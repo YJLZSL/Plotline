@@ -94,6 +94,23 @@ pub fn run() {
             commands::note::create_note,
             commands::note::update_note,
             commands::note::delete_note,
+            // location (map)
+            commands::location::list_locations,
+            commands::location::create_location,
+            commands::location::update_location,
+            commands::location::delete_location,
+            commands::location::list_location_links,
+            commands::location::link_locations,
+            commands::location::unlink_locations,
+            // vn (visual novel)
+            commands::vn::list_vn_scenes,
+            commands::vn::create_vn_scene,
+            commands::vn::update_vn_scene,
+            commands::vn::delete_vn_scene,
+            commands::vn::list_vn_lines,
+            commands::vn::create_vn_line,
+            commands::vn::update_vn_line,
+            commands::vn::delete_vn_line,
             // statistics
             commands::statistics::get_statistics,
             // settings

@@ -50,7 +50,7 @@
 - Node.js ≥ 20
 - pnpm ≥ 10
 - Rust ≥ 1.77
-- Windows: WebView2（Win11 自带）/ macOS: Xcode CLI / Linux: webkit2gtk
+- Windows: WebView2（Win11 自带）；本应用面向 Windows 平台
 
 ### 安装与运行
 ```bash

@@ -10,13 +10,19 @@ import type {
   CharacterRelationship,
   CreateCharacterInput,
   CreateEventInput,
+  CreateLocationInput,
   CreateNoteInput,
   CreateOutlineNodeInput,
   CreateRelationshipInput,
   CreateTrackInput,
   CreateWorkspaceInput,
+  CreateVnLineInput,
+  CreateVnSceneInput,
   Event,
   EventConnection,
+  LinkLocationsInput,
+  Location,
+  LocationLink,
   MoveOutlineNodeInput,
   Note,
   OutlineNode,
@@ -25,12 +31,17 @@ import type {
   Track,
   UpdateCharacterInput,
   UpdateEventInput,
+  UpdateLocationInput,
   UpdateNoteInput,
   UpdateOutlineNodeInput,
   UpdateRelationshipInput,
   UpdateSettingsInput,
   UpdateTrackInput,
+  UpdateVnLineInput,
+  UpdateVnSceneInput,
   UpdateWorkspaceInput,
+  VnLine,
+  VnScene,
   Workspace,
   WorkspaceBundle,
 } from '@/types';
@@ -44,6 +55,10 @@ interface MockDB {
   eventConnections: EventConnection[];
   outlineNodes: OutlineNode[];
   notes: Note[];
+  locations: Location[];
+  locationLinks: LocationLink[];
+  vnScenes: VnScene[];
+  vnLines: VnLine[];
   settings: AppSettings;
 }
 
@@ -82,6 +97,10 @@ function loadDB(): MockDB {
     eventConnections: [],
     outlineNodes: [],
     notes: [],
+    locations: [],
+    locationLinks: [],
+    vnScenes: [],
+    vnLines: [],
     settings: { ...DEFAULT_SETTINGS },
   };
   saveDB(db);
@@ -203,6 +222,16 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       db.relationships = db.relationships.filter((r) => r.workspaceId !== id);
       db.outlineNodes = db.outlineNodes.filter((o) => o.workspaceId !== id);
       db.notes = db.notes.filter((n) => n.workspaceId !== id);
+      db.locations = db.locations.filter((l) => l.workspaceId !== id);
+      db.locationLinks = db.locationLinks.filter(
+        (lk) =>
+          db.locations.find((l) => l.id === lk.sourceId) &&
+          db.locations.find((l) => l.id === lk.targetId),
+      );
+      db.vnScenes = db.vnScenes.filter((s) => s.workspaceId !== id);
+      db.vnLines = db.vnLines.filter((l) =>
+        db.vnScenes.find((s) => s.id === l.sceneId),
+      );
       return null;
     }
     case 'export_workspace': {
@@ -779,6 +808,183 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         })),
       };
       return stats;
+    }
+
+    // ===== location (map) =====
+    case 'list_locations': {
+      const wsId = args.workspaceId as string;
+      return db.locations.filter((l) => l.workspaceId === wsId);
+    }
+    case 'create_location': {
+      const input = args.input as CreateLocationInput;
+      if (!input.name?.trim()) invalidInput('地点名称不能为空');
+      const now = nowISO();
+      const loc: Location = {
+        id: uuid(),
+        workspaceId: input.workspaceId,
+        name: input.name,
+        description: input.description ?? '',
+        posX: input.posX ?? 200,
+        posY: input.posY ?? 200,
+        color: input.color ?? '#C68A3E',
+        icon: input.icon ?? '📍',
+        linkedEventId: input.linkedEventId ?? null,
+        characterIds: input.characterIds ?? [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.locations.push(loc);
+      return loc;
+    }
+    case 'update_location': {
+      const input = args.input as UpdateLocationInput;
+      const loc = db.locations.find((l) => l.id === input.id);
+      if (!loc) notFound(`地点 ${input.id} 不存在`);
+      if (input.name !== undefined) loc.name = input.name;
+      if (input.description !== undefined) loc.description = input.description;
+      if (input.posX !== undefined) loc.posX = input.posX;
+      if (input.posY !== undefined) loc.posY = input.posY;
+      if (input.color !== undefined) loc.color = input.color;
+      if (input.icon !== undefined) loc.icon = input.icon;
+      if (input.linkedEventId !== undefined) loc.linkedEventId = input.linkedEventId;
+      if (input.characterIds !== undefined) loc.characterIds = input.characterIds;
+      loc.updatedAt = nowISO();
+      return loc;
+    }
+    case 'delete_location': {
+      const id = args.id as string;
+      db.locations = db.locations.filter((l) => l.id !== id);
+      db.locationLinks = db.locationLinks.filter(
+        (lk) => lk.sourceId !== id && lk.targetId !== id,
+      );
+      return null;
+    }
+    case 'list_location_links': {
+      const wsId = args.workspaceId as string;
+      return db.locationLinks
+        .filter(
+          (lk) =>
+            db.locations.find((l) => l.id === lk.sourceId)?.workspaceId === wsId &&
+            db.locations.find((l) => l.id === lk.targetId)?.workspaceId === wsId,
+        )
+        .map((lk) => ({
+          ...lk,
+          sourceName: db.locations.find((l) => l.id === lk.sourceId)?.name ?? '',
+          targetName: db.locations.find((l) => l.id === lk.targetId)?.name ?? '',
+        }));
+    }
+    case 'link_locations': {
+      const input = args.input as LinkLocationsInput;
+      if (input.sourceId === input.targetId) invalidInput('不能连接到自身');
+      const src = db.locations.find((l) => l.id === input.sourceId);
+      const tgt = db.locations.find((l) => l.id === input.targetId);
+      if (!src || !tgt) notFound('地点不存在');
+      db.locationLinks = db.locationLinks.filter(
+        (lk) => !(lk.sourceId === input.sourceId && lk.targetId === input.targetId),
+      );
+      db.locationLinks.push({
+        sourceId: input.sourceId,
+        targetId: input.targetId,
+        label: input.label ?? '',
+        sourceName: src.name,
+        targetName: tgt.name,
+      });
+      return null;
+    }
+    case 'unlink_locations': {
+      const { sourceId, targetId } = args as { sourceId: string; targetId: string };
+      db.locationLinks = db.locationLinks.filter(
+        (lk) => !(lk.sourceId === sourceId && lk.targetId === targetId),
+      );
+      return null;
+    }
+
+    // ===== vn (visual novel) =====
+    case 'list_vn_scenes': {
+      const wsId = args.workspaceId as string;
+      return db.vnScenes
+        .filter((s) => s.workspaceId === wsId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    case 'create_vn_scene': {
+      const input = args.input as CreateVnSceneInput;
+      if (!input.title?.trim()) invalidInput('场景标题不能为空');
+      const now = nowISO();
+      const count = db.vnScenes.filter((s) => s.workspaceId === input.workspaceId).length;
+      const scene: VnScene = {
+        id: uuid(),
+        workspaceId: input.workspaceId,
+        title: input.title,
+        background: input.background ?? '',
+        outlineNodeId: input.outlineNodeId ?? null,
+        sortOrder: count,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.vnScenes.push(scene);
+      return scene;
+    }
+    case 'update_vn_scene': {
+      const input = args.input as UpdateVnSceneInput;
+      const s = db.vnScenes.find((x) => x.id === input.id);
+      if (!s) notFound(`场景 ${input.id} 不存在`);
+      if (input.title !== undefined) s.title = input.title;
+      if (input.background !== undefined) s.background = input.background;
+      if (input.outlineNodeId !== undefined) s.outlineNodeId = input.outlineNodeId;
+      if (input.sortOrder !== undefined) s.sortOrder = input.sortOrder;
+      s.updatedAt = nowISO();
+      return s;
+    }
+    case 'delete_vn_scene': {
+      const id = args.id as string;
+      db.vnScenes = db.vnScenes.filter((s) => s.id !== id);
+      db.vnLines = db.vnLines.filter((l) => l.sceneId !== id);
+      return null;
+    }
+    case 'list_vn_lines': {
+      const sceneId = args.sceneId as string;
+      return db.vnLines
+        .filter((l) => l.sceneId === sceneId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    case 'create_vn_line': {
+      const input = args.input as CreateVnLineInput;
+      const now = nowISO();
+      const count = db.vnLines.filter((l) => l.sceneId === input.sceneId).length;
+      const line: VnLine = {
+        id: uuid(),
+        sceneId: input.sceneId,
+        sortOrder: count,
+        lineType: input.lineType ?? 'dialog',
+        characterId: input.characterId ?? null,
+        speakerName: input.speakerName ?? '',
+        text: input.text ?? '',
+        emotion: input.emotion ?? '',
+        choiceLabel: input.choiceLabel ?? '',
+        choiceTargetSceneId: input.choiceTargetSceneId ?? null,
+        createdAt: now,
+      };
+      db.vnLines.push(line);
+      return line;
+    }
+    case 'update_vn_line': {
+      const input = args.input as UpdateVnLineInput;
+      const l = db.vnLines.find((x) => x.id === input.id);
+      if (!l) notFound(`台词 ${input.id} 不存在`);
+      if (input.lineType !== undefined) l.lineType = input.lineType;
+      if (input.characterId !== undefined) l.characterId = input.characterId;
+      if (input.speakerName !== undefined) l.speakerName = input.speakerName;
+      if (input.text !== undefined) l.text = input.text;
+      if (input.emotion !== undefined) l.emotion = input.emotion;
+      if (input.choiceLabel !== undefined) l.choiceLabel = input.choiceLabel;
+      if (input.choiceTargetSceneId !== undefined) l.choiceTargetSceneId = input.choiceTargetSceneId;
+      if (input.sortOrder !== undefined) l.sortOrder = input.sortOrder;
+      return l;
+    }
+    case 'delete_vn_line': {
+      const id = args.id as string;
+      db.vnLines = db.vnLines.filter((l) => l.id !== id);
+      return null;
     }
 
     // ===== settings =====

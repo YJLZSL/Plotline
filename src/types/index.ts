@@ -5,3 +5,5 @@ export * from './character';
 export * from './outline';
 export * from './note';
 export * from './settings';
+export * from './location';
+export * from './vn';

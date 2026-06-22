@@ -9,6 +9,8 @@ import {
   Settings as SettingsIcon,
   ChevronLeft,
   ChevronRight,
+  Map as MapIcon,
+  Film,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -27,6 +29,8 @@ const items: NavItem[] = [
   { to: 'timeline', labelKey: 'nav.timeline', icon: Clock4 },
   { to: 'characters', labelKey: 'nav.characters', icon: Users },
   { to: 'outline', labelKey: 'nav.outline', icon: ListTree },
+  { to: 'map', labelKey: 'nav.map', icon: MapIcon },
+  { to: 'vn', labelKey: 'nav.vn', icon: Film },
   { to: 'statistics', labelKey: 'nav.statistics', icon: BarChart3 },
   { to: 'notebook', labelKey: 'nav.notebook', icon: StickyNote },
   { to: 'settings', labelKey: 'nav.settings', icon: SettingsIcon },

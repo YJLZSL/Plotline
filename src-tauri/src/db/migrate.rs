@@ -5,6 +5,7 @@ use crate::error::{AppError, AppResult};
 /// 内嵌迁移文件。新增迁移时，追加 (version, sql) 元组。
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../../migrations/001_initial.sql")),
+    (2, include_str!("../../migrations/002_map_and_vn.sql")),
 ];
 
 /// 创建 schema_migrations 表并依次执行迁移。
@@ -61,7 +62,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 1);
+        assert_eq!(v, 2, "迁移 001 与 002 均应已应用");
     }
 
     #[test]
@@ -98,6 +99,47 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 1);
+        assert_eq!(v, 2, "重复执行迁移不应改变版本号");
+    }
+
+    #[test]
+    fn should_apply_map_and_vn_migration() {
+        let conn = test_conn();
+        let v: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(v, 2, "迁移 002 应使版本号变为 2");
+        // 验证 locations 表存在
+        conn.execute(
+            "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO locations (id, workspace_id, name, created_at, updated_at) \
+             VALUES ('l1', 'w1', '城', 't', 't')",
+            [],
+        )
+        .unwrap();
+        // 验证 vn_scenes / vn_lines 表存在
+        conn.execute(
+            "INSERT INTO vn_scenes (id, workspace_id, title, created_at, updated_at) \
+             VALUES ('s1', 'w1', '开场', 't', 't')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO vn_lines (id, scene_id, created_at) VALUES ('ln1', 's1', 't')",
+            [],
+        )
+        .unwrap();
+        let name: String =
+            conn.query_row("SELECT name FROM locations WHERE id='l1'", [], |r| r.get(0))
+                .unwrap();
+        assert_eq!(name, "城");
     }
 }

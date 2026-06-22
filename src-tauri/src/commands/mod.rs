@@ -1,11 +1,13 @@
 pub mod character;
 pub mod event;
 pub mod export;
+pub mod location;
 pub mod note;
 pub mod outline;
 pub mod settings;
 pub mod statistics;
 pub mod track;
+pub mod vn;
 pub mod workspace;
 
 /// 从 Tauri 状态中获取数据库连接的辅助宏。

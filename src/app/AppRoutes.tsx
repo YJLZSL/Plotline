@@ -10,6 +10,8 @@ import { OutlineView } from '@/components/views/OutlineView';
 import { StatisticsView } from '@/components/views/StatisticsView';
 import { SettingsView } from '@/components/views/SettingsView';
 import { NotebookView } from '@/components/views/NotebookView';
+import { MapView } from '@/components/views/MapView';
+import { VnView } from '@/components/views/VnView';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
 import { useI18n } from '@/hooks/useI18n';
@@ -67,6 +69,8 @@ function AnimatedRoutes() {
             <Route path="outline" element={<WorkspaceViewWrapper view="outline" />} />
             <Route path="statistics" element={<WorkspaceViewWrapper view="statistics" />} />
             <Route path="notebook" element={<WorkspaceViewWrapper view="notebook" />} />
+            <Route path="map" element={<WorkspaceViewWrapper view="map" />} />
+            <Route path="vn" element={<WorkspaceViewWrapper view="vn" />} />
             <Route path="settings" element={<WorkspaceViewWrapper view="settings" />} />
           </Route>
         </Routes>
@@ -91,6 +95,10 @@ function WorkspaceViewWrapper({ view }: { view: string }) {
       return <StatisticsView workspaceId={workspaceId} workspaceName={workspaceName} />;
     case 'notebook':
       return <NotebookView workspaceId={workspaceId} workspaceName={workspaceName} />;
+    case 'map':
+      return <MapView workspaceId={workspaceId} workspaceName={workspaceName} />;
+    case 'vn':
+      return <VnView workspaceId={workspaceId} workspaceName={workspaceName} />;
     case 'settings':
       return <SettingsView workspaceId={workspaceId} workspaceName={workspaceName} />;
     default:

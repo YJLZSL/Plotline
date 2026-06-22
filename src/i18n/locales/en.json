@@ -8,6 +8,8 @@
     "timeline": "Timeline",
     "characters": "Characters",
     "outline": "Outline",
+    "map": "Map",
+    "vn": "Visual Novel",
     "statistics": "Statistics",
     "notebook": "Notebook",
     "settings": "Settings"
@@ -186,6 +188,57 @@
     "segment": "Segment",
     "empty": "No data yet. Start creating and insights will appear here."
   },
+  "map": {
+    "title": "Story Map",
+    "addLocation": "Add Location",
+    "newLocation": "New Location",
+    "linkedEvent": "Linked Event",
+    "linkedCharacters": "Linked Characters",
+    "startLink": "Link to another location",
+    "linkHint": "Click a target location to create a path, or",
+    "noCharacters": "No characters yet — create some in the Characters view",
+    "empty": {
+      "title": "The map is empty",
+      "description": "Add your first location to build the geography of your story world.",
+      "cta": "Add first location"
+    },
+    "form": {
+      "name": "Name",
+      "icon": "Icon",
+      "color": "Color",
+      "description": "Description",
+      "linkedEvent": "Linked Event",
+      "characters": "Linked Characters"
+    }
+  },
+  "vn": {
+    "title": "Visual Novel",
+    "scenes": "Scenes",
+    "scene": "Scene",
+    "addScene": "Add Scene",
+    "newScene": "New Scene",
+    "emptyScenes": "No scenes yet — use the button above to create one",
+    "emptyLines": "No lines yet — use the buttons above to add dialog, narration, or choices",
+    "lineDialog": "Dialog",
+    "lineNarration": "Narration",
+    "lineChoice": "Choice",
+    "narrationLabel": "Narration",
+    "customSpeaker": "Custom speaker",
+    "speakerNamePlaceholder": "Speaker name",
+    "choiceLabelPlaceholder": "Choice label (e.g. Go to forest)",
+    "choiceTextPlaceholder": "Choice display text",
+    "noTarget": "No target",
+    "textPlaceholder": "Enter line text…",
+    "previewMode": "Preview",
+    "editMode": "Edit",
+    "choose": "Choose",
+    "continue": "Continue",
+    "sceneEnd": "End of scene",
+    "empty": {
+      "title": "No scenes yet",
+      "description": "Create your first VN scene with dialog, narration, and branching choices."
+    }
+  },
   "settings": {
     "title": "Settings",
     "appearance": "Appearance",
@@ -251,6 +304,11 @@
     "outlineUpdated": "Node updated",
     "outlineDeleted": "Node deleted",
     "settingsSaved": "Settings saved",
-    "backupFailed": "Auto backup failed: {{reason}}"
+    "backupFailed": "Auto backup failed: {{reason}}",
+    "locationCreated": "Location created",
+    "locationUpdated": "Location updated",
+    "locationDeleted": "Location deleted",
+    "vnSceneCreated": "Scene created",
+    "vnSceneDeleted": "Scene deleted"
   }
 }

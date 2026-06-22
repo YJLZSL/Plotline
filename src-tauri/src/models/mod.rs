@@ -1,15 +1,19 @@
 pub mod character;
 pub mod event;
+pub mod location;
 pub mod note;
 pub mod outline;
 pub mod settings;
 pub mod track;
+pub mod vn;
 pub mod workspace;
 
 pub use character::*;
 pub use event::*;
+pub use location::*;
 pub use note::*;
 pub use outline::*;
 pub use settings::*;
 pub use track::*;
+pub use vn::*;
 pub use workspace::*;

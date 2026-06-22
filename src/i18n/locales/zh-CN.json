@@ -8,6 +8,8 @@
     "timeline": "时间轴",
     "characters": "角色",
     "outline": "大纲",
+    "map": "地图",
+    "vn": "视觉小说",
     "statistics": "统计",
     "notebook": "资料库",
     "settings": "设置"
@@ -186,6 +188,57 @@
     "segment": "情节段",
     "empty": "尚无数据，开始创作后这里会显示统计。"
   },
+  "map": {
+    "title": "故事地图",
+    "addLocation": "添加地点",
+    "newLocation": "新地点",
+    "linkedEvent": "关联事件",
+    "linkedCharacters": "关联角色",
+    "startLink": "连接到其他地点",
+    "linkHint": "点击目标地点以建立路径连接，或",
+    "noCharacters": "暂无角色，请先到角色视图创建",
+    "empty": {
+      "title": "地图是空的",
+      "description": "添加第一个地点，构建你的故事世界地理。",
+      "cta": "添加第一个地点"
+    },
+    "form": {
+      "name": "名称",
+      "icon": "图标",
+      "color": "颜色",
+      "description": "描述",
+      "linkedEvent": "关联事件",
+      "characters": "关联角色"
+    }
+  },
+  "vn": {
+    "title": "视觉小说",
+    "scenes": "场景列表",
+    "scene": "场景",
+    "addScene": "添加场景",
+    "newScene": "新场景",
+    "emptyScenes": "暂无场景，点击上方按钮创建",
+    "emptyLines": "暂无台词，点击上方按钮添加对话、旁白或选项",
+    "lineDialog": "对话",
+    "lineNarration": "旁白",
+    "lineChoice": "选项",
+    "narrationLabel": "旁白",
+    "customSpeaker": "自定义说话人",
+    "speakerNamePlaceholder": "说话人名字",
+    "choiceLabelPlaceholder": "选项标签（如：去森林）",
+    "choiceTextPlaceholder": "选项展示文本",
+    "noTarget": "无跳转目标",
+    "textPlaceholder": "输入台词内容…",
+    "previewMode": "预览",
+    "editMode": "编辑",
+    "choose": "请选择",
+    "continue": "继续",
+    "sceneEnd": "场景结束",
+    "empty": {
+      "title": "还没有场景",
+      "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。"
+    }
+  },
   "settings": {
     "title": "设置",
     "appearance": "外观",
@@ -251,6 +304,11 @@
     "outlineUpdated": "节点已更新",
     "outlineDeleted": "节点已删除",
     "settingsSaved": "设置已保存",
-    "backupFailed": "自动备份失败：{{reason}}"
+    "backupFailed": "自动备份失败：{{reason}}",
+    "locationCreated": "地点已创建",
+    "locationUpdated": "地点已更新",
+    "locationDeleted": "地点已删除",
+    "vnSceneCreated": "场景已创建",
+    "vnSceneDeleted": "场景已删除"
   }
 }
