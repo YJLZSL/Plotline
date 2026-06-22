@@ -14,9 +14,11 @@
    `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 4. 在仓库根目录执行 `pwsh scripts/release-v1.ps1`（或手动依次执行
    `pnpm lint && pnpm typecheck && pnpm test && cargo test --manifest-path src-tauri/Cargo.toml && pnpm tauri build`）。
-5. 升级版本号时务必保持三处同步：`package.json`、`src-tauri/Cargo.toml`、
-   `src-tauri/tauri.conf.json`（v1.0.0 已同步完毕）。
-6. 推送标签触发 CI 发布：`git tag v1.0.0 && git push --tags`。
+5. 升级版本号时务必保持以下多处同步：`package.json`、`src-tauri/Cargo.toml`、
+   `src-tauri/tauri.conf.json`、`src/components/layout/WorkspaceLayout.tsx`、
+   `src/components/views/SettingsView.tsx`、`tests/e2e/*.spec.ts`、
+   `scripts/release-v1.ps1`（v1.2.0 已同步完毕）。
+6. 推送标签触发 CI 发布：`git tag v1.2.0 && git push --tags`。
    `.github/workflows/release.yml` 会构建三平台安装包并连同 `latest.json`
    一起上传到对应的 GitHub Release（更新客户端轮询的就是 `latest.json`）。
 7. Release 发布后，在已安装的旧版本里打开 *设置 → 关于 → 检查更新*
@@ -31,6 +33,53 @@
 
 若两者都缺失，`pnpm tauri build` 会在打包阶段失败但 Rust 部分会成功编译。
 推荐通过 GitHub Actions 的 `release.yml` 完成跨平台打包，本机仅做开发预览。
+
+## [1.2.0] - 2026-06-22
+
+**统计**：本轮迭代完成 PRD §8 第四阶段路线图全部 4 项产品能力，新增 12 个文件
+（4 个布局算法 + 4 个视图组件 + 4 个测试），修改 8 个文件；前端单元测试从 60 个
+增长到 97 个（+37），Rust 测试 15 个保持全绿。本机已构建
+`Plotline_1.2.0_x64-setup.exe`。
+
+### 新增
+- **甘特图视图** (`src/components/views/GanttChart.tsx` + `src/features/timeline/ganttLayout.ts`)：
+  时间轴视图工具栏新增「时间轴 / 甘特图」切换按钮。甘特图按轨道横向排布事件节点，
+  按日期升序排列，事件条颜色跟随轨道色，选中高亮，双击进入编辑。支持轨道显隐过滤。
+- **大纲树状图视图** (`src/components/views/OutlineTreeChart.tsx` +
+  `src/features/outline/treeLayout.ts`)：大纲视图工具栏新增「列表 / 树状图」切换按钮。
+  树状图以 SVG 绘制卷→章→场景层级，父子节点贝塞尔连线，节点颜色按类型区分，
+  状态圆点指示草稿/完成/待修改，点击节点联动右侧详情。
+- **角色关系矩阵视图** (`src/components/views/RelationshipMatrix.tsx` +
+  `src/features/characters/relationshipMatrix.ts`)：角色视图工具栏新增「矩阵」页签。
+  N×N 网格展示角色两两关系，单元格颜色按关系类型区分、不透明度按强度（1-5）递增，
+  对角线自交单元格灰化，底部图例与统计关系总数，点击表头/行标签可选中角色。
+- **高级统计：情节密度分布** (`src/components/views/PlotDensityChart.tsx` +
+  `src/features/statistics/advancedStats.ts`)：统计视图新增条形图，按事件时间顺序
+  分桶（默认 8 段），峰值段高亮琥珀色，悬停显示具体事件数。
+- **高级统计：角色弧线时间轴** (`src/components/views/CharacterArcChart.tsx`)：
+  统计视图新增 SVG 时间轴，每角色一行，按事件出现顺序绘制圆点（颜色=角色色，
+  描边=状态色），下方列出角色弧线描述（最多 6 个）。
+- **新单元测试**：`ganttLayout.test.ts`（7）、`treeLayout.test.ts`（8）、
+  `relationshipMatrix.test.ts`（6）、`advancedStats.test.ts`（6）、
+  `GanttChart.test.tsx`（2）、`OutlineTreeChart.test.tsx`（2）、
+  `RelationshipMatrix.test.tsx`（2）、`AdvancedCharts.test.tsx`（4）。
+- **国际化文案扩展**：新增 `gantt.*`、`treeChart.*`、`matrix.*`、
+  `statistics.plotDensity`、`statistics.characterArc`、`statistics.peakCount`、
+  `statistics.segment` 等键，同步维护 `zh-CN.json` 与 `en.json`。
+
+### 变更
+- **应用版本号** 从 `1.0.0` 同步升级到 `1.2.0`（`package.json`、
+  `src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`WorkspaceLayout`、
+  `SettingsView`、E2E 回归脚本、发布脚本、`Cargo.lock` 全部保持一致）。
+- `TimelineView` 工具栏新增视图模式切换组（时间轴 / 甘特图）。
+- `OutlineView` 工具栏新增视图模式切换组（列表 / 树状图）。
+- `CharactersView` 页签新增「矩阵」选项，并订阅关系数据。
+- `StatisticsView` 订阅事件与角色数据，追加两张高级统计卡片。
+
+### 备注与后续
+- 插件系统仍为可选远期规划，不在 v1.2 范围内。
+- 甘特图目前按事件序列排布，未支持跨日期区间条；后续可基于 `dateValue` 计算真实时长。
+- 关系矩阵为有向矩阵（[源,目标] 单元格），双向关系需建立两条记录；后续可加对称合并开关。
 
 ## [1.1.0] - 2026-06-22
 

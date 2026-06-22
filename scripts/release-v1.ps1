@@ -34,4 +34,4 @@ Invoke-Step -Name 'pnpm tauri build' -Action { pnpm tauri build }
 Write-Host ""
 Write-Host "所有发布前置校验已通过。" -ForegroundColor Green
 Write-Host "Windows 产物默认位于 src-tauri/target/release/bundle/" -ForegroundColor Yellow
-Write-Host "下一步：git tag v1.1.0 && git push --tags 触发 release.yml" -ForegroundColor Yellow
+Write-Host "下一步：git tag v1.2.0 && git push --tags 触发 release.yml" -ForegroundColor Yellow

@@ -92,6 +92,28 @@
       "statusRevise": "Revise"
     }
   },
+  "gantt": {
+    "title": "Gantt Chart",
+    "subtitle": "Events laid out by track"
+  },
+  "treeChart": {
+    "title": "Tree Chart",
+    "subtitle": "Outline hierarchy visualization",
+    "volume": "Volume",
+    "chapter": "Chapter",
+    "scene": "Scene"
+  },
+  "matrix": {
+    "title": "Relationship Matrix",
+    "subtitle": "Pairwise character relationship grid",
+    "target": "Target",
+    "source": "Source",
+    "legend": "Relationship legend",
+    "totalRelations": "{{count}} relationships",
+    "viewList": "Card list",
+    "viewGraph": "Network graph",
+    "viewMatrix": "Relationship matrix"
+  },
   "characters": {
     "title": "Characters",
     "subtitle": "Profiles and relationships",
@@ -158,6 +180,10 @@
     "trackEvents": "Events per Track",
     "foreshadowTracker": "Foreshadow Tracker",
     "foreshadowEmpty": "No foreshadow connections yet. Select Foreshadow type on the timeline and connect two events.",
+    "plotDensity": "Plot Density",
+    "characterArc": "Character Arc Timeline",
+    "peakCount": "Peak {{count}} events",
+    "segment": "Segment",
     "empty": "No data yet. Start creating and insights will appear here."
   },
   "settings": {

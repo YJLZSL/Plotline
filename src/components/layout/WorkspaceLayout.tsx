@@ -4,7 +4,7 @@ import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { HistoryControls } from './HistoryControls';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();

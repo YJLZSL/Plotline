@@ -12,6 +12,7 @@ import {
   ArrowUp,
   ArrowDown,
   Download,
+  Share2,
 } from 'lucide-react';
 
 import {
@@ -40,6 +41,7 @@ import {
 } from '@/features/outline/hooks';
 import { useExportOutlineMarkdown } from '@/features/workspace/hooks';
 import { useMoveOutlineNode } from '@/features/outline/moveHooks';
+import { OutlineTreeChart } from './OutlineTreeChart';
 
 interface OutlineViewProps {
   workspaceId: string;
@@ -67,6 +69,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState<OutlineNode | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'chart'>('list');
 
   // 构建树
   const tree = useMemo(() => buildTree(nodes), [nodes]);
@@ -114,6 +117,32 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
         workspaceName={workspaceName}
         right={
           <div className="flex items-center gap-2">
+            <div className="flex bg-bg-elevated rounded-[6px] p-0.5">
+              <button
+                onClick={() => setViewMode('list')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'list'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('outline.title')}
+              >
+                <ListTree className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('chart')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'chart'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('treeChart.title')}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -131,6 +160,13 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
         }
       />
 
+      {viewMode === 'chart' ? (
+        <OutlineTreeChart
+          nodes={nodes}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+      ) : (
       <div className="flex flex-1 min-h-0">
         <div className="w-80 flex-shrink-0 border-r border-border bg-bg-surface overflow-auto">
           {isLoading ? (
@@ -229,6 +265,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
           )}
         </div>
       </div>
+      )}
 
       <OutlineEditDialog
         open={editDialogOpen}

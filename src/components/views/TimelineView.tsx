@@ -11,7 +11,10 @@ import {
   Clock4,
   Link2,
   ShieldCheck,
+  GanttChart as GanttIcon,
+  CalendarRange,
 } from 'lucide-react';
+import { GanttChart } from './GanttChart';
 
 import {
   Button,
@@ -97,6 +100,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [newTrackName, setNewTrackName] = useState('');
   const [showConnections, setShowConnections] = useState(true);
   const [checkingConsistency, setCheckingConsistency] = useState(false);
+  const [viewMode, setViewMode] = useState<'timeline' | 'gantt'>('timeline');
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
   const connectEvents = useConnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
@@ -310,6 +314,32 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         workspaceName={workspaceName}
         right={
           <div className="flex items-center gap-1">
+            <div className="flex bg-bg-elevated rounded-[6px] p-0.5 mr-1">
+              <button
+                onClick={() => setViewMode('timeline')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'timeline'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('timeline.title')}
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('gantt')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'gantt'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('gantt.title')}
+              >
+                <GanttIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <Button variant="ghost" size="sm" onClick={() => cycleZoom(-1)} title={t('timeline.zoom')}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
@@ -352,6 +382,23 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         }
       />
 
+      {viewMode === 'gantt' ? (
+        <GanttChart
+          tracks={tracks}
+          events={events}
+          selectedEventId={selectedEventId}
+          onSelectEvent={(id) => {
+            setSelectedEventId(id);
+            const ev = events.find((e) => e.id === id) ?? null;
+            setEditingEvent(ev);
+          }}
+          onEditEvent={(ev) => {
+            setEditingEvent(ev);
+            setEventDialogOpen(true);
+          }}
+          onAddEvent={(trackId) => void handleAddEvent(trackId)}
+        />
+      ) : (
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* 轨道面板 */}
         <aside className="w-56 flex-shrink-0 border-r border-border bg-bg-surface flex flex-col">
@@ -496,6 +543,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           )}
         </div>
       </div>
+      )}
 
       <EventEditDialog
         open={eventDialogOpen}

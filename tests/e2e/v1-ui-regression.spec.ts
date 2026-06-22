@@ -21,7 +21,7 @@ test.describe('Plotline v1.1 — 视觉与导航回归', () => {
     await expect(navLinks).toHaveCount(6);
   });
 
-  test('设置 → 关于 应显示 v1.1.0 与"检查更新"按钮', async ({ page }) => {
+  test('设置 → 关于 应显示 v1.2.0 与"检查更新"按钮', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('create-workspace-btn').click();
     await page.getByTestId('workspace-name-input').fill('Settings 测试');
@@ -31,7 +31,7 @@ test.describe('Plotline v1.1 — 视觉与导航回归', () => {
     await page.locator('nav a[title], nav a').filter({ hasText: '设置' }).click();
     // 切换到 "关于" 标签
     await page.getByRole('button', { name: '关于' }).click();
-    await expect(page.locator('text=v1.1.0').first()).toBeVisible();
+    await expect(page.locator('text=v1.2.0').first()).toBeVisible();
     await expect(page.getByRole('button', { name: /立即检查/ })).toBeVisible();
   });
 });

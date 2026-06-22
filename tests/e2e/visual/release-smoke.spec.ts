@@ -61,7 +61,7 @@ test.describe('Plotline v1.1 — 发布前可视化点击回归', () => {
     // 步骤 7：设置 → 关于 → 检查更新
     await page.locator('nav a').filter({ hasText: '设置' }).click();
     await page.getByRole('button', { name: '关于' }).click();
-    await expect(page.locator('text=v1.1.0').first()).toBeVisible();
+    await expect(page.locator('text=v1.2.0').first()).toBeVisible();
     await page.screenshot({
       path: 'test-results/visual/07-settings-about.png',
       fullPage: true,

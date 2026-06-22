@@ -8,6 +8,7 @@ import {
   X,
   Network,
   LayoutGrid,
+  Grid3x3,
 } from 'lucide-react';
 
 import {
@@ -36,10 +37,12 @@ import {
   useUpdateCharacter,
 } from '@/features/characters/hooks';
 import { RelationshipGraph } from '@/features/characters/RelationshipGraph';
+import { RelationshipMatrix } from './RelationshipMatrix';
+import { useRelationshipsQuery } from '@/features/characters/relationshipHooks';
 
 const PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
 
-type Tab = 'list' | 'graph';
+type Tab = 'list' | 'graph' | 'matrix';
 
 interface CharactersViewProps {
   workspaceId: string;
@@ -49,6 +52,7 @@ interface CharactersViewProps {
 export function CharactersView({ workspaceId, workspaceName }: CharactersViewProps) {
   const { t } = useI18n();
   const { data: characters = [], isLoading } = useCharactersQuery(workspaceId);
+  const { data: relationships = [] } = useRelationshipsQuery(workspaceId);
   const createMutation = useCreateCharacter(workspaceId);
   const updateMutation = useUpdateCharacter(workspaceId);
   const deleteMutation = useDeleteCharacter(workspaceId);
@@ -104,7 +108,7 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
                     ? 'bg-bg-surface text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary',
                 )}
-                title="卡片列表"
+                title={t('matrix.viewList')}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </button>
@@ -116,9 +120,21 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
                     ? 'bg-bg-surface text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary',
                 )}
-                title="关系网络"
+                title={t('matrix.viewGraph')}
               >
                 <Network className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setTab('matrix')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  tab === 'matrix'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('matrix.title')}
+              >
+                <Grid3x3 className="h-3.5 w-3.5" />
               </button>
             </div>
             <Button size="sm" onClick={handleAdd} className="gap-2">
@@ -134,6 +150,36 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
           <RelationshipGraph
             workspaceId={workspaceId}
             characters={characters}
+            onCharacterClick={(id) => setSelectedId(id)}
+          />
+          <AnimatePresence>
+            {selected && (
+              <motion.aside
+                initial={{ x: 320, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 320, opacity: 0 }}
+                transition={MOTION_BASE}
+                className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
+              >
+                <CharacterDetailPanel
+                  character={selected}
+                  onClose={() => setSelectedId(null)}
+                  onEdit={() => {
+                    setEditing(selected);
+                    setEditOpen(true);
+                  }}
+                  onDelete={() => setConfirmDelete(selected.id)}
+                  t={t}
+                />
+              </motion.aside>
+            )}
+          </AnimatePresence>
+        </div>
+      ) : tab === 'matrix' ? (
+        <div className="flex flex-1 min-h-0">
+          <RelationshipMatrix
+            characters={characters}
+            relationships={relationships}
             onCharacterClick={(id) => setSelectedId(id)}
           />
           <AnimatePresence>

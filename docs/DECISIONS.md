@@ -343,5 +343,44 @@ PRD 第三阶段要求"伏笔追踪系统"和"事件关联"。数据库已有 `e
 
 ---
 
-> 文档版本：v1.1.0  
+## ADR-016：第四阶段可视化采用纯前端 SVG
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+PRD §8 第四阶段要求甘特图视图、树状图视图、关系矩阵视图、高级统计（情节分析、
+角色弧线可视化）。这些视图都是对既有数据（事件、轨道、角色、关系、大纲节点）
+的**只读可视化重组**，不涉及新数据写入或新查询维度。
+
+候选方案：
+- 新增 Rust IPC 命令 + SQL 聚合
+- 纯前端 SVG，复用 TanStack Query 缓存
+
+### 决策
+**纯前端 SVG，零新增 IPC 命令**。
+
+### 理由
+- 数据已在客户端缓存（`useEventsQuery`、`useCharactersQuery` 等），前端聚合无网络/IPC 往返。
+- 布局算法（甘特排布、树形坐标、矩阵网格、密度分桶）是纯计算，TypeScript 实现易测试。
+- 不动 Rust 后端意味着 mock 层（`src/lib/mock.ts`）自动对等，E2E 与纯 Web 模式无需额外适配。
+- SVG 矢量、可访问、Framer Motion 动画自然，与 ADR-004 一致。
+- 1000 事件以内 SVG 完全胜任；超过后可后续引入 Canvas 分层（与时间轴同路径演进）。
+
+### 实现
+- 布局算法：`src/features/timeline/ganttLayout.ts`、`src/features/outline/treeLayout.ts`、
+  `src/features/characters/relationshipMatrix.ts`、`src/features/statistics/advancedStats.ts`。
+- 视图组件：`src/components/views/GanttChart.tsx`、`OutlineTreeChart.tsx`、
+  `RelationshipMatrix.tsx`、`PlotDensityChart.tsx`、`CharacterArcChart.tsx`。
+- 接入点：`TimelineView`（甘特切换）、`OutlineView`（树状图切换）、
+  `CharactersView`（矩阵页签）、`StatisticsView`（两张高级图表卡片）。
+
+### 后果
+- 第四阶段视图均为只读，编辑仍需回到主视图（时间轴/大纲列表/角色卡片）。
+- 甘特图当前按事件序列排布，未支持真实日期区间条；后续增强可基于 `dateValue` 计算。
+- 关系矩阵为有向矩阵；双向关系需两条记录，后续可加对称合并开关。
+
+---
+
+> 文档版本：v1.2.0  
 > 最后更新：2026-06-22

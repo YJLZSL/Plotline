@@ -25,7 +25,11 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { useStatisticsQuery } from '@/features/statistics/hooks';
 import { useEventConnectionsQuery } from '@/features/timeline/hooks';
+import { useEventsQuery } from '@/features/timeline/hooks';
+import { useCharactersQuery } from '@/features/characters/hooks';
 import { MOTION_BASE } from '@/lib/motion';
+import { PlotDensityChart } from './PlotDensityChart';
+import { CharacterArcChart } from './CharacterArcChart';
 
 const TRANSITION = MOTION_BASE;
 
@@ -44,6 +48,8 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
   const { t } = useI18n();
   const { data, isLoading } = useStatisticsQuery(workspaceId);
   const { data: connections = [] } = useEventConnectionsQuery(workspaceId);
+  const { data: events = [] } = useEventsQuery(workspaceId);
+  const { data: characters = [] } = useCharactersQuery(workspaceId);
   const foreshadows = connections.filter((c) => c.connectionType === 'foreshadow');
 
   return (
@@ -251,6 +257,9 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
                 )}
               </CardContent>
             </Card>
+
+            <PlotDensityChart events={events} />
+            <CharacterArcChart events={events} characters={characters} />
           </div>
         )}
       </div>

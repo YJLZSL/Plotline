@@ -19,7 +19,7 @@ import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { useThemeStore } from '@/stores/ui';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 interface SettingsViewProps {
   workspaceId: string;

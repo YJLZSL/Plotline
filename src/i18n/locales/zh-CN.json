@@ -92,6 +92,28 @@
       "statusRevise": "待修改"
     }
   },
+  "gantt": {
+    "title": "甘特图",
+    "subtitle": "按轨道横向排布事件节点"
+  },
+  "treeChart": {
+    "title": "树状图",
+    "subtitle": "大纲层级可视化",
+    "volume": "卷",
+    "chapter": "章",
+    "scene": "场景"
+  },
+  "matrix": {
+    "title": "关系矩阵",
+    "subtitle": "角色两两关系强度网格",
+    "target": "目标角色",
+    "source": "源角色",
+    "legend": "关系类型图例",
+    "totalRelations": "共 {{count}} 条关系",
+    "viewList": "卡片列表",
+    "viewGraph": "关系网络",
+    "viewMatrix": "关系矩阵"
+  },
   "characters": {
     "title": "角色",
     "subtitle": "管理角色档案与关系",
@@ -158,6 +180,10 @@
     "trackEvents": "轨道事件数",
     "foreshadowTracker": "伏笔追踪",
     "foreshadowEmpty": "暂无伏笔连接。在时间轴中选择「伏笔」类型并连接两个事件即可创建。",
+    "plotDensity": "情节密度分布",
+    "characterArc": "角色弧线时间轴",
+    "peakCount": "峰值 {{count}} 个事件",
+    "segment": "情节段",
     "empty": "尚无数据，开始创作后这里会显示统计。"
   },
   "settings": {

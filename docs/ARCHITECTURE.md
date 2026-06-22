@@ -58,7 +58,7 @@ plotline/
 │   ├── components/
 │   │   ├── ui/               # 基础原子组件（Button、Card、Dialog...）
 │   │   ├── layout/           # 应用布局（Sidebar、Toolbar、StatusBar）
-│   │   └── views/            # 顶级视图（5 大模块各一个）
+│   │   └── views/            # 顶级视图 + 第四阶段可视化（甘特图、树状图、关系矩阵、高级统计图表）
 │   ├── features/             # 按业务领域拆分
 │   │   ├── workspace/        # 工作区
 │   │   ├── timeline/         # 时间轴
@@ -200,6 +200,10 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
   角色、笔记、大纲节点的创建/更新/删除。详见 ADR-014。
 - **Markdown 导出**：v1.1 起后端 `services::export` 支持导出工作区/大纲为 Markdown。
   详见 ADR-013。
+- **第四阶段可视化**：v1.2 起新增甘特图、大纲树状图、关系矩阵、情节密度图、
+  角色弧线时间轴。均为**纯前端 SVG**实现，复用既有 TanStack Query 数据缓存，
+  不新增 IPC 命令，mock 层自动对等。布局算法集中在 `features/*/layout.ts`，
+  视图组件在 `components/views/`。详见 ADR-016。
 - **崩溃恢复**：应用启动时检测 `.db.lock`，若存在则提示恢复。
 - **动效一致性**：`src/lib/motion.ts` 暴露 fast/base/slow 三档 token，所有
   framer-motion `transition` 必须引用 token，禁止字面量。详见 ADR-008。
@@ -224,8 +228,9 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
 12. **ADR-013**：Markdown 导出采用后端模板生成 —— 创作者通用格式。
 13. **ADR-014**：撤销/重做采用前端命令历史栈 —— 不改动后端、覆盖主要 CRUD。
 14. **ADR-015**：事件连接与伏笔追踪 —— 启用 `event_connections` 并暴露到前端。
+15. **ADR-016**：第四阶段可视化采用纯前端 SVG —— 零新增 IPC、复用数据缓存。
 
 ---
 
-> 文档版本：v1.1.0  
+> 文档版本：v1.2.0  
 > 最后更新：2026-06-22
