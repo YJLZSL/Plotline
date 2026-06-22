@@ -29,7 +29,9 @@ pub fn create_character(
     input: CreateCharacterInput,
 ) -> AppResult<Character> {
     if input.name.trim().is_empty() {
-        return Err(crate::error::AppError::InvalidInput("角色名称不能为空".into()));
+        return Err(crate::error::AppError::InvalidInput(
+            "角色名称不能为空".into(),
+        ));
     }
     with_db!(state, |conn| {
         crate::services::character::create(conn, input)

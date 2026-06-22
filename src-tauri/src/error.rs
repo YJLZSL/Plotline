@@ -31,9 +31,7 @@ pub enum AppError {
 impl From<rusqlite::Error> for AppError {
     fn from(err: rusqlite::Error) -> Self {
         match err {
-            rusqlite::Error::QueryReturnedNoRows => {
-                AppError::NotFound("记录不存在".into())
-            }
+            rusqlite::Error::QueryReturnedNoRows => AppError::NotFound("记录不存在".into()),
             other => AppError::Db(other.to_string()),
         }
     }

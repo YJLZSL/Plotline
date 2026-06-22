@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type PomodoroTheme = 'warm' | 'mc' | 'minimal';
 export type PomodoroPhase = 'focus' | 'shortBreak' | 'longBreak';
@@ -28,60 +29,71 @@ function phaseSeconds(phase: PomodoroPhase): number {
   return PHASE_MINUTES[phase] * 60;
 }
 
-export const usePomodoroStore = create<PomodoroState>((set, get) => ({
-  phase: 'focus',
-  theme: 'warm',
-  secondsLeft: phaseSeconds('focus'),
-  isRunning: false,
-  completedFocusSessions: 0,
-  setTheme: (theme) => set({ theme }),
-  setPhase: (phase) =>
-    set({ phase, secondsLeft: phaseSeconds(phase), isRunning: false }),
-  start: () => set({ isRunning: true }),
-  pause: () => set({ isRunning: false }),
-  reset: () => set({ secondsLeft: phaseSeconds(get().phase), isRunning: false }),
-  tick: () => {
-    const { secondsLeft, isRunning, phase, completedFocusSessions } = get();
-    if (!isRunning || secondsLeft <= 0) return;
-    const next = secondsLeft - 1;
-    if (next === 0) {
-      // Auto-switch phase
-      let nextPhase: PomodoroPhase;
-      let nextCompleted = completedFocusSessions;
-      if (phase === 'focus') {
-        nextCompleted += 1;
-        nextPhase = nextCompleted % 4 === 0 ? 'longBreak' : 'shortBreak';
-      } else {
-        nextPhase = 'focus';
-      }
-      set({
-        phase: nextPhase,
-        secondsLeft: phaseSeconds(nextPhase),
-        isRunning: false,
-        completedFocusSessions: nextCompleted,
-      });
-    } else {
-      set({ secondsLeft: next });
-    }
-  },
-  skip: () => {
-    const { phase, completedFocusSessions } = get();
-    let nextPhase: PomodoroPhase;
-    let nextCompleted = completedFocusSessions;
-    if (phase === 'focus') {
-      nextCompleted += 1;
-      nextPhase = nextCompleted % 4 === 0 ? 'longBreak' : 'shortBreak';
-    } else {
-      nextPhase = 'focus';
-    }
-    set({
-      phase: nextPhase,
-      secondsLeft: phaseSeconds(nextPhase),
+export const usePomodoroStore = create<PomodoroState>()(
+  persist(
+    (set, get) => ({
+      phase: 'focus',
+      theme: 'warm',
+      secondsLeft: phaseSeconds('focus'),
       isRunning: false,
-      completedFocusSessions: nextCompleted,
-    });
-  },
-}));
+      completedFocusSessions: 0,
+      setTheme: (theme) => set({ theme }),
+      setPhase: (phase) =>
+        set({ phase, secondsLeft: phaseSeconds(phase), isRunning: false }),
+      start: () => set({ isRunning: true }),
+      pause: () => set({ isRunning: false }),
+      reset: () => set({ secondsLeft: phaseSeconds(get().phase), isRunning: false }),
+      tick: () => {
+        const { secondsLeft, isRunning, phase, completedFocusSessions } = get();
+        if (!isRunning || secondsLeft <= 0) return;
+        const next = secondsLeft - 1;
+        if (next === 0) {
+          // Auto-switch phase
+          let nextPhase: PomodoroPhase;
+          let nextCompleted = completedFocusSessions;
+          if (phase === 'focus') {
+            nextCompleted += 1;
+            nextPhase = nextCompleted % 4 === 0 ? 'longBreak' : 'shortBreak';
+          } else {
+            nextPhase = 'focus';
+          }
+          set({
+            phase: nextPhase,
+            secondsLeft: phaseSeconds(nextPhase),
+            isRunning: false,
+            completedFocusSessions: nextCompleted,
+          });
+        } else {
+          set({ secondsLeft: next });
+        }
+      },
+      skip: () => {
+        const { phase, completedFocusSessions } = get();
+        let nextPhase: PomodoroPhase;
+        let nextCompleted = completedFocusSessions;
+        if (phase === 'focus') {
+          nextCompleted += 1;
+          nextPhase = nextCompleted % 4 === 0 ? 'longBreak' : 'shortBreak';
+        } else {
+          nextPhase = 'focus';
+        }
+        set({
+          phase: nextPhase,
+          secondsLeft: phaseSeconds(nextPhase),
+          isRunning: false,
+          completedFocusSessions: nextCompleted,
+        });
+      },
+    }),
+    {
+      name: 'plotline:pomodoro',
+      partialize: (state) => ({
+        theme: state.theme,
+        completedFocusSessions: state.completedFocusSessions,
+      }),
+    },
+  ),
+);
 
 export function formatPomodoroTime(seconds: number): string {
   const m = Math.floor(seconds / 60);

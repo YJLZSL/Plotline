@@ -58,7 +58,9 @@ pub fn import_workspace(
     bundle: WorkspaceBundle,
 ) -> AppResult<Workspace> {
     if bundle.workspace.name.trim().is_empty() {
-        return Err(crate::error::AppError::InvalidInput("工作区名称不能为空".into()));
+        return Err(crate::error::AppError::InvalidInput(
+            "工作区名称不能为空".into(),
+        ));
     }
     with_db!(state, |conn| {
         crate::services::workspace::import_bundle(conn, bundle)

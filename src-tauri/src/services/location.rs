@@ -183,7 +183,11 @@ pub fn link(conn: &Connection, input: LinkLocationsInput) -> AppResult<()> {
     conn.execute(
         "INSERT INTO location_links (source_id, target_id, label) VALUES (?1, ?2, ?3)
          ON CONFLICT(source_id, target_id) DO UPDATE SET label = excluded.label",
-        params![input.source_id, input.target_id, input.label.unwrap_or_default()],
+        params![
+            input.source_id,
+            input.target_id,
+            input.label.unwrap_or_default()
+        ],
     )?;
     Ok(())
 }

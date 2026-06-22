@@ -8,6 +8,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("../../migrations/002_map_and_vn.sql")),
     (3, include_str!("../../migrations/003_font_theme.sql")),
     (4, include_str!("../../migrations/004_ai_assistant.sql")),
+    (5, include_str!("../../migrations/005_vn_assets.sql")),
 ];
 
 /// 创建 schema_migrations 表并依次执行迁移。
@@ -64,7 +65,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 4, "迁移 001-004 均应已应用");
+        assert_eq!(v, 5, "迁移 001-005 均应已应用");
     }
 
     #[test]
@@ -75,9 +76,9 @@ mod tests {
             [],
         )
         .unwrap();
-        let name: String =
-            conn.query_row("SELECT name FROM workspaces WHERE id='1'", [], |r| r.get(0))
-                .unwrap();
+        let name: String = conn
+            .query_row("SELECT name FROM workspaces WHERE id='1'", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(name, "a");
     }
 
@@ -85,7 +86,9 @@ mod tests {
     fn should_seed_app_settings() {
         let conn = test_conn();
         let theme: String = conn
-            .query_row("SELECT theme FROM app_settings WHERE id=1", [], |r| r.get(0))
+            .query_row("SELECT theme FROM app_settings WHERE id=1", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(theme, "light");
     }
@@ -101,7 +104,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 4, "重复执行迁移不应改变版本号");
+        assert_eq!(v, 5, "重复执行迁移不应改变版本号");
     }
 
     #[test]
@@ -114,7 +117,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 4, "迁移 004 应使版本号变为 4");
+        assert_eq!(v, 5, "迁移 005 应使版本号变为 5");
         // 验证 locations 表存在
         conn.execute(
             "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",
@@ -139,9 +142,9 @@ mod tests {
             [],
         )
         .unwrap();
-        let name: String =
-            conn.query_row("SELECT name FROM locations WHERE id='l1'", [], |r| r.get(0))
-                .unwrap();
+        let name: String = conn
+            .query_row("SELECT name FROM locations WHERE id='l1'", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(name, "城");
     }
 }

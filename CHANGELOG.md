@@ -4,6 +4,60 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [1.6.0] - 2026-06-22
+
+**目标**：补齐用户反馈的兜底需求——MC 彩蛋、AI 厂商真实图标、VN 素材导入与预览、
+功能间协作入口与动画过渡，并发布 v1.6.0。
+
+### 新增
+- **MC 风格彩蛋** (`src/hooks/useKonamiCode.ts` + `src/app/AppRoutes.tsx` +
+  `src/styles/themes.css`)：
+  在应用中输入 Konami 码（↑↑↓↓←→←→BA）后，全局界面会短暂切换为像素字体并显示
+  “MC 彩蛋已激活！Creeper? Aww man~”提示，8 秒后自动恢复。
+- **番茄钟主题持久化** (`src/stores/pomodoro.ts`)：
+  `theme` 与 `completedFocusSessions` 现在会持久化到本地存储，重启后保留。
+- **AI 厂商图标升级** (`src/features/ai/providers.tsx`)：
+  将原先的示意性单色图标替换为更接近各品牌官方风格的简化 SVG，覆盖
+  OpenAI、DeepSeek、Moonshot、智谱 AI、硅基流动、火山方舟、腾讯混元、Ollama。
+- **VN 预览器素材渲染** (`src/components/views/VnView.tsx`)：
+  预览模式现在会真实显示上传的场景背景图、角色立绘，并播放场景 BGM 与台词配音。
+- **Ren'Py 导入/导出增强** (`src/components/views/VnView.tsx` +
+  `src-tauri/src/services/vn.rs`)：
+  导入时解析 `scene`、`play music`、`show`、`voice` 等语句并写入对应素材字段；
+  导出时附带 `play music`、`show ... at center`、`voice` 以及素材路径注释。
+- **地图 → 时间轴联动** (`src/components/views/MapView.tsx`)：
+  地点详情面板中的“关联事件”现在可点击，直接跳转到该工作区的时间轴视图。
+- **大纲生成时间轴事件** (`src/components/views/OutlineView.tsx`)：
+  选中大纲节点后，点击“生成时间轴事件”即可基于节点标题与内容创建事件，
+  并自动回填节点的 `eventId`。
+- **视图切换动画补全** (`src/components/views/VnView.tsx` +
+  `src/components/views/MapView.tsx`)：
+  VN 编辑/预览/关系图三种模式切换加入 `AnimatePresence` 淡入滑动过渡；
+  地图右侧详情面板也包裹 `AnimatePresence`，关闭时退出动画生效。
+
+### 变更
+- **编辑器字体生效** (`src/components/ui/RichEditor.tsx`)：
+  富文本编辑器内容区新增 `font-mono` 类，使设置页自定义的编辑器字体真正生效。
+- **AI 插入 VN 场景错误处理** (`src-tauri/src/services/ai.rs`)：
+  将创建台词失败时的 `let _ = ...` 忽略改为 `?` 错误传播。
+
+### 修复
+- 修复 `src/components/views/VnView.tsx` 中 Ren'Py 导入时 `labelMatch[1]` 可能为
+  `undefined` 导致的 TypeScript 编译错误。
+- 修复 `VnLineRow` 单元测试因未提供 `QueryClientProvider` 而失败的问题，
+  通过 `vi.mock('@/features/vn/hooks')` 隔离 `useUploadVnAsset`。
+- 修复 Rust 测试与新 VN 素材字段不匹配的问题，并在 `db::migrate::MIGRATIONS`
+  中补录遗漏的 `005_vn_assets.sql`。
+
+### 文档
+- 更新 `AGENTS.md` 当前迭代状态至 v1.6.0。
+- 更新 `docs/DATA_MODEL.md` 记录 VN 素材字段。
+
+### 测试
+- 新增 `src/hooks/useKonamiCode.test.ts`（2 项）验证 Konami 码触发与错误序列不触发。
+- 新增 Rust 测试 `services::vn::tests::should_export_renpy_includes_asset_paths`
+  验证导出包含素材路径。
+
 ## [1.5.0] - 2026-06-23
 
 **目标**：完善 AI 助手多服务商支持、统一应用图标、修复数据导入与错误处理缺陷，发布 v1.5.0 小版本。

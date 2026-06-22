@@ -16,12 +16,25 @@ import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
+import { useKonamiCode } from '@/hooks/useKonamiCode';
+import { toastSuccess } from '@/stores/toast';
 import { MOTION_FAST } from '@/lib/motion';
 
 function WorkspaceRoutes() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   if (!workspaceId) return null;
   return <WorkspaceLayout />;
+}
+
+function KonamiEasterEgg() {
+  useKonamiCode(() => {
+    document.documentElement.classList.add('mc-easter');
+    toastSuccess('MC 彩蛋已激活！Creeper? Aww man~');
+    window.setTimeout(() => {
+      document.documentElement.classList.remove('mc-easter');
+    }, 8000);
+  });
+  return null;
 }
 
 function ThemeSync() {
@@ -44,6 +57,7 @@ export function AppRoutes() {
   return (
     <>
       <ThemeSync />
+      <KonamiEasterEgg />
       <AnimatedRoutes />
     </>
   );

@@ -5,7 +5,7 @@
  * 因此后端 `services::ai::call_chat_api` 无需改动，只需在前端预设好
  * provider id / baseUrl / 推荐模型，用户即可一键切换。
  *
- * 图标采用各厂商官方/高辨识度 SVG 的简化单色版（currentColor），
+ * 图标采用各厂商官方/高辨识度 SVG 的简化单色版（currentColor，24×24），
  * 在设置页与 AI 助手面板顶部展示，保证视觉一致。
  */
 
@@ -37,15 +37,9 @@ const iconProps = {
 } as const;
 
 const OpenAiIcon = (
-  <svg {...iconProps} aria-hidden>
+  <svg {...iconProps} aria-hidden viewBox="0 0 24 24">
     <path
-      d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M12 7l4.33 2.5v5L12 17 7.67 14.5v-5L12 7z"
+      d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.896zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"
       fill="currentColor"
     />
   </svg>
@@ -54,10 +48,11 @@ const OpenAiIcon = (
 const SiliconFlowIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M2 12c4-4 8 0 12-4s4 8 8 4M2 16c4-4 8 0 12-4s4 8 8 4"
+      d="M2 12c3-3 6 0 9-3s3 6 9 3M2 16c3-3 6 0 9-3s3 6 9 3"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
+      fill="none"
     />
   </svg>
 );
@@ -65,7 +60,7 @@ const SiliconFlowIcon = (
 const VolcanoIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 3c2 4 6 6 5 11-1 3-3 5-5 6-2-1-4-3-5-6-1-5 3-7 5-11z"
+      d="M12 2c1.5 3.5 5.5 6 4.5 11.5-.8 3.2-3 5.5-4.5 6.5-1.5-1-3.7-3.3-4.5-6.5C6.5 8 10.5 5.5 12 2z"
       fill="currentColor"
     />
   </svg>
@@ -74,7 +69,7 @@ const VolcanoIcon = (
 const TencentIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM7 11h10v2H7v-2z"
+      d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15V7h4v3h3v4h-3v3h-4z"
       fill="currentColor"
     />
   </svg>
@@ -83,14 +78,15 @@ const TencentIcon = (
 const DeepSeekIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M4 20c0-6 5-10 10-10 2 0 4 .5 6 1.5-2-1.5-4.5-2.5-7-2.5-4 0-7 3-7 7 0 1.5.5 2.8 1.5 4H4z"
+      d="M4 19.5c.5-5.5 5.5-9 10.5-9 2 0 4 .5 5.5 1.5-1.8-1.8-4.3-3-7-3-5 0-9 3.5-9 8.5 0 1 .2 2 .5 2.9H4z"
       fill="currentColor"
     />
     <path
-      d="M14 7c0-2 1.5-3.5 3.5-4M18 6c-1.5 1-2 3-1 5"
+      d="M15.5 6.5c0-2.5 2.5-4 5-4.5M21 5.5c-1.5 1.5-2 3.5-1 6"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
+      fill="none"
     />
   </svg>
 );
@@ -116,19 +112,20 @@ const ZhipuIcon = (
 const OllamaIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 3c-4 0-7 3-7 7 0 2 1 4 3 5v3l4-2 4 2v-3c2-1 3-3 3-5 0-4-3-7-7-7z"
+      d="M12 3c-3.8 0-6.8 2.8-7 6.5-.1 1.8.6 3.5 2 4.6V18l5-2.5 5 2.5v-3.9c1.4-1.1 2.1-2.8 2-4.6-.2-3.7-3.2-6.5-7-6.5z"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinejoin="round"
+      fill="none"
     />
-    <circle cx="12" cy="10" r="2" fill="currentColor" />
+    <circle cx="12" cy="10" r="1.8" fill="currentColor" />
   </svg>
 );
 
 const CustomIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M4 6h16M4 12h10M4 18h16"
+      d="M4 7h16M4 12h16M4 17h16"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"

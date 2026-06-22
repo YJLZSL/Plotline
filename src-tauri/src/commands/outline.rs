@@ -23,7 +23,9 @@ pub fn create_outline_node(
     input: CreateOutlineNodeInput,
 ) -> AppResult<OutlineNode> {
     if input.title.trim().is_empty() {
-        return Err(crate::error::AppError::InvalidInput("节点标题不能为空".into()));
+        return Err(crate::error::AppError::InvalidInput(
+            "节点标题不能为空".into(),
+        ));
     }
     with_db!(state, |conn| {
         crate::services::outline::create(conn, input)

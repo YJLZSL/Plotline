@@ -4,6 +4,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { VnLineRow } from './VnView';
 import type { Character, VnLine, VnScene } from '@/types';
 
+vi.mock('@/features/vn/hooks', () => ({
+  useUploadVnAsset: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+}));
+
 const t = (key: string) => key;
 
 function makeLine(overrides: Partial<VnLine> = {}): VnLine {
@@ -18,6 +22,8 @@ function makeLine(overrides: Partial<VnLine> = {}): VnLine {
     emotion: '',
     choiceLabel: '',
     choiceTargetSceneId: null,
+    spriteAssetPath: null,
+    voicePath: null,
     createdAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
@@ -50,6 +56,8 @@ const scenes: VnScene[] = [
     workspaceId: 'ws1',
     title: '开场',
     background: '',
+    backgroundAssetPath: null,
+    bgmPath: null,
     outlineNodeId: null,
     sortOrder: 0,
     createdAt: '',
@@ -65,6 +73,7 @@ describe('VnLineRow', () => {
         index={0}
         characters={characters}
         scenes={scenes}
+        workspaceId="ws1"
         currentSceneId="s1"
         canMoveUp={false}
         canMoveDown={true}
@@ -86,6 +95,7 @@ describe('VnLineRow', () => {
         index={1}
         characters={characters}
         scenes={scenes}
+        workspaceId="ws1"
         currentSceneId="s1"
         canMoveUp={true}
         canMoveDown={true}
@@ -108,6 +118,7 @@ describe('VnLineRow', () => {
         index={0}
         characters={characters}
         scenes={scenes}
+        workspaceId="ws1"
         currentSceneId="s1"
         canMoveUp={false}
         canMoveDown={true}
@@ -129,6 +140,7 @@ describe('VnLineRow', () => {
         index={0}
         characters={characters}
         scenes={scenes}
+        workspaceId="ws1"
         currentSceneId="s1"
         canMoveUp={false}
         canMoveDown={false}

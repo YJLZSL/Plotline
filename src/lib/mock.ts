@@ -939,6 +939,8 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         workspaceId: input.workspaceId,
         title: input.title,
         background: input.background ?? '',
+        backgroundAssetPath: input.backgroundAssetPath ?? null,
+        bgmPath: input.bgmPath ?? null,
         outlineNodeId: input.outlineNodeId ?? null,
         sortOrder: count,
         createdAt: now,
@@ -953,6 +955,8 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       if (!s) notFound(`场景 ${input.id} 不存在`);
       if (input.title !== undefined) s.title = input.title;
       if (input.background !== undefined) s.background = input.background;
+      if (input.backgroundAssetPath !== undefined) s.backgroundAssetPath = input.backgroundAssetPath;
+      if (input.bgmPath !== undefined) s.bgmPath = input.bgmPath;
       if (input.outlineNodeId !== undefined) s.outlineNodeId = input.outlineNodeId;
       if (input.sortOrder !== undefined) s.sortOrder = input.sortOrder;
       s.updatedAt = nowISO();
@@ -991,6 +995,8 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         emotion: input.emotion ?? '',
         choiceLabel: input.choiceLabel ?? '',
         choiceTargetSceneId: input.choiceTargetSceneId ?? null,
+        spriteAssetPath: input.spriteAssetPath ?? null,
+        voicePath: input.voicePath ?? null,
         createdAt: now,
       };
       db.vnLines.push(line);

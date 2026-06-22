@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -13,6 +13,7 @@ import {
   ArrowDown,
   Download,
   Share2,
+  CalendarDays,
 } from 'lucide-react';
 
 import {
@@ -32,6 +33,7 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn, downloadText } from '@/lib/utils';
 import { MOTION_FAST } from '@/lib/motion';
+import { toastError } from '@/stores/toast';
 import type { OutlineNode, OutlineNodeType } from '@/types';
 import {
   useCreateOutlineNode,
@@ -39,6 +41,7 @@ import {
   useOutlineQuery,
   useUpdateOutlineNode,
 } from '@/features/outline/hooks';
+import { useCreateEvent, useTracksQuery } from '@/features/timeline/hooks';
 import { useExportOutlineMarkdown } from '@/features/workspace/hooks';
 import { useMoveOutlineNode } from '@/features/outline/moveHooks';
 import { OutlineTreeChart } from './OutlineTreeChart';
@@ -63,6 +66,8 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const deleteMutation = useDeleteOutlineNode(workspaceId);
   const moveMutation = useMoveOutlineNode(workspaceId);
   const exportMdMutation = useExportOutlineMarkdown();
+  const createEvent = useCreateEvent(workspaceId);
+  const { data: tracks = [] } = useTracksQuery(workspaceId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -107,6 +112,23 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
     });
     setEditDialogOpen(false);
     setEditing(null);
+  };
+
+  const handleGenerateEvent = async (node: OutlineNode) => {
+    if (tracks.length === 0) {
+      toastError(new Error(t('outline.noTracksForEvent')));
+      return;
+    }
+    const event = await createEvent.mutateAsync({
+      workspaceId,
+      trackId: tracks[0]!.id,
+      title: node.title,
+      description: node.content,
+    });
+    await updateMutation.mutateAsync({
+      id: node.id,
+      eventId: event.id,
+    });
   };
 
   return (
@@ -234,7 +256,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
                   </p>
                 )}
               </div>
-              <div className="mt-6 flex gap-2">
+              <div className="mt-6 flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -244,6 +266,16 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
                   }}
                 >
                   {t('common.edit')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleGenerateEvent(selected)}
+                  loading={createEvent.isPending || updateMutation.isPending}
+                  className="gap-1.5"
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {t('outline.generateEvent')}
                 </Button>
                 <Button
                   variant="danger"

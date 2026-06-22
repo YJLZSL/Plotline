@@ -4,9 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{
-    CreateWorkspaceInput, UpdateWorkspaceInput, Workspace, WorkspaceBundle,
-};
+use crate::models::{CreateWorkspaceInput, UpdateWorkspaceInput, Workspace, WorkspaceBundle};
 
 fn parse_settings(s: &str) -> Value {
     serde_json::from_str(s).unwrap_or_else(|e| {
@@ -212,7 +210,15 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
         tx.execute(
             "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![new_id, new_ws_id, t.name, t.color, t.sort_order, t.is_visible as i64, now_str],
+            params![
+                new_id,
+                new_ws_id,
+                t.name,
+                t.color,
+                t.sort_order,
+                t.is_visible as i64,
+                now_str
+            ],
         )?;
     }
 
@@ -288,7 +294,15 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
             "INSERT INTO character_relationships
              (id, workspace_id, source_id, target_id, type, description, strength)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![new_id, new_ws_id, new_source, new_target, rel.r#type, rel.description, rel.strength],
+            params![
+                new_id,
+                new_ws_id,
+                new_source,
+                new_target,
+                rel.r#type,
+                rel.description,
+                rel.strength
+            ],
         )?;
     }
 
@@ -307,7 +321,10 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
     }
     let note_ws_id = Some(new_ws_id.clone());
     for n in bundle.notes.drain(..) {
-        let new_id = note_map.get(&n.id).cloned().unwrap_or_else(|| Uuid::new_v4().to_string());
+        let new_id = note_map
+            .get(&n.id)
+            .cloned()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let new_folder = n.folder_id.and_then(|fid| note_map.get(&fid).cloned());
         tx.execute(
             "INSERT INTO notes
@@ -328,12 +345,16 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
         )?;
     }
 
-    let mut outline_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut outline_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for o in &bundle.outline_nodes {
         outline_map.insert(o.id.clone(), Uuid::new_v4().to_string());
     }
     for o in bundle.outline_nodes.drain(..) {
-        let new_id = outline_map.get(&o.id).cloned().unwrap_or_else(|| Uuid::new_v4().to_string());
+        let new_id = outline_map
+            .get(&o.id)
+            .cloned()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let new_event = o.event_id.and_then(|eid| event_map.get(&eid).cloned());
         let new_parent = o.parent_id.and_then(|pid| outline_map.get(&pid).cloned());
         tx.execute(
@@ -509,8 +530,14 @@ mod tests {
         let new_ws = import_bundle(&conn, bundle).unwrap();
 
         let notes = crate::services::note::list(&conn, &new_ws.id).unwrap();
-        let folder = notes.iter().find(|n| n.is_folder).expect("folder note missing");
-        let child = notes.iter().find(|n| !n.is_folder).expect("child note missing");
+        let folder = notes
+            .iter()
+            .find(|n| n.is_folder)
+            .expect("folder note missing");
+        let child = notes
+            .iter()
+            .find(|n| !n.is_folder)
+            .expect("child note missing");
         assert!(
             child.folder_id.is_some(),
             "child note should have a folder_id after import"
@@ -553,6 +580,9 @@ mod tests {
         let old_id = bundle.workspace.id.clone();
         let new_ws = import_bundle(&conn, bundle).unwrap();
         assert_ne!(new_ws.id, old_id, "imported workspace should get a new ID");
-        assert!(new_ws.name.contains("导入"), "imported name should have suffix");
+        assert!(
+            new_ws.name.contains("导入"),
+            "imported name should have suffix"
+        );
     }
 }

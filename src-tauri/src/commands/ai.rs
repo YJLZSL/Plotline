@@ -2,7 +2,10 @@ use tauri::State;
 
 use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
-use crate::models::{AiChatInput, AiChatResult, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiSession, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput};
+use crate::models::{
+    AiChatInput, AiChatResult, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo,
+    AiSession, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
+};
 use crate::services::settings::read_settings;
 use crate::AppState;
 
@@ -11,7 +14,9 @@ pub fn create_ai_session(
     state: State<'_, AppState>,
     input: CreateAiSessionInput,
 ) -> AppResult<AiSession> {
-    with_db!(state, |conn| crate::services::ai::create_session(conn, input))
+    with_db!(state, |conn| crate::services::ai::create_session(
+        conn, input
+    ))
 }
 
 #[tauri::command]
@@ -55,19 +60,17 @@ pub fn list_ai_messages(
 }
 
 #[tauri::command]
-pub async fn ai_chat(
-    state: State<'_, AppState>,
-    input: AiChatInput,
-) -> AppResult<AiChatResult> {
+pub async fn ai_chat(state: State<'_, AppState>, input: AiChatInput) -> AppResult<AiChatResult> {
     let user_message = input.message.trim().to_string();
     if user_message.is_empty() {
         return Err(AppError::InvalidInput("消息不能为空".into()));
     }
 
     let (settings, session_id, history, chunks) = {
-        let db = state.db.lock().map_err(|e| {
-            AppError::Internal(format!("db lock poisoned: {e}"))
-        })?;
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
         let settings = read_settings(&db.conn)?;
         if !settings.ai_enabled {
             return Err(AppError::Forbidden(
@@ -77,14 +80,16 @@ pub async fn ai_chat(
 
         let session_id = match input.session_id {
             Some(id) => id,
-            None => crate::services::ai::create_session(
-                &db.conn,
-                CreateAiSessionInput {
-                    workspace_id: input.workspace_id.clone(),
-                    title: None,
-                },
-            )?
-            .id,
+            None => {
+                crate::services::ai::create_session(
+                    &db.conn,
+                    CreateAiSessionInput {
+                        workspace_id: input.workspace_id.clone(),
+                        title: None,
+                    },
+                )?
+                .id
+            }
         };
 
         crate::services::ai::add_message(
@@ -114,13 +119,14 @@ pub async fn ai_chat(
         (settings, session_id, history, chunks)
     };
 
-    let reply = crate::services::ai::call_chat_api(&settings, &history, &user_message, &chunks)
-        .await?;
+    let reply =
+        crate::services::ai::call_chat_api(&settings, &history, &user_message, &chunks).await?;
 
     let messages = {
-        let db = state.db.lock().map_err(|e| {
-            AppError::Internal(format!("db lock poisoned: {e}"))
-        })?;
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
         crate::services::ai::add_message(
             &db.conn,
             &session_id,
@@ -138,10 +144,7 @@ pub async fn ai_chat(
 }
 
 #[tauri::command]
-pub fn ai_index_workspace(
-    state: State<'_, AppState>,
-    workspace_id: String,
-) -> AppResult<()> {
+pub fn ai_index_workspace(state: State<'_, AppState>, workspace_id: String) -> AppResult<()> {
     with_db!(state, |conn| {
         crate::services::ai::index_workspace(conn, &workspace_id)
     })
@@ -153,7 +156,11 @@ pub fn ai_kv_get(
     workspace_id: String,
     key: String,
 ) -> AppResult<Option<AiKvEntry>> {
-    with_db!(state, |conn| crate::services::ai::kv_get(conn, &workspace_id, &key))
+    with_db!(state, |conn| crate::services::ai::kv_get(
+        conn,
+        &workspace_id,
+        &key
+    ))
 }
 
 #[tauri::command]
@@ -171,6 +178,7 @@ pub fn apply_ai_output(
     state: State<'_, AppState>,
     input: AiInsertInput,
 ) -> AppResult<AiInsertResult> {
-    with_db!(state, |conn| crate::services::ai::apply_output(conn, &input))
+    with_db!(state, |conn| crate::services::ai::apply_output(
+        conn, &input
+    ))
 }
-

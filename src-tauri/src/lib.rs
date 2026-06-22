@@ -18,7 +18,11 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -129,6 +133,7 @@ pub fn run() {
             commands::vn::update_vn_line,
             commands::vn::delete_vn_line,
             commands::vn::export_vn_renpy,
+            commands::vn::upload_vn_asset,
             // statistics
             commands::statistics::get_statistics,
             // settings

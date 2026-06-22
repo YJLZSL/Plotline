@@ -39,8 +39,7 @@ pub fn check_event_conflicts(events: &[Event]) -> Vec<Conflict> {
         .into_iter()
         .filter_map(|((character_id, date_value), bucket)| {
             // 不同 track 才算冲突。
-            let mut track_ids: Vec<String> =
-                bucket.iter().map(|e| e.track_id.clone()).collect();
+            let mut track_ids: Vec<String> = bucket.iter().map(|e| e.track_id.clone()).collect();
             track_ids.sort();
             track_ids.dedup();
             if track_ids.len() < 2 {

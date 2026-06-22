@@ -15,9 +15,10 @@ pub mod workspace;
 macro_rules! with_db {
     ($state:expr, $f:expr) => {{
         let state = $state;
-        let db = state.db.lock().map_err(|e| {
-            crate::error::AppError::Internal(format!("db lock poisoned: {e}"))
-        })?;
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| crate::error::AppError::Internal(format!("db lock poisoned: {e}")))?;
         $f(&db.conn)
     }};
 }

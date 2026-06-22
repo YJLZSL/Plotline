@@ -154,6 +154,8 @@
     "expandAll": "全部展开",
     "collapseAll": "全部折叠",
     "exportMarkdown": "导出 Markdown",
+    "generateEvent": "生成时间轴事件",
+    "noTracksForEvent": "当前工作区没有时间轴轨道，请先创建一个轨道",
     "empty": {
       "title": "大纲是空的",
       "description": "添加第一卷开始组织你的故事结构。"
@@ -243,7 +245,15 @@
     "reorderUp": "上移",
     "reorderDown": "下移",
     "exportRenpy": "导出 Ren'Py",
+    "importRenpy": "导入 Ren'Py",
     "background": "背景",
+    "uploadBackground": "上传背景图",
+    "uploadBgm": "上传背景音乐",
+    "uploadSprite": "上传角色立绘",
+    "uploadVoice": "上传配音",
+    "spriteUploaded": "已上传立绘",
+    "voiceUploaded": "已上传配音",
+    "imported": "Ren'Py 脚本导入成功",
     "typewriter": "打字机",
     "empty": {
       "title": "还没有场景",

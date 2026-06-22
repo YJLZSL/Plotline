@@ -8,14 +8,20 @@ use crate::models::{
 use crate::AppState;
 
 #[tauri::command]
-pub fn list_locations(state: State<'_, AppState>, workspace_id: String) -> AppResult<Vec<Location>> {
+pub fn list_locations(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> AppResult<Vec<Location>> {
     with_db!(state, |conn| {
         crate::services::location::list(conn, &workspace_id)
     })
 }
 
 #[tauri::command]
-pub fn create_location(state: State<'_, AppState>, input: CreateLocationInput) -> AppResult<Location> {
+pub fn create_location(
+    state: State<'_, AppState>,
+    input: CreateLocationInput,
+) -> AppResult<Location> {
     if input.name.trim().is_empty() {
         return Err(AppError::InvalidInput("地点名称不能为空".into()));
     }
@@ -25,7 +31,10 @@ pub fn create_location(state: State<'_, AppState>, input: CreateLocationInput) -
 }
 
 #[tauri::command]
-pub fn update_location(state: State<'_, AppState>, input: UpdateLocationInput) -> AppResult<Location> {
+pub fn update_location(
+    state: State<'_, AppState>,
+    input: UpdateLocationInput,
+) -> AppResult<Location> {
     with_db!(state, |conn| {
         crate::services::location::update(conn, input)
     })

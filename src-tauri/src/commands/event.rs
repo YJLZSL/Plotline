@@ -2,7 +2,9 @@ use tauri::State;
 
 use crate::commands::with_db;
 use crate::error::AppResult;
-use crate::models::{ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput};
+use crate::models::{
+    ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput,
+};
 use crate::AppState;
 
 #[tauri::command]
@@ -15,7 +17,9 @@ pub fn list_events(state: State<'_, AppState>, workspace_id: String) -> AppResul
 #[tauri::command]
 pub fn create_event(state: State<'_, AppState>, input: CreateEventInput) -> AppResult<Event> {
     if input.title.trim().is_empty() {
-        return Err(crate::error::AppError::InvalidInput("事件标题不能为空".into()));
+        return Err(crate::error::AppError::InvalidInput(
+            "事件标题不能为空".into(),
+        ));
     }
     with_db!(state, |conn| {
         crate::services::event::create(conn, input)

@@ -6,6 +6,8 @@ export interface VnScene {
   workspaceId: string;
   title: string;
   background: string;
+  backgroundAssetPath: string | null;
+  bgmPath: string | null;
   outlineNodeId: string | null;
   sortOrder: number;
   createdAt: string;
@@ -23,6 +25,8 @@ export interface VnLine {
   emotion: VnEmotion;
   choiceLabel: string;
   choiceTargetSceneId: string | null;
+  spriteAssetPath: string | null;
+  voicePath: string | null;
   createdAt: string;
 }
 
@@ -30,6 +34,8 @@ export interface CreateVnSceneInput {
   workspaceId: string;
   title: string;
   background?: string;
+  backgroundAssetPath?: string | null;
+  bgmPath?: string | null;
   outlineNodeId?: string | null;
 }
 
@@ -37,6 +43,8 @@ export interface UpdateVnSceneInput {
   id: string;
   title?: string;
   background?: string;
+  backgroundAssetPath?: string | null;
+  bgmPath?: string | null;
   outlineNodeId?: string | null;
   sortOrder?: number;
 }
@@ -50,6 +58,8 @@ export interface CreateVnLineInput {
   emotion?: VnEmotion;
   choiceLabel?: string;
   choiceTargetSceneId?: string | null;
+  spriteAssetPath?: string | null;
+  voicePath?: string | null;
 }
 
 export interface UpdateVnLineInput {
@@ -61,5 +71,7 @@ export interface UpdateVnLineInput {
   emotion?: VnEmotion;
   choiceLabel?: string;
   choiceTargetSceneId?: string | null;
+  spriteAssetPath?: string | null;
+  voicePath?: string | null;
   sortOrder?: number;
 }

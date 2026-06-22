@@ -41,20 +41,21 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v1.5.0 代码已完成，发布待收尾）
-- **AI 多服务商支持**：设置页 AI 标签新增可视化服务商选择卡片（`src/features/ai/providers.tsx`），内置 OpenAI、硅基流动、火山方舟、腾讯混元、DeepSeek、Moonshot、智谱 AI、Ollama 本地、自定义共 9 种预设，每个预设携带官方品牌色、简化单色 SVG 图标、推荐 baseUrl 与模型名，点击自动填充并提供「获取 API Key」直达链接；AI 助手面板顶部同步显示当前服务商品牌图标。
-- **统一应用图标**：重新设计羽毛笔沿时间线书写的优雅图标（`src-tauri/icons/icon.svg` + `src/components/ui/BrandMark.tsx`），应用内外使用同一构图，消除此前 BrandMark 与 icon.svg 不一致问题；Skia 重新渲染全部 19 个 PNG/ICO 尺寸。
-- **数据导入修复**：修复工作区导入时笔记归属错误工作区（HIGH）、大纲父子层级丢失（HIGH）、笔记文件夹层级丢失（MEDIUM）三个数据损坏 bug，新增 4 项 Rust 回归测试。
-- **错误处理加固**：移除 AI `kv_set` 生产路径 `unwrap()`（HIGH）；统计/计数查询 `unwrap_or(0)` 统一改为 `?` 传播（13 处）；JSON 解析损坏时 `log::warn` 而非静默吞错（4 处）；地点连接新增跨工作区校验。
-- **竞品调研与问题审计**：新增 `docs/COMPETITOR_RESEARCH.md`（5 款竞品对比）与 `docs/ISSUE_AUDIT.md`（16 项问题，10 项已修复）。
-- **测试**：本地 `vitest run`（129 passed）、`cargo test`（40 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
-- **构建与发布**：代码已推送 `main`（commit `38a3981`），`v1.5.0` tag 已推送，CI 构建成功，草稿 Release 已创建（含 NSIS + MSI）。**遗留：安装包签名 + latest.json 填充 + 发布草稿**（本地非 TTY 环境 `tauri signer sign` 挂起，需在有 TTY 的终端中完成，详见 `HANDOFF.md` 第 2 节）。
+### 当前迭代状态（v1.6.0 已完成）
+- **MC 风格彩蛋**：新增 `useKonamiCode` hook，输入 Konami 码后全局切换像素字体并弹出彩蛋提示。
+- **番茄钟 MC 主题**：MC 主题已存在，本次补充主题持久化，重启后保留。
+- **字体自定义与像素字体**：设置页已支持 UI/编辑器字体预设 + 自定义输入，内置 Fusion Pixel 10px 像素字体；本次让富文本编辑器真正应用 `font-mono`。
+- **AI 助手融入工作流**：AI 回复支持插入为笔记/大纲/事件/VN 场景；设置页模型下拉会根据 baseUrl + API Key 拉取 `/models`；本次将厂商图标替换为更接近官方风格的 SVG。
+- **VN 素材导入**：VN 场景/台词支持上传背景图、BGM、立绘、配音；预览器可真实渲染图片与播放音频；Ren'Py 导入/导出支持素材语句。
+- **功能间配合与动画过渡**：地图关联事件可跳转时间轴；大纲节点可一键生成时间轴事件；VN 三种模式切换与地图详情面板补全 `AnimatePresence` 过渡。
+- **测试**：本地 `vitest run`（131 passed）、`cargo test`（41 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
+- **构建与发布**：版本号统一升级到 `v1.6.0`，`CHANGELOG.md` 与 `AGENTS.md` 已更新。
 
-### 下一迭代方向（v1.6 候选）
+### 下一迭代方向（v1.7 候选）
 - **导出格式扩展**：增加 ePub、PDF、Word 导出，对标 Scrivener 编译系统。
 - **导出包补全**：`WorkspaceBundle` 加入 VN 场景/台词、地点、地点连线，消除静默数据丢失。
 - **AI 流式输出**：支持 SSE 流式响应，AI 回复逐字显示；AI 系统提示词可配置。
-- **VN 编辑器**：台词富文本编辑、角色立绘插槽、预览播放器、分支调试器。
+- **VN 编辑器增强**：台词富文本编辑、分支调试器、角色立绘插槽拖拽。
 - **地图 polish**：地点分组/图层、更丰富的图标库、地图打印/PDF 导出。
 - **世界观模块**：参考 Campfire 增加种族/物种/宗教等实体管理。
 - **UI 美术**：统一空状态插画、卡片质感升级、更多主题预设、日文翻译补全。

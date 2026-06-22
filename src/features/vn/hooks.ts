@@ -15,6 +15,7 @@ import {
   listVnScenes as apiListScenes,
   updateVnLine as apiUpdateLine,
   updateVnScene as apiUpdateScene,
+  uploadVnAsset as apiUploadVnAsset,
 } from './api';
 
 export const vnScenesKey = (wsId: string) => ['vnScenes', wsId] as const;
@@ -130,6 +131,13 @@ export function useExportVnRenpy(workspaceId: string) {
     onSuccess: () => {
       toastSuccess(t('toast.vnExported'));
     },
+    onError: toastError,
+  });
+}
+
+export function useUploadVnAsset(workspaceId: string) {
+  return useMutation({
+    mutationFn: (sourcePath: string) => apiUploadVnAsset(workspaceId, sourcePath),
     onError: toastError,
   });
 }

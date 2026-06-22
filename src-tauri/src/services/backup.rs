@@ -98,11 +98,14 @@ mod tests {
         let db_path = dir.path().join("workspace.db");
         touch(&db_path);
 
-        let backup = backup_workspace_db(&db_path, DEFAULT_MAX_BACKUPS)
-            .expect("backup should succeed");
+        let backup =
+            backup_workspace_db(&db_path, DEFAULT_MAX_BACKUPS).expect("backup should succeed");
 
         assert!(backup.exists(), "backup file should exist");
-        assert!(dir.path().join("backups").is_dir(), "backups/ directory should exist");
+        assert!(
+            dir.path().join("backups").is_dir(),
+            "backups/ directory should exist"
+        );
         let name = backup.file_name().unwrap().to_string_lossy().to_string();
         assert!(name.starts_with("plotline-"), "name should be prefixed");
         assert!(name.ends_with(".db"), "name should keep .db suffix");
@@ -123,8 +126,7 @@ mod tests {
         touch(&db_path);
 
         for _ in 0..12 {
-            backup_workspace_db(&db_path, DEFAULT_MAX_BACKUPS)
-                .expect("backup should succeed");
+            backup_workspace_db(&db_path, DEFAULT_MAX_BACKUPS).expect("backup should succeed");
             // 时间戳精度为秒，需要短暂等待以避免文件名冲突。
             sleep(Duration::from_millis(1100));
         }

@@ -11,7 +11,8 @@ use crate::models::{
     AiSearchResult, AiSession, CreateAiMessageInput, CreateAiSessionInput,
 };
 
-const DEFAULT_SYSTEM_PROMPT: &str = "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答。";
+const DEFAULT_SYSTEM_PROMPT: &str =
+    "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答。";
 pub const MAX_HISTORY_MESSAGES: usize = 10;
 pub const MAX_RAG_CHUNKS: usize = 5;
 const MAX_CHUNK_TOKENS: usize = 800;
@@ -173,8 +174,9 @@ pub fn kv_set(conn: &Connection, entry: AiKvEntry) -> AppResult<AiKvEntry> {
          ON CONFLICT(workspace_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
         params![entry.workspace_id, entry.key, entry.value, now],
     )?;
-    kv_get(conn, &entry.workspace_id, &entry.key)?
-        .ok_or_else(|| AppError::Internal("kv_set upsert succeeded but kv_get returned None".into()))
+    kv_get(conn, &entry.workspace_id, &entry.key)?.ok_or_else(|| {
+        AppError::Internal("kv_set upsert succeeded but kv_get returned None".into())
+    })
 }
 
 pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {
@@ -200,7 +202,14 @@ pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {
             character.arc,
             character.tags.join(", "),
         );
-        insert_chunk(&tx, workspace_id, "character", &character.id, &content, character.updated_at)?;
+        insert_chunk(
+            &tx,
+            workspace_id,
+            "character",
+            &character.id,
+            &content,
+            character.updated_at,
+        )?;
     }
 
     for event in crate::services::event::list(conn, workspace_id)? {
@@ -213,7 +222,14 @@ pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {
             event.status,
             event.character_ids.join(", "),
         );
-        insert_chunk(&tx, workspace_id, "event", &event.id, &content, event.updated_at)?;
+        insert_chunk(
+            &tx,
+            workspace_id,
+            "event",
+            &event.id,
+            &content,
+            event.updated_at,
+        )?;
     }
 
     for node in crate::services::outline::list(conn, workspace_id)? {
@@ -221,17 +237,43 @@ pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {
             "大纲节点：{}\n类型：{}\n内容：{}\n状态：{}",
             node.title, node.r#type, node.content, node.status
         );
-        insert_chunk(&tx, workspace_id, "outline", &node.id, &content, node.updated_at)?;
+        insert_chunk(
+            &tx,
+            workspace_id,
+            "outline",
+            &node.id,
+            &content,
+            node.updated_at,
+        )?;
     }
 
     for note in crate::services::note::list(conn, workspace_id)? {
-        let content = format!("笔记：{}\n内容：{}\n标签：{}", note.title, note.content, note.tags.join(", "));
-        insert_chunk(&tx, workspace_id, "note", &note.id, &content, note.updated_at)?;
+        let content = format!(
+            "笔记：{}\n内容：{}\n标签：{}",
+            note.title,
+            note.content,
+            note.tags.join(", ")
+        );
+        insert_chunk(
+            &tx,
+            workspace_id,
+            "note",
+            &note.id,
+            &content,
+            note.updated_at,
+        )?;
     }
 
     for scene in crate::services::vn::list_scenes(conn, workspace_id)? {
         let content = format!("VN 场景：{}\n背景：{}", scene.title, scene.background);
-        insert_chunk(&tx, workspace_id, "vn_scene", &scene.id, &content, scene.updated_at)?;
+        insert_chunk(
+            &tx,
+            workspace_id,
+            "vn_scene",
+            &scene.id,
+            &content,
+            scene.updated_at,
+        )?;
     }
 
     let mut stmt = tx.prepare(
@@ -253,7 +295,10 @@ pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {
     let lines: Vec<_> = lines.collect::<Result<_, _>>()?;
     drop(stmt);
     for (id, _scene_id, speaker, text, emotion, line_type) in lines {
-        let content = format!("VN 台词（{}）\n说话人：{}\n情绪：{}\n内容：{}", line_type, speaker, emotion, text);
+        let content = format!(
+            "VN 台词（{}）\n说话人：{}\n情绪：{}\n内容：{}",
+            line_type, speaker, emotion, text
+        );
         insert_chunk(&tx, workspace_id, "vn_line", &id, &content, now)?;
     }
 
@@ -298,7 +343,14 @@ fn insert_chunk(
     conn.execute(
         "INSERT INTO ai_chunks (id, workspace_id, source_type, source_id, content, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![id, workspace_id, source_type, source_id, truncated, updated_at],
+        params![
+            id,
+            workspace_id,
+            source_type,
+            source_id,
+            truncated,
+            updated_at
+        ],
     )?;
 
     let terms = extract_terms(&truncated);
@@ -357,8 +409,24 @@ fn is_punctuation(c: char) -> bool {
     c.is_ascii_punctuation()
         || matches!(
             c,
-            '，' | '。' | '、' | '；' | '：' | '？' | '！' | '"' | '\'' | '（' | '）'
-                | '《' | '》' | '【' | '】' | '…' | '—' | '–' | '～'
+            '，' | '。'
+                | '、'
+                | '；'
+                | '：'
+                | '？'
+                | '！'
+                | '"'
+                | '\''
+                | '（'
+                | '）'
+                | '《'
+                | '》'
+                | '【'
+                | '】'
+                | '…'
+                | '—'
+                | '–'
+                | '～'
         )
 }
 
@@ -388,8 +456,7 @@ pub fn search_chunks(
     );
 
     let mut stmt = conn.prepare(&sql)?;
-    let mut values: Vec<rusqlite::types::Value> =
-        vec![workspace_id.to_string().into()];
+    let mut values: Vec<rusqlite::types::Value> = vec![workspace_id.to_string().into()];
     values.extend(terms.iter().map(|t| t.clone().into()));
     values.push(limit.into());
     let rows = stmt.query_map(rusqlite::params_from_iter(values), |row| {
@@ -515,10 +582,7 @@ pub async fn call_chat_api(
         .map_err(|e| AppError::Internal(format!("AI 请求失败: {}", e)))?;
 
     if !response.status().is_success() {
-        let body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "未知错误".into());
+        let body = response.text().await.unwrap_or_else(|_| "未知错误".into());
         return Err(AppError::Internal(format!("AI API 错误: {}", body)));
     }
 
@@ -638,11 +702,9 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                 Some(id) => id.clone(),
                 None => {
                     let tracks = crate::services::track::list(conn, &input.workspace_id)?;
-                    tracks
-                        .into_iter()
-                        .next()
-                        .map(|t| t.id)
-                        .ok_or_else(|| AppError::InvalidInput("工作区没有可用轨道，无法创建事件".into()))?
+                    tracks.into_iter().next().map(|t| t.id).ok_or_else(|| {
+                        AppError::InvalidInput("工作区没有可用轨道，无法创建事件".into())
+                    })?
                 }
             };
             let event = crate::services::event::create(
@@ -673,11 +735,13 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                     workspace_id: input.workspace_id.clone(),
                     title: title.clone(),
                     background: None,
+                    background_asset_path: None,
+                    bgm_path: None,
                     outline_node_id: None,
                 },
             )?;
             if !body.is_empty() {
-                let _ = crate::services::vn::create_line(
+                crate::services::vn::create_line(
                     conn,
                     crate::models::CreateVnLineInput {
                         scene_id: scene.id.clone(),
@@ -688,8 +752,10 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                         emotion: None,
                         choice_label: None,
                         choice_target_scene_id: None,
+                        sprite_asset_path: None,
+                        voice_path: None,
                     },
-                );
+                )?;
             }
             Ok(AiInsertResult {
                 target: "vn_scene".into(),

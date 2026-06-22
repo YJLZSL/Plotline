@@ -47,3 +47,7 @@ export function deleteVnLine(id: string): Promise<void> {
 export function exportVnRenpy(workspaceId: string): Promise<string> {
   return invoke<string>('export_vn_renpy', { workspaceId });
 }
+
+export function uploadVnAsset(workspaceId: string, sourcePath: string): Promise<string> {
+  return invoke<string>('upload_vn_asset', { workspaceId, sourcePath });
+}

@@ -154,6 +154,8 @@
     "expandAll": "Expand All",
     "collapseAll": "Collapse All",
     "exportMarkdown": "Export Markdown",
+    "generateEvent": "Generate Timeline Event",
+    "noTracksForEvent": "No timeline tracks in this workspace. Please create a track first.",
     "empty": {
       "title": "Outline is empty",
       "description": "Add the first volume to structure your story."
@@ -243,7 +245,15 @@
     "reorderUp": "Move up",
     "reorderDown": "Move down",
     "exportRenpy": "Export Ren'Py",
+    "importRenpy": "Import Ren'Py",
     "background": "Background",
+    "uploadBackground": "Upload background",
+    "uploadBgm": "Upload BGM",
+    "uploadSprite": "Upload sprite",
+    "uploadVoice": "Upload voice",
+    "spriteUploaded": "Sprite uploaded",
+    "voiceUploaded": "Voice uploaded",
+    "imported": "Ren'Py script imported",
     "typewriter": "Typewriter",
     "empty": {
       "title": "No scenes yet",

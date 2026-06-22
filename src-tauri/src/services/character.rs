@@ -51,8 +51,7 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Character>> 
 }
 
 fn list_event_ids(conn: &Connection, character_id: &str) -> AppResult<Vec<String>> {
-    let mut stmt =
-        conn.prepare("SELECT event_id FROM event_characters WHERE character_id = ?1")?;
+    let mut stmt = conn.prepare("SELECT event_id FROM event_characters WHERE character_id = ?1")?;
     let rows = stmt.query_map(params![character_id], |r| r.get::<_, String>(0))?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
@@ -165,7 +164,10 @@ pub fn delete(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn list_relationships(conn: &Connection, workspace_id: &str) -> AppResult<Vec<CharacterRelationship>> {
+pub fn list_relationships(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<CharacterRelationship>> {
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, source_id, target_id, type, description, strength
          FROM character_relationships WHERE workspace_id = ?1",
@@ -269,8 +271,10 @@ pub fn update_relationship(
 }
 
 pub fn delete_relationship(conn: &Connection, id: &str) -> AppResult<()> {
-    let affected =
-        conn.execute("DELETE FROM character_relationships WHERE id=?1", params![id])?;
+    let affected = conn.execute(
+        "DELETE FROM character_relationships WHERE id=?1",
+        params![id],
+    )?;
     if affected == 0 {
         return Err(AppError::NotFound(format!("关系 {} 不存在", id)));
     }

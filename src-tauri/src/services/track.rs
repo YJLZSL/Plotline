@@ -6,12 +6,7 @@ use crate::error::{AppError, AppResult};
 use crate::models::{CreateTrackInput, ReorderTracksInput, Track, UpdateTrackInput};
 
 const TRACK_PALETTE: [&str; 6] = [
-    "#F4B6C2",
-    "#B6D4F4",
-    "#B6F4C8",
-    "#F4E4B6",
-    "#D8B6F4",
-    "#F4CBB6",
+    "#F4B6C2", "#B6D4F4", "#B6F4C8", "#F4E4B6", "#D8B6F4", "#F4CBB6",
 ];
 
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Track>> {

@@ -78,12 +78,7 @@ fn append_outline_nodes(
         .enumerate()
     {
         let (idx, node) = n;
-        md.push_str(&format!(
-            "{} {}. {}\n\n",
-            prefix,
-            idx + 1,
-            node.title
-        ));
+        md.push_str(&format!("{} {}. {}\n\n", prefix, idx + 1, node.title));
         if !node.content.is_empty() {
             md.push_str(&format!("{}\n\n", node.content));
         }
@@ -124,7 +119,10 @@ mod tests {
         )
         .unwrap();
 
-        let ws = crate::services::workspace::list(&conn).unwrap().pop().unwrap();
+        let ws = crate::services::workspace::list(&conn)
+            .unwrap()
+            .pop()
+            .unwrap();
         let md = export_workspace_markdown(&conn, &ws.id).unwrap();
         assert!(md.contains("# 测试故事"));
         assert!(md.contains("一个测试"));
@@ -147,7 +145,10 @@ mod tests {
         )
         .unwrap();
 
-        let ws = crate::services::workspace::list(&conn).unwrap().pop().unwrap();
+        let ws = crate::services::workspace::list(&conn)
+            .unwrap()
+            .pop()
+            .unwrap();
         let md = export_outline_markdown(&conn, &ws.id).unwrap();
         assert!(md.contains("# 大纲测试 - 大纲"));
     }

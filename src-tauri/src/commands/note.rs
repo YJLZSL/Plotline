@@ -15,18 +15,16 @@ pub fn list_notes(state: State<'_, AppState>, workspace_id: String) -> AppResult
 #[tauri::command]
 pub fn create_note(state: State<'_, AppState>, input: CreateNoteInput) -> AppResult<Note> {
     if input.title.trim().is_empty() {
-        return Err(crate::error::AppError::InvalidInput("笔记标题不能为空".into()));
+        return Err(crate::error::AppError::InvalidInput(
+            "笔记标题不能为空".into(),
+        ));
     }
-    with_db!(state, |conn| {
-        crate::services::note::create(conn, input)
-    })
+    with_db!(state, |conn| { crate::services::note::create(conn, input) })
 }
 
 #[tauri::command]
 pub fn update_note(state: State<'_, AppState>, input: UpdateNoteInput) -> AppResult<Note> {
-    with_db!(state, |conn| {
-        crate::services::note::update(conn, input)
-    })
+    with_db!(state, |conn| { crate::services::note::update(conn, input) })
 }
 
 #[tauri::command]

@@ -147,3 +147,13 @@ body {
 [data-tauri-drag-region] input {
   -webkit-app-region: no-drag;
 }
+
+/* MC 彩蛋：Konami 码触发后全局像素化 */
+html.mc-easter body {
+  font-family: var(--font-pixel) !important;
+}
+
+html.mc-easter [data-theme] {
+  --accent: #5b8c39;
+  --accent-soft: #8fb36f;
+}

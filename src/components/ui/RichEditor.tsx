@@ -57,7 +57,7 @@ export function RichEditor({
       <div className="flex-1 overflow-auto p-4 bg-bg-base">
         <EditorContent
           editor={editor}
-          className="prose prose-sm max-w-none prose-headings:text-text-primary prose-p:text-text-primary prose-strong:text-text-primary prose-blockquote:text-text-secondary prose-blockquote:border-l-accent"
+          className="prose prose-sm max-w-none font-mono prose-headings:text-text-primary prose-p:text-text-primary prose-strong:text-text-primary prose-blockquote:text-text-secondary prose-blockquote:border-l-accent"
           style={{ minHeight }}
         />
       </div>

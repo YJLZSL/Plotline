@@ -8,6 +8,8 @@ pub struct VnScene {
     pub workspace_id: String,
     pub title: String,
     pub background: String,
+    pub background_asset_path: Option<String>,
+    pub bgm_path: Option<String>,
     pub outline_node_id: Option<String>,
     pub sort_order: i64,
     pub created_at: DateTime<Utc>,
@@ -27,6 +29,8 @@ pub struct VnLine {
     pub emotion: String,
     pub choice_label: String,
     pub choice_target_scene_id: Option<String>,
+    pub sprite_asset_path: Option<String>,
+    pub voice_path: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -36,6 +40,8 @@ pub struct CreateVnSceneInput {
     pub workspace_id: String,
     pub title: String,
     pub background: Option<String>,
+    pub background_asset_path: Option<String>,
+    pub bgm_path: Option<String>,
     pub outline_node_id: Option<String>,
 }
 
@@ -45,6 +51,8 @@ pub struct UpdateVnSceneInput {
     pub id: String,
     pub title: Option<String>,
     pub background: Option<String>,
+    pub background_asset_path: Option<Option<String>>,
+    pub bgm_path: Option<Option<String>>,
     pub outline_node_id: Option<Option<String>>,
     pub sort_order: Option<i64>,
 }
@@ -60,6 +68,8 @@ pub struct CreateVnLineInput {
     pub emotion: Option<String>,
     pub choice_label: Option<String>,
     pub choice_target_scene_id: Option<String>,
+    pub sprite_asset_path: Option<String>,
+    pub voice_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -73,5 +83,7 @@ pub struct UpdateVnLineInput {
     pub emotion: Option<String>,
     pub choice_label: Option<String>,
     pub choice_target_scene_id: Option<Option<String>>,
+    pub sprite_asset_path: Option<Option<String>>,
+    pub voice_path: Option<Option<String>>,
     pub sort_order: Option<i64>,
 }

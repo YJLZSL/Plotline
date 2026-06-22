@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -14,7 +15,15 @@ import {
   Download,
   ArrowUp,
   ArrowDown,
+  Upload,
+  Image as ImageIcon,
+  Music,
+  FileAudio,
 } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readTextFile } from '@tauri-apps/plugin-fs';
+import { appDataDir, join } from '@tauri-apps/api/path';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 import {
   AppIcon,
@@ -28,8 +37,10 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
+import { isTauri } from '@/lib/ipc';
 import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
-import type { Character, VnLine, VnLineType, VnScene } from '@/types';
+import { toastError, toastSuccess } from '@/stores/toast';
+import type { Character, CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnLine, VnLineType, VnScene } from '@/types';
 import {
   useVnScenesQuery,
   useCreateVnScene,
@@ -41,7 +52,13 @@ import {
   useUpdateVnLine,
   useDeleteVnLine,
   useExportVnRenpy,
+  useUploadVnAsset,
 } from '@/features/vn/hooks';
+import {
+  createVnLine as apiCreateVnLine,
+  updateVnLine as apiUpdateVnLine,
+  updateVnScene as apiUpdateVnScene,
+} from '@/features/vn/api';
 import { useCharactersQuery } from '@/features/characters/hooks';
 
 const EMOTIONS: Array<{ value: string; label: string; emoji: string }> = [
@@ -91,14 +108,181 @@ interface VnViewProps {
   workspaceName?: string;
 }
 
+async function importRenpyScript(
+  content: string,
+  workspaceId: string,
+  createScene: (input: CreateVnSceneInput) => Promise<VnScene>,
+  createLine: (input: CreateVnLineInput) => Promise<VnLine>,
+  updateScene: (input: UpdateVnSceneInput) => Promise<VnScene>,
+  updateLine: (input: UpdateVnLineInput) => Promise<VnLine>,
+) {
+  const rawLines = content.split('\n');
+  let currentSceneId: string | null = null;
+  let pendingSpriteAssetPath: string | null = null;
+  let pendingVoicePath: string | null = null;
+
+  const attachPendingAssets = async (line: VnLine) => {
+    if (!pendingSpriteAssetPath && !pendingVoicePath) return line;
+    const patch: Partial<VnLine> = {};
+    if (pendingSpriteAssetPath) patch.spriteAssetPath = pendingSpriteAssetPath;
+    if (pendingVoicePath) patch.voicePath = pendingVoicePath;
+    const updated = await updateLine({ id: line.id, ...patch });
+    pendingSpriteAssetPath = null;
+    pendingVoicePath = null;
+    return updated;
+  };
+
+  for (const raw of rawLines) {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const labelMatch = trimmed.match(/^label\s+(\w+)\s*:/);
+    if (labelMatch?.[1]) {
+      const scene = await createScene({
+        workspaceId,
+        title: labelMatch[1],
+        background: '',
+      });
+      currentSceneId = scene.id;
+      pendingSpriteAssetPath = null;
+      pendingVoicePath = null;
+      continue;
+    }
+
+    if (!currentSceneId) continue;
+
+    const sceneMatch = trimmed.match(/^scene\s+(.+)/);
+    if (sceneMatch?.[1]) {
+      const value = sceneMatch[1].trim();
+      if (value.includes('/') || value.includes('\\') || value.includes('.')) {
+        await updateScene({ id: currentSceneId, backgroundAssetPath: value });
+      } else {
+        await updateScene({ id: currentSceneId, background: value });
+      }
+      continue;
+    }
+
+    const playMusicMatch = trimmed.match(/^play\s+music\s+(.+)/);
+    if (playMusicMatch?.[1]) {
+      await updateScene({ id: currentSceneId, bgmPath: playMusicMatch[1].trim() });
+      continue;
+    }
+
+    const showMatch = trimmed.match(/^show\s+(\S+)/);
+    if (showMatch?.[1]) {
+      pendingSpriteAssetPath = showMatch[1].trim();
+      continue;
+    }
+
+    const voiceMatch = trimmed.match(/^voice\s+(.+)/);
+    if (voiceMatch?.[1]) {
+      pendingVoicePath = voiceMatch[1].trim();
+      continue;
+    }
+
+    if (trimmed === 'menu:') continue;
+
+    const choiceMatch = trimmed.match(/^"([^"]+)"(?:\s*:\s*)?(?:jump\s+(\w+))?/);
+    if (choiceMatch?.[1]) {
+      const line = await createLine({
+        sceneId: currentSceneId,
+        lineType: 'choice',
+        choiceLabel: choiceMatch[1],
+        text: choiceMatch[1],
+        choiceTargetSceneId: choiceMatch[2] || null,
+      });
+      await attachPendingAssets(line);
+      continue;
+    }
+
+    const sayMatch = trimmed.match(/^(\w+)\s+"([^"]+)"/);
+    if (sayMatch) {
+      const speaker = sayMatch[1];
+      const text = sayMatch[2];
+      if (speaker && text) {
+        const line = await createLine({
+          sceneId: currentSceneId,
+          lineType: 'dialog',
+          speakerName: speaker,
+          text,
+        });
+        await attachPendingAssets(line);
+        continue;
+      }
+    }
+
+    const narrationMatch = trimmed.match(/^"([^"]+)"/);
+    if (narrationMatch?.[1]) {
+      const line = await createLine({
+        sceneId: currentSceneId,
+        lineType: 'narration',
+        text: narrationMatch[1],
+      });
+      await attachPendingAssets(line);
+    }
+  }
+}
+
+function useVnAssetUrl(assetPath: string | null) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!assetPath || !isTauri()) {
+      setUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const dir = await appDataDir();
+        const full = await join(dir, assetPath);
+        if (!cancelled) setUrl(convertFileSrc(full));
+      } catch {
+        if (!cancelled) setUrl(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assetPath]);
+
+  return url;
+}
+
 export function VnView({ workspaceId, workspaceName }: VnViewProps) {
   const { t } = useI18n();
   const { data: scenes = [], isLoading } = useVnScenesQuery(workspaceId);
   const { data: characters = [] } = useCharactersQuery(workspaceId);
+  const qc = useQueryClient();
   const createScene = useCreateVnScene(workspaceId);
   const deleteScene = useDeleteVnScene(workspaceId);
   const updateScene = useUpdateVnScene(workspaceId);
   const exportRenpy = useExportVnRenpy(workspaceId);
+
+  const handleImportRenpy = async () => {
+    if (!isTauri()) return;
+    try {
+      const path = await open({
+        title: t('vn.importRenpy'),
+        multiple: false,
+        filters: [{ name: 'Ren\'Py', extensions: ['rpy'] }],
+      });
+      if (!path || Array.isArray(path)) return;
+      const content = await readTextFile(path);
+      await importRenpyScript(
+        content,
+        workspaceId,
+        (input) => createScene.mutateAsync(input),
+        apiCreateVnLine,
+        apiUpdateVnScene,
+        apiUpdateVnLine,
+      );
+      qc.invalidateQueries({ queryKey: ['vnScenes', workspaceId] });
+      toastSuccess(t('vn.imported'));
+    } catch (err) {
+      toastError(err);
+    }
+  };
 
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<VnViewMode>('edit');
@@ -170,6 +354,15 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => void handleImportRenpy()}
+              className="gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('vn.importRenpy')}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleExportRenpy}
               loading={exportRenpy.isPending}
               className="gap-2"
@@ -238,36 +431,48 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
 
         {/* 编辑器、预览或关系图 */}
         {selectedScene ? (
-          viewMode === 'preview' ? (
-            <VnPreview
-              key={selectedScene.id}
-              scene={selectedScene}
-              characters={characters}
-              onExit={() => setViewMode('edit')}
-              onJumpScene={(id) => {
-                setSelectedSceneId(id);
-              }}
-              t={t}
-            />
-          ) : viewMode === 'graph' ? (
-            <VnGraphPanel
-              workspaceId={workspaceId}
-              scenes={scenes}
-              onSelectScene={(id) => setSelectedSceneId(id)}
-              t={t}
-            />
-          ) : (
-            <VnScriptEditor
-              scene={selectedScene}
-              characters={characters}
-              scenes={scenes}
-              onRename={(title) => updateScene.mutateAsync({ id: selectedScene.id, title })}
-              onUpdateBackground={(background) =>
-                updateScene.mutateAsync({ id: selectedScene.id, background })
-              }
-              t={t}
-            />
-          )
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={viewMode}
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={MOTION_BASE}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              {viewMode === 'preview' ? (
+                <VnPreview
+                  key={selectedScene.id}
+                  scene={selectedScene}
+                  characters={characters}
+                  onExit={() => setViewMode('edit')}
+                  onJumpScene={(id) => {
+                    setSelectedSceneId(id);
+                  }}
+                  t={t}
+                />
+              ) : viewMode === 'graph' ? (
+                <VnGraphPanel
+                  workspaceId={workspaceId}
+                  scenes={scenes}
+                  onSelectScene={(id) => setSelectedSceneId(id)}
+                  t={t}
+                />
+              ) : (
+                <VnScriptEditor
+                  scene={selectedScene}
+                  characters={characters}
+                  scenes={scenes}
+                  workspaceId={workspaceId}
+                  onRename={(title) => updateScene.mutateAsync({ id: selectedScene.id, title })}
+                  onUpdateBackground={(background) =>
+                    updateScene.mutateAsync({ id: selectedScene.id, background })
+                  }
+                  t={t}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         ) : (
           <div className="flex-1 grid place-items-center">
             <EmptyState
@@ -312,6 +517,7 @@ function VnScriptEditor({
   scene,
   characters,
   scenes,
+  workspaceId,
   onRename,
   onUpdateBackground,
   t,
@@ -319,6 +525,7 @@ function VnScriptEditor({
   scene: VnScene;
   characters: Character[];
   scenes: VnScene[];
+  workspaceId: string;
   onRename: (title: string) => void;
   onUpdateBackground: (background: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -327,9 +534,39 @@ function VnScriptEditor({
   const createLine = useCreateVnLine(scene.id);
   const updateLine = useUpdateVnLine(scene.id);
   const deleteLine = useDeleteVnLine(scene.id);
+  const updateScene = useUpdateVnScene(workspaceId);
+  const uploadAsset = useUploadVnAsset(workspaceId);
 
   const [title, setTitle] = useState(scene.title);
   const [background, setBackground] = useState(scene.background);
+
+  const pickAndUploadAsset = async (
+    titleKey: string,
+    extensions: string[],
+  ): Promise<string | null> => {
+    if (!isTauri()) return null;
+    const path = await open({
+      title: t(titleKey),
+      multiple: false,
+      filters: [{ name: 'Files', extensions }],
+    });
+    if (!path || Array.isArray(path)) return null;
+    return uploadAsset.mutateAsync(path);
+  };
+
+  const handleUploadBackground = async () => {
+    const assetPath = await pickAndUploadAsset('vn.uploadBackground', ['png', 'jpg', 'jpeg', 'webp', 'gif']);
+    if (assetPath) {
+      await updateScene.mutateAsync({ id: scene.id, backgroundAssetPath: assetPath });
+    }
+  };
+
+  const handleUploadBgm = async () => {
+    const assetPath = await pickAndUploadAsset('vn.uploadBgm', ['mp3', 'ogg', 'wav']);
+    if (assetPath) {
+      await updateScene.mutateAsync({ id: scene.id, bgmPath: assetPath });
+    }
+  };
 
   useEffect(() => {
     setTitle(scene.title);
@@ -381,6 +618,24 @@ function VnScriptEditor({
           className="w-40 text-xs"
           title={t('vn.background')}
         />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void handleUploadBackground()}
+          loading={uploadAsset.isPending}
+          title={t('vn.uploadBackground')}
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void handleUploadBgm()}
+          loading={uploadAsset.isPending}
+          title={t('vn.uploadBgm')}
+        >
+          <Music className="h-4 w-4" />
+        </Button>
         <div className="flex gap-1.5">
           <Button variant="outline" size="sm" onClick={() => handleAddLine('dialog')} className="gap-1.5">
             <MessageSquare className="h-3.5 w-3.5" />
@@ -419,6 +674,7 @@ function VnScriptEditor({
                   index={i}
                   characters={characters}
                   scenes={scenes}
+                  workspaceId={workspaceId}
                   currentSceneId={scene.id}
                   canMoveUp={i > 0}
                   canMoveDown={i < lines.length - 1}
@@ -442,6 +698,7 @@ export function VnLineRow({
   index,
   characters,
   scenes,
+  workspaceId,
   currentSceneId,
   canMoveUp,
   canMoveDown,
@@ -454,6 +711,7 @@ export function VnLineRow({
   index: number;
   characters: Character[];
   scenes: VnScene[];
+  workspaceId: string;
   currentSceneId: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -465,6 +723,28 @@ export function VnLineRow({
   const Icon = LINE_TYPE_ICONS[line.lineType];
   const isChoice = line.lineType === 'choice';
   const isNarration = line.lineType === 'narration';
+  const uploadAsset = useUploadVnAsset(workspaceId);
+
+  const pickAndUpload = async (titleKey: string, extensions: string[]) => {
+    if (!isTauri()) return null;
+    const path = await open({
+      title: t(titleKey),
+      multiple: false,
+      filters: [{ name: 'Files', extensions }],
+    });
+    if (!path || Array.isArray(path)) return null;
+    return uploadAsset.mutateAsync(path);
+  };
+
+  const handleUploadSprite = async () => {
+    const assetPath = await pickAndUpload('vn.uploadSprite', ['png', 'jpg', 'jpeg', 'webp', 'gif']);
+    if (assetPath) onChange({ spriteAssetPath: assetPath });
+  };
+
+  const handleUploadVoice = async () => {
+    const assetPath = await pickAndUpload('vn.uploadVoice', ['mp3', 'ogg', 'wav']);
+    if (assetPath) onChange({ voicePath: assetPath });
+  };
 
   return (
     <motion.div
@@ -565,6 +845,38 @@ export function VnLineRow({
             placeholder={isChoice ? t('vn.choiceTextPlaceholder') : t('vn.textPlaceholder')}
             className="text-sm min-h-[44px] resize-y"
           />
+          {!isNarration && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void handleUploadSprite()}
+                disabled={uploadAsset.isPending}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] border transition-colors disabled:opacity-50',
+                  line.spriteAssetPath
+                    ? 'border-accent/40 text-accent bg-accent/10'
+                    : 'border-border text-text-secondary hover:text-text-primary',
+                )}
+                title={t('vn.uploadSprite')}
+              >
+                <ImageIcon className="h-3 w-3" />
+                {line.spriteAssetPath ? t('vn.spriteUploaded') : t('vn.uploadSprite')}
+              </button>
+              <button
+                onClick={() => void handleUploadVoice()}
+                disabled={uploadAsset.isPending}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] border transition-colors disabled:opacity-50',
+                  line.voicePath
+                    ? 'border-accent/40 text-accent bg-accent/10'
+                    : 'border-border text-text-secondary hover:text-text-primary',
+                )}
+                title={t('vn.uploadVoice')}
+              >
+                <FileAudio className="h-3 w-3" />
+                {line.voicePath ? t('vn.voiceUploaded') : t('vn.uploadVoice')}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1 flex-shrink-0">
@@ -801,10 +1113,53 @@ function VnPreview({
   const currentLine = lines[currentIdx] ?? null;
   const isLast = currentIdx >= lines.length - 1;
 
+  const bgImageUrl = useVnAssetUrl(scene.backgroundAssetPath);
+  const bgmUrl = useVnAssetUrl(scene.bgmPath);
+  const spriteUrl = useVnAssetUrl(currentLine?.spriteAssetPath ?? null);
+  const voiceUrl = useVnAssetUrl(currentLine?.voicePath ?? null);
+
+  const bgmRef = useRef<HTMLAudioElement | null>(null);
+  const voiceRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     setCurrentIdx(0);
     setShowChoices(false);
   }, [scene.id]);
+
+  useEffect(() => {
+    if (!bgmUrl) {
+      if (bgmRef.current) {
+        bgmRef.current.pause();
+        bgmRef.current = null;
+      }
+      return;
+    }
+    const audio = new Audio(bgmUrl);
+    audio.loop = true;
+    audio.volume = 0.5;
+    void audio.play().catch(() => {});
+    bgmRef.current = audio;
+    return () => {
+      audio.pause();
+      if (bgmRef.current === audio) bgmRef.current = null;
+    };
+  }, [bgmUrl]);
+
+  useEffect(() => {
+    if (voiceRef.current) {
+      voiceRef.current.pause();
+      voiceRef.current = null;
+    }
+    if (!voiceUrl) return;
+    const audio = new Audio(voiceUrl);
+    audio.volume = 1;
+    void audio.play().catch(() => {});
+    voiceRef.current = audio;
+    return () => {
+      audio.pause();
+      if (voiceRef.current === audio) voiceRef.current = null;
+    };
+  }, [voiceUrl]);
 
   const advance = () => {
     if (!currentLine) return;
@@ -868,6 +1223,20 @@ function VnPreview({
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center max-w-xl opacity-20 pointer-events-none select-none">
           <p className="text-2xl text-text-primary font-semibold">{bg.value}</p>
         </div>
+      )}
+      {bgImageUrl && (
+        <img
+          src={bgImageUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+      {spriteUrl && (
+        <img
+          src={spriteUrl}
+          alt=""
+          className="absolute bottom-28 left-1/2 z-10 h-56 -translate-x-1/2 object-contain drop-shadow-lg"
+        />
       )}
 
       {/* 顶部场景标题 */}

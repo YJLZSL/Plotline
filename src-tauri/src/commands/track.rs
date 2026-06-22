@@ -15,7 +15,9 @@ pub fn list_tracks(state: State<'_, AppState>, workspace_id: String) -> AppResul
 #[tauri::command]
 pub fn create_track(state: State<'_, AppState>, input: CreateTrackInput) -> AppResult<Track> {
     if input.name.trim().is_empty() {
-        return Err(crate::error::AppError::InvalidInput("轨道名称不能为空".into()));
+        return Err(crate::error::AppError::InvalidInput(
+            "轨道名称不能为空".into(),
+        ));
     }
     with_db!(state, |conn| {
         crate::services::track::create(conn, input)

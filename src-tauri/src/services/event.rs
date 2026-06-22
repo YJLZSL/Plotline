@@ -3,7 +3,9 @@ use rusqlite::{params, Connection};
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput};
+use crate::models::{
+    ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput,
+};
 
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
     let mut stmt = conn.prepare(
@@ -38,15 +40,13 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
 }
 
 fn list_character_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<String>> {
-    let mut stmt =
-        conn.prepare("SELECT character_id FROM event_characters WHERE event_id = ?1")?;
+    let mut stmt = conn.prepare("SELECT character_id FROM event_characters WHERE event_id = ?1")?;
     let rows = stmt.query_map(params![event_id], |r| r.get::<_, String>(0))?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
 fn list_connected_event_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<String>> {
-    let mut stmt =
-        conn.prepare("SELECT target_id FROM event_connections WHERE source_id = ?1")?;
+    let mut stmt = conn.prepare("SELECT target_id FROM event_connections WHERE source_id = ?1")?;
     let rows = stmt.query_map(params![event_id], |r| r.get::<_, String>(0))?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
@@ -238,7 +238,8 @@ mod tests {
             "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
              VALUES ('t1', 'ws', 'T1', '#F4B6C2', 0, 1, '2024-01-01T00:00:00Z')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
              VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
@@ -256,7 +257,8 @@ mod tests {
                 target_id: "e2".into(),
                 connection_type: Some("foreshadow".into()),
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let events = list(&conn, "ws").unwrap();
         let source = events.iter().find(|e| e.id == "e1").unwrap();
@@ -275,7 +277,8 @@ mod tests {
             "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
              VALUES ('t1', 'ws', 'T1', '#F4B6C2', 0, 1, '2024-01-01T00:00:00Z')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
              VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
@@ -293,7 +296,8 @@ mod tests {
                 target_id: "e2".into(),
                 connection_type: Some("causal".into()),
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let conns = list_connections(&conn, "ws").unwrap();
         assert_eq!(conns.len(), 1);

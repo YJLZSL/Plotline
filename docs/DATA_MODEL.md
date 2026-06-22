@@ -159,19 +159,21 @@ Workspace 1───* VnScene 1───* VnLine
 | label | TEXT | 路径标签 |
 | PRIMARY KEY | (source_id, target_id) | |
 
-### vn_scenes（v1.3 视觉小说场景）
+### vn_scenes（v1.6 视觉小说场景）
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | id | TEXT PK | |
 | workspace_id | TEXT FK | ON DELETE CASCADE |
 | title | TEXT | 场景标题 |
-| background | TEXT | 背景色 hex（可选） |
+| background | TEXT | 背景描述/颜色（可选） |
+| background_asset_path | TEXT NULL | 背景图资源相对路径 |
+| bgm_path | TEXT NULL | 背景音乐资源相对路径 |
 | outline_node_id | TEXT NULL FK | 关联大纲节点 |
 | sort_order | INTEGER | |
 | created_at | TEXT | |
 | updated_at | TEXT | |
 
-### vn_lines（v1.3 视觉小说台词）
+### vn_lines（v1.6 视觉小说台词）
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | id | TEXT PK | |
@@ -184,6 +186,8 @@ Workspace 1───* VnScene 1───* VnLine
 | emotion | TEXT | 情绪标签 |
 | choice_label | TEXT | 选项标签 |
 | choice_target_scene_id | TEXT NULL FK | 选项跳转目标 |
+| sprite_asset_path | TEXT NULL | 角色立绘资源相对路径 |
+| voice_path | TEXT NULL | 配音资源相对路径 |
 | created_at | TEXT | |
 
 ### app_settings（全局，单行）

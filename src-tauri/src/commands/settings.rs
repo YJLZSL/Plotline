@@ -15,7 +15,9 @@ pub fn update_settings(
     state: State<'_, AppState>,
     input: UpdateSettingsInput,
 ) -> AppResult<AppSettings> {
-    with_db!(state, |conn| crate::services::settings::merge_settings(conn, input))
+    with_db!(state, |conn| crate::services::settings::merge_settings(
+        conn, input
+    ))
 }
 
 #[cfg(test)]

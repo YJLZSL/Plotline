@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   MapPin,
@@ -462,33 +463,37 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
         </div>
 
         {/* 右侧详情面板 */}
-        {selected && (
-          <motion.aside
-            initial={{ x: 300, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 300, opacity: 0 }}
-            transition={MOTION_BASE}
-            className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
-          >
-            <LocationDetailPanel
-              location={selected}
-              characters={characters}
-              eventName={
-                selected.linkedEventId
-                  ? eventById.get(selected.linkedEventId)?.title ?? null
-                  : null
-              }
-              onClose={() => setSelectedId(null)}
-              onEdit={() => {
-                setEditing(selected);
-                setEditOpen(true);
-              }}
-              onDelete={() => setConfirmDelete(selected.id)}
-              onStartLink={() => setLinkMode(selected.id)}
-              t={t}
-            />
-          </motion.aside>
-        )}
+        <AnimatePresence initial={false}>
+          {selected && (
+            <motion.aside
+              key="detail"
+              initial={{ x: 300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 300, opacity: 0 }}
+              transition={MOTION_BASE}
+              className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
+            >
+              <LocationDetailPanel
+                workspaceId={workspaceId}
+                location={selected}
+                characters={characters}
+                eventName={
+                  selected.linkedEventId
+                    ? eventById.get(selected.linkedEventId)?.title ?? null
+                    : null
+                }
+                onClose={() => setSelectedId(null)}
+                onEdit={() => {
+                  setEditing(selected);
+                  setEditOpen(true);
+                }}
+                onDelete={() => setConfirmDelete(selected.id)}
+                onStartLink={() => setLinkMode(selected.id)}
+                t={t}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
       </div>
 
       <LocationEditDialog
@@ -661,6 +666,7 @@ function LocationLucideIcon({ name, color }: { name: string; color: string }) {
 }
 
 function LocationDetailPanel({
+  workspaceId,
   location,
   characters,
   eventName,
@@ -670,6 +676,7 @@ function LocationDetailPanel({
   onStartLink,
   t,
 }: {
+  workspaceId: string;
   location: Location;
   characters: Character[];
   eventName: string | null;
@@ -679,6 +686,7 @@ function LocationDetailPanel({
   onStartLink: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
+  const navigate = useNavigate();
   const linkedChars = characters.filter((c) => location.characterIds.includes(c.id));
   return (
     <>
@@ -711,7 +719,12 @@ function LocationDetailPanel({
         {eventName && (
           <div>
             <Label className="text-xs text-text-secondary">{t('map.linkedEvent')}</Label>
-            <p className="text-sm text-text-primary mt-1">{eventName}</p>
+            <button
+              onClick={() => navigate(`/workspaces/${workspaceId}/timeline`)}
+              className="mt-1 text-sm text-accent hover:underline text-left"
+            >
+              {eventName}
+            </button>
           </div>
         )}
         {linkedChars.length > 0 && (
