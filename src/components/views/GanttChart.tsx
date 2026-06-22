@@ -136,7 +136,7 @@ export function GanttChart({
                 key={bar.eventId}
                 initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ ...MOTION_BASE, delay: Math.min(i * 0.02, 0.2) }}
+                transition={{ ...MOTION_BASE, delay: Math.min(i * 0.015, 0.1) }}
                 onClick={() => onSelectEvent(bar.eventId)}
                 onDoubleClick={() => {
                   const ev = events.find((e) => e.id === bar.eventId);

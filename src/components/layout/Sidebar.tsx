@@ -16,7 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import { useUIStore } from '@/stores/ui';
-import { MOTION_BASE } from '@/lib/motion';
+import { MOTION_FAST } from '@/lib/motion';
 import { AppIcon, BrandMark } from '@/components/ui';
 
 interface NavItem {
@@ -45,7 +45,7 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
   return (
     <motion.aside
       animate={{ width: collapsed ? 56 : 240 }}
-      transition={MOTION_BASE}
+      transition={MOTION_FAST}
       className={cn(
         'flex flex-col bg-bg-surface border-r border-border',
         'flex-shrink-0 overflow-hidden',
@@ -83,9 +83,9 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
             >
               {active && (
                 <motion.span
-                  layoutId="sidebar-active"
+                  layoutId={`sidebar-active-${item.to}`}
                   className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-accent"
-                  transition={MOTION_BASE}
+                  transition={MOTION_FAST}
                 />
               )}
               <AppIcon size="sm" tone={active ? 'accent' : 'muted'}>

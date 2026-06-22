@@ -131,7 +131,7 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
                   key={s.id}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ ...MOTION_BASE, delay: Math.min(i * 0.03, 0.15) }}
+                  transition={{ ...MOTION_BASE, delay: Math.min(i * 0.02, 0.1) }}
                   className={cn(
                     'group flex items-center gap-2 px-3 h-10 mx-1 rounded-[6px] cursor-pointer transition-colors',
                     selectedSceneId === s.id

@@ -75,6 +75,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   backupIntervalHours: 24,
   defaultView: 'timeline',
   timelineZoom: 'month',
+  fontTheme: 'sans',
 };
 
 const TRACK_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
@@ -1007,6 +1008,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
           : {}),
         ...(input.defaultView !== undefined ? { defaultView: input.defaultView } : {}),
         ...(input.timelineZoom !== undefined ? { timelineZoom: input.timelineZoom } : {}),
+        ...(input.fontTheme !== undefined ? { fontTheme: input.fontTheme } : {}),
       };
       return db.settings;
     }

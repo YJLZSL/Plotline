@@ -447,7 +447,19 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         </aside>
 
         {/* 画布区域 */}
-        <div className="flex-1 overflow-auto bg-bg-base relative">
+        <div
+          className="flex-1 overflow-auto bg-bg-base relative"
+          onWheel={(e) => {
+            const el = e.currentTarget;
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              cycleZoom(e.deltaY > 0 ? 1 : -1);
+            } else if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+              e.preventDefault();
+              el.scrollLeft += e.deltaY * 0.8;
+            }
+          }}
+        >
           {visibleTracks.length === 0 ? (
             <EmptyState
               icon={<Clock4 className="h-10 w-10" />}
@@ -872,7 +884,7 @@ function EventCard({
       initial={{ opacity: 0, scale: 0.9, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.22, ease: EASE_STANDARD, delay: Math.min(index * 0.02, 0.2) }}
+      transition={{ duration: 0.22, ease: EASE_STANDARD, delay: Math.min(index * 0.015, 0.1) }}
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.15}

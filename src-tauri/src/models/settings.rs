@@ -14,6 +14,7 @@ pub struct AppSettings {
     pub backup_interval_hours: i64,
     pub default_view: String,
     pub timeline_zoom: String,
+    pub font_theme: String,
 }
 
 impl Default for AppSettings {
@@ -30,6 +31,7 @@ impl Default for AppSettings {
             backup_interval_hours: 24,
             default_view: "timeline".into(),
             timeline_zoom: "month".into(),
+            font_theme: "sans".into(),
         }
     }
 }
@@ -48,4 +50,5 @@ pub struct UpdateSettingsInput {
     pub backup_interval_hours: Option<i64>,
     pub default_view: Option<String>,
     pub timeline_zoom: Option<String>,
+    pub font_theme: Option<String>,
 }

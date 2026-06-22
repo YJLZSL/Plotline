@@ -31,6 +31,7 @@ pub fn update_settings(
                 .unwrap_or(existing.backup_interval_hours),
             default_view: input.default_view.unwrap_or(existing.default_view),
             timeline_zoom: input.timeline_zoom.unwrap_or(existing.timeline_zoom),
+            font_theme: input.font_theme.unwrap_or(existing.font_theme),
         };
         write_settings(conn, &merged)?;
         Ok(merged)
@@ -40,7 +41,7 @@ pub fn update_settings(
 fn read_settings(conn: &rusqlite::Connection) -> AppResult<AppSettings> {
     conn.query_row(
         "SELECT theme, accent_color, language, editor_font, ui_font, font_size,
-                backup_path, auto_backup, backup_interval_hours, default_view, timeline_zoom
+                backup_path, auto_backup, backup_interval_hours, default_view, timeline_zoom, font_theme
          FROM app_settings WHERE id=1",
         [],
         |row| {
@@ -56,6 +57,7 @@ fn read_settings(conn: &rusqlite::Connection) -> AppResult<AppSettings> {
                 backup_interval_hours: row.get(8)?,
                 default_view: row.get(9)?,
                 timeline_zoom: row.get(10)?,
+                font_theme: row.get(11)?,
             })
         },
     )
@@ -66,7 +68,7 @@ fn write_settings(conn: &rusqlite::Connection, s: &AppSettings) -> AppResult<()>
     conn.execute(
         "UPDATE app_settings SET theme=?1, accent_color=?2, language=?3, editor_font=?4,
             ui_font=?5, font_size=?6, backup_path=?7, auto_backup=?8,
-            backup_interval_hours=?9, default_view=?10, timeline_zoom=?11 WHERE id=1",
+            backup_interval_hours=?9, default_view=?10, timeline_zoom=?11, font_theme=?12 WHERE id=1",
         rusqlite::params![
             s.theme,
             s.accent_color,
@@ -79,6 +81,7 @@ fn write_settings(conn: &rusqlite::Connection, s: &AppSettings) -> AppResult<()>
             s.backup_interval_hours,
             s.default_view,
             s.timeline_zoom,
+            s.font_theme,
         ],
     )?;
     Ok(())

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { AppSettings, Theme } from '@/types';
+import type { AppSettings, FontTheme, Theme } from '@/types';
 
 interface UIState {
   sidebarCollapsed: boolean;
@@ -26,17 +26,26 @@ export const useUIStore = create<UIState>()(
   ),
 );
 
+const FONT_STACKS: Record<FontTheme, string> = {
+  sans: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+  mono: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+  pixel: '"Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+};
+
 interface ThemeState {
   theme: Theme;
   accentColor: string;
+  fontTheme: FontTheme;
   setTheme: (theme: Theme) => void;
   setAccentColor: (color: string) => void;
+  setFontTheme: (fontTheme: FontTheme) => void;
   applyToDOM: (settings: Partial<AppSettings>) => void;
 }
 
 export const useThemeStore = create<ThemeState>()((set, get) => ({
   theme: 'light',
   accentColor: '#C68A3E',
+  fontTheme: 'sans',
   setTheme: (theme) => {
     set({ theme });
     get().applyToDOM({ theme });
@@ -44,6 +53,10 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   setAccentColor: (accentColor) => {
     set({ accentColor });
     get().applyToDOM({ accentColor });
+  },
+  setFontTheme: (fontTheme) => {
+    set({ fontTheme });
+    get().applyToDOM({ fontTheme });
   },
   applyToDOM: (settings) => {
     if (typeof document === 'undefined') return;
@@ -62,6 +75,12 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
     }
     if (settings.editorFont) {
       root.style.setProperty('--font-mono', settings.editorFont);
+    }
+    if (settings.fontTheme) {
+      root.style.setProperty('--font-sans', FONT_STACKS[settings.fontTheme]);
+      if (settings.fontTheme === 'pixel') {
+        root.style.setProperty('--font-mono', FONT_STACKS.pixel);
+      }
     }
   },
 }));

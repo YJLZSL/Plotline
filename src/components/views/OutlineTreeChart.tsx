@@ -69,7 +69,7 @@ export function OutlineTreeChart({ nodes, selectedId, onSelect }: OutlineTreeCha
                   key={node.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ ...MOTION_BASE, delay: Math.min(i * 0.015, 0.18) }}
+                  transition={{ ...MOTION_BASE, delay: Math.min(i * 0.01, 0.1) }}
                   transform={`translate(${node.x}, ${node.y})`}
                   className={cn('cursor-pointer')}
                   onClick={() => onSelect(node.id)}

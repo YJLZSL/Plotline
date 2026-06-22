@@ -2,6 +2,7 @@ export type Theme = 'light' | 'dark' | 'sepia';
 export type Language = 'zh-CN' | 'zh-TW' | 'en';
 export type DefaultView = 'timeline' | 'characters' | 'outline' | 'statistics' | 'notebook' | 'map' | 'vn';
 export type TimelineZoom = 'year' | 'month' | 'day' | 'hour';
+export type FontTheme = 'sans' | 'mono' | 'pixel';
 
 export interface AppSettings {
   theme: Theme;
@@ -15,6 +16,7 @@ export interface AppSettings {
   backupIntervalHours: number;
   defaultView: DefaultView;
   timelineZoom: TimelineZoom;
+  fontTheme: FontTheme;
 }
 
 export interface UpdateSettingsInput {
@@ -29,6 +31,7 @@ export interface UpdateSettingsInput {
   backupIntervalHours?: number;
   defaultView?: DefaultView;
   timelineZoom?: TimelineZoom;
+  fontTheme?: FontTheme;
 }
 
 export interface Statistics {

@@ -96,7 +96,7 @@ export function CharacterArcChart({ events, characters }: CharacterArcChartProps
                           key={j}
                           initial={{ opacity: 0, scale: 0.6 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          transition={{ ...MOTION_BASE, delay: Math.min(j * 0.03, 0.2) }}
+                          transition={{ ...MOTION_BASE, delay: Math.min(j * 0.02, 0.1) }}
                         >
                           <circle
                             cx={x}

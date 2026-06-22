@@ -16,7 +16,7 @@ import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
-import { MOTION_BASE } from '@/lib/motion';
+import { MOTION_FAST } from '@/lib/motion';
 
 function WorkspaceRoutes() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -52,13 +52,13 @@ export function AppRoutes() {
 function AnimatedRoutes() {
   const location = useLocation();
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="sync">
       <motion.div
         key={location.pathname}
-        initial={{ opacity: 0, y: 6 }}
+        initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -6 }}
-        transition={MOTION_BASE}
+        exit={{ opacity: 0, y: -4 }}
+        transition={MOTION_FAST}
         className="h-screen w-screen"
       >
         <Routes location={location}>

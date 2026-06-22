@@ -14,7 +14,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
-import type { AppSettings, Language, Theme } from '@/types';
+import type { AppSettings, FontTheme, Language, Theme } from '@/types';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { useThemeStore } from '@/stores/ui';
@@ -43,6 +43,12 @@ const THEMES: Array<{ value: Theme; labelKey: string; icon: React.ComponentType<
 ];
 
 const ACCENT_PALETTE = ['#C68A3E', '#A86A2C', '#B85537', '#7B5E3C', '#D4A574', '#9C6B3E'];
+
+const FONT_THEMES: Array<{ value: FontTheme; labelKey: string }> = [
+  { value: 'sans', labelKey: 'settings.fontThemeSans' },
+  { value: 'mono', labelKey: 'settings.fontThemeMono' },
+  { value: 'pixel', labelKey: 'settings.fontThemePixel' },
+];
 
 export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) {
   const { t, i18n } = useI18n();
@@ -83,7 +89,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const set = (patch: Partial<AppSettings>) => {
     setDraft((d) => (d ? { ...d, ...patch } : d));
-    if (patch.theme || patch.accentColor || patch.fontSize || patch.uiFont || patch.editorFont) {
+    if (patch.theme || patch.accentColor || patch.fontSize || patch.uiFont || patch.editorFont || patch.fontTheme) {
       applyToDOM({ ...draft, ...patch });
     }
   };
@@ -225,6 +231,26 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                         )}
                       >
                         {lng === 'zh-CN' ? '简体中文' : 'English'}
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+
+                <Section title={t('settings.fontTheme')}>
+                  <div className="flex gap-2">
+                    {FONT_THEMES.map((ft) => (
+                      <button
+                        key={ft.value}
+                        onClick={() => set({ fontTheme: ft.value })}
+                        className={cn(
+                          'h-10 px-4 rounded-[6px] border text-sm transition-colors',
+                          draft.fontTheme === ft.value
+                            ? 'border-accent bg-accent/10 text-accent'
+                            : 'border-border text-text-secondary hover:bg-bg-elevated',
+                        )}
+                        style={{ fontFamily: ft.value === 'pixel' ? 'var(--font-pixel)' : undefined }}
+                      >
+                        {t(ft.labelKey)}
                       </button>
                     ))}
                   </div>

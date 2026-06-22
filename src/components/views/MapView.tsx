@@ -338,7 +338,7 @@ function LocationNode({
     <motion.g
       initial={{ opacity: 0, scale: 0.6 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ ...MOTION_BASE, delay: Math.min(index * 0.03, 0.2) }}
+      transition={{ ...MOTION_BASE, delay: Math.min(index * 0.02, 0.1) }}
       transform={`translate(${location.posX}, ${location.posY})`}
       className="cursor-grab active:cursor-grabbing"
       onClick={(e) => {
