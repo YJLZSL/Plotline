@@ -46,8 +46,8 @@
 - **地图 / VN**：`MapView` 拖拽已改为窗口级鼠标事件，`VnView` 基础视图与后端 API 已就绪；空状态插画、完整 i18n 与更多交互细节留到 v1.4。
 - **番茄钟**：`PomodoroTimer` 浮层组件支持 `warm` / `mc` / `minimal` 三种主题，状态机覆盖 focus / shortBreak / longBreak 自动切换。
 - **全局字体主题**：设置页支持 `sans` / `mono` / `pixel` 三种界面字体主题，像素字体优先使用系统 `Zpix` 或 `站酷快乐体` fallback，通过 `--font-sans` / `--font-mono` CSS 变量全局生效。
-- **图标**：已用 `scripts/generate-icons.mjs`（Node.js 纯内置模块）重绘所有 Tauri 尺寸，不再依赖 Python；测试覆盖颜色解析、渐变采样与图标绘制。
-- **测试**：新增 `pomodoro.test.ts`、`ui.test.ts`、`scripts/generate-icons.test.ts` 与 Rust `settings` 测试；本地 `vitest run`、`cargo test` 与 `eslint` 全绿。
+- **图标**：已用 `scripts/render-icon.py`（基于 SVG 矢量源 + Skia 渲染）重绘所有 Tauri 尺寸，统一应用与仓库图标；不再依赖位图绘制。
+- **测试**：新增 `pomodoro.test.ts`、`ui.test.ts` 与 Rust `settings` 测试；本地 `vitest run`、`cargo test` 与 `eslint` 全绿。
 - **构建**：v1.3.0 Windows 安装包（NSIS + MSI）已发布到 [GitHub Release](https://github.com/YJLZSL/Plotline/releases/tag/v1.3.0)。
 
 ### 下一迭代方向（v1.4 候选）
@@ -289,7 +289,7 @@ docs(agents): 补充 IPC 调用规范
 | 改已发布迁移 | 新增迁移补丁 |
 | 删除测试 | 改测试以匹配新行为 |
 | 引入新依赖未经 ADR | 在 `docs/DECISIONS.md` 记录 |
-| 用 Python 脚本生成图标 | 使用 `scripts/generate-icons.mjs`（Node.js） |
+| 用 Python 脚本生成图标 | 使用 `scripts/render-icon.py`（基于 SVG + Skia） |
 | 组件内硬编码 `font-family` | 使用 CSS 变量 `--font-sans` / `--font-mono` / `--font-pixel` |
 | 冷蓝色主色 | 暖色调主题 |
 | 旋转 loading | 骨架屏 |

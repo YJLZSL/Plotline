@@ -86,6 +86,7 @@ pnpm tauri build        # 生成桌面安装包（NSIS + MSI）
 | `pnpm dev:web` | 纯前端开发（mock IPC） |
 | `pnpm build` | 构建前端 |
 | `pnpm tauri build` | 生成 NSIS / MSI 安装包 |
+| `python scripts/render-icon.py` | 基于 SVG 矢量源渲染所有 Tauri 图标尺寸（PNG + ICO） |
 | `pnpm lint` | ESLint 检查 |
 | `pnpm typecheck` | TypeScript 类型检查 |
 | `pnpm test` | Vitest watch |
