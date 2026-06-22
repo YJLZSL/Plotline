@@ -1,0 +1,185 @@
+use chrono::Utc;
+use rusqlite::{params, Connection};
+use uuid::Uuid;
+
+use crate::error::{AppError, AppResult};
+use crate::models::{ConnectEventsInput, CreateEventInput, Event, UpdateEventInput};
+
+pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, workspace_id, track_id, title, description, date_type, date_value,
+                sort_order, status, color, created_at, updated_at
+         FROM events WHERE workspace_id = ?1 ORDER BY track_id, sort_order, created_at",
+    )?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        Ok(Event {
+            id: row.get(0)?,
+            workspace_id: row.get(1)?,
+            track_id: row.get(2)?,
+            title: row.get(3)?,
+            description: row.get(4)?,
+            date_type: row.get(5)?,
+            date_value: row.get(6)?,
+            sort_order: row.get(7)?,
+            status: row.get(8)?,
+            color: row.get(9)?,
+            character_ids: Vec::new(),
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
+        })
+    })?;
+    let mut events: Vec<Event> = rows.collect::<Result<_, _>>()?;
+    for ev in events.iter_mut() {
+        ev.character_ids = list_character_ids(conn, &ev.id)?;
+    }
+    Ok(events)
+}
+
+fn list_character_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<String>> {
+    let mut stmt =
+        conn.prepare("SELECT character_id FROM event_characters WHERE event_id = ?1")?;
+    let rows = stmt.query_map(params![event_id], |r| r.get::<_, String>(0))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+fn get(conn: &Connection, id: &str) -> AppResult<Event> {
+    let mut stmt = conn.prepare(
+        "SELECT id, workspace_id, track_id, title, description, date_type, date_value,
+                sort_order, status, color, created_at, updated_at
+         FROM events WHERE id = ?1",
+    )?;
+    let mut event = stmt
+        .query_row(params![id], |row| {
+            Ok(Event {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                track_id: row.get(2)?,
+                title: row.get(3)?,
+                description: row.get(4)?,
+                date_type: row.get(5)?,
+                date_value: row.get(6)?,
+                sort_order: row.get(7)?,
+                status: row.get(8)?,
+                color: row.get(9)?,
+                character_ids: Vec::new(),
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })
+        .map_err(|_| AppError::NotFound(format!("事件 {} 不存在", id)))?;
+    event.character_ids = list_character_ids(conn, id)?;
+    Ok(event)
+}
+
+pub fn create(conn: &Connection, input: CreateEventInput) -> AppResult<Event> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now();
+    let now_str = now.to_rfc3339();
+    let date_type = input.date_type.unwrap_or_else(|| "relative".into());
+    let status = input.status.unwrap_or_else(|| "draft".into());
+    let sort_order = input.sort_order.unwrap_or(0);
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT INTO events
+         (id, workspace_id, track_id, title, description, date_type, date_value,
+          sort_order, status, color, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            id,
+            input.workspace_id,
+            input.track_id,
+            input.title,
+            input.description.unwrap_or_default(),
+            date_type,
+            input.date_value.unwrap_or_default(),
+            sort_order,
+            status,
+            input.color,
+            now_str,
+            now_str,
+        ],
+    )?;
+    if let Some(cids) = input.character_ids {
+        for cid in cids {
+            tx.execute(
+                "INSERT OR IGNORE INTO event_characters (event_id, character_id) VALUES (?1, ?2)",
+                params![id, cid],
+            )?;
+        }
+    }
+    tx.commit()?;
+    get(conn, &id)
+}
+
+pub fn update(conn: &Connection, input: UpdateEventInput) -> AppResult<Event> {
+    let existing = get(conn, &input.id)?;
+    let title = input.title.unwrap_or(existing.title);
+    let description = input.description.unwrap_or(existing.description);
+    let track_id = input.track_id.unwrap_or(existing.track_id);
+    let date_type = input.date_type.unwrap_or(existing.date_type);
+    let date_value = input.date_value.unwrap_or(existing.date_value);
+    let sort_order = input.sort_order.unwrap_or(existing.sort_order);
+    let status = input.status.unwrap_or(existing.status);
+    let color = input.color.unwrap_or(existing.color);
+    let now_str = Utc::now().to_rfc3339();
+
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE events SET title=?1, description=?2, track_id=?3, date_type=?4,
+            date_value=?5, sort_order=?6, status=?7, color=?8, updated_at=?9 WHERE id=?10",
+        params![
+            title,
+            description,
+            track_id,
+            date_type,
+            date_value,
+            sort_order,
+            status,
+            color,
+            now_str,
+            input.id,
+        ],
+    )?;
+    if let Some(cids) = input.character_ids {
+        tx.execute(
+            "DELETE FROM event_characters WHERE event_id=?1",
+            params![input.id],
+        )?;
+        for cid in cids {
+            tx.execute(
+                "INSERT OR IGNORE INTO event_characters (event_id, character_id) VALUES (?1, ?2)",
+                params![input.id, cid],
+            )?;
+        }
+    }
+    tx.commit()?;
+    get(conn, &input.id)
+}
+
+pub fn delete(conn: &Connection, id: &str) -> AppResult<()> {
+    let affected = conn.execute("DELETE FROM events WHERE id=?1", params![id])?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!("事件 {} 不存在", id)));
+    }
+    Ok(())
+}
+
+pub fn connect(conn: &Connection, input: ConnectEventsInput) -> AppResult<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO event_connections (source_id, target_id, type) VALUES (?1, ?2, ?3)",
+        params![
+            input.source_id,
+            input.target_id,
+            input.connection_type.unwrap_or_else(|| "causal".into()),
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn disconnect(conn: &Connection, source_id: &str, target_id: &str) -> AppResult<()> {
+    conn.execute(
+        "DELETE FROM event_connections WHERE source_id=?1 AND target_id=?2",
+        params![source_id, target_id],
+    )?;
+    Ok(())
+}

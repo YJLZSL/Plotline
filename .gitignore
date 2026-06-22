@@ -1,0 +1,57 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+dist-ssr/
+build/
+src-tauri/target/
+src-tauri/gen/
+
+# Tauri 本地数据库与备份
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+backups/
+src-tauri/data/
+
+# 日志与临时
+*.log
+logs/
+.cache/
+tmp/
+temp/
+
+# 环境与秘密
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+
+# Vite
+.vite/
+
+# TypeScript 增量
+*.tsbuildinfo

@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-border: var(--border);
+  --color-track-1: #f4b6c2;
+  --color-track-2: #b6d4f4;
+  --color-track-3: #b6f4c8;
+  --color-track-4: #f4e4b6;
+  --color-track-5: #d8b6f4;
+  --color-track-6: #f4cbb6;
+  --color-status-draft: #9b9b9b;
+  --color-status-done: #7fb58c;
+  --color-status-revise: #e0a95c;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.05);
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.08);
+
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-dialog: 12px;
+
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}

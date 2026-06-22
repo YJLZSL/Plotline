@@ -1,0 +1,3 @@
+[env]
+# rustc 1.96 在 Windows 上启用增量编译时存在 ICE，临时关闭
+CARGO_INCREMENTAL = "0"

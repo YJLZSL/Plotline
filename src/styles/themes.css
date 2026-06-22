@@ -1,0 +1,131 @@
+/* 主题变量：三套暖色调主题，通过 [data-theme] 切换 */
+:root {
+  --bg-base: #faf7f0;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f5efe3;
+  --text-primary: #3a2e26;
+  --text-secondary: #7a6b5e;
+  --accent: #c68a3e;
+  --accent-soft: #e8c988;
+  --border: #e5ddc9;
+  --shadow-color: rgba(58, 46, 38, 0.08);
+}
+
+[data-theme="dark"] {
+  --bg-base: #1e1a16;
+  --bg-surface: #2a241f;
+  --bg-elevated: #352d27;
+  --text-primary: #f5efe3;
+  --text-secondary: #b5a89a;
+  --accent: #e0a95c;
+  --accent-soft: #8a5e2c;
+  --border: #3d352e;
+  --shadow-color: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="sepia"] {
+  --bg-base: #f2e8d5;
+  --bg-surface: #efe2c8;
+  --bg-elevated: #e7d7b6;
+  --text-primary: #4a3927;
+  --text-secondary: #7a6347;
+  --accent: #a86a2c;
+  --accent-soft: #d4b47c;
+  --border: #d6c29c;
+  --shadow-color: rgba(74, 57, 39, 0.1);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* 自定义滚动条 - 暖色风格 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+  border: 2px solid var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* 选中文字配色 */
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+/* 动画统一曲线 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 0%,
+    var(--border) 50%,
+    var(--bg-elevated) 100%
+  );
+  background-size: 200% 100%;
+  animation: pulse-soft 1.5s ease-in-out infinite;
+}
+
+/* Tauri 窗口拖拽区域 */
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  cursor: default;
+}
+
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] a,
+[data-tauri-drag-region] input {
+  -webkit-app-region: no-drag;
+}
