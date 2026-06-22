@@ -14,6 +14,8 @@ Workspace 1───* Event *───* Character
 Character 1───* CharacterRelationship *───1 Character
 Workspace 1───* OutlineNode (self-ref tree)
 Workspace 1───* Note
+Workspace 1───* Location *───* Location  (via location_links)
+Workspace 1───* VnScene 1───* VnLine
 ```
 
 ---
@@ -134,6 +136,56 @@ Workspace 1───* Note
 | created_at | TEXT | |
 | updated_at | TEXT | |
 
+### locations（v1.3 故事地图）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | |
+| workspace_id | TEXT FK | ON DELETE CASCADE |
+| name | TEXT | 地点名称 |
+| description | TEXT | |
+| pos_x | INTEGER | SVG 画布 X 坐标 |
+| pos_y | INTEGER | SVG 画布 Y 坐标 |
+| color | TEXT | 地点色 |
+| icon | TEXT | emoji 图标 |
+| linked_event_id | TEXT NULL FK | 关联事件 |
+| created_at | TEXT | |
+| updated_at | TEXT | |
+
+### location_links（v1.3 地点路径）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| source_id | TEXT FK | ON DELETE CASCADE |
+| target_id | TEXT FK | ON DELETE CASCADE |
+| label | TEXT | 路径标签 |
+| PRIMARY KEY | (source_id, target_id) | |
+
+### vn_scenes（v1.3 视觉小说场景）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | |
+| workspace_id | TEXT FK | ON DELETE CASCADE |
+| title | TEXT | 场景标题 |
+| background | TEXT | 背景色 hex（可选） |
+| outline_node_id | TEXT NULL FK | 关联大纲节点 |
+| sort_order | INTEGER | |
+| created_at | TEXT | |
+| updated_at | TEXT | |
+
+### vn_lines（v1.3 视觉小说台词）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | |
+| scene_id | TEXT FK | ON DELETE CASCADE |
+| sort_order | INTEGER | |
+| line_type | TEXT | dialog/narration/choice |
+| character_id | TEXT NULL FK | 说话角色 |
+| speaker_name | TEXT | 自定义说话人 |
+| text | TEXT | 台词/旁白文本 |
+| emotion | TEXT | 情绪标签 |
+| choice_label | TEXT | 选项标签 |
+| choice_target_scene_id | TEXT NULL FK | 选项跳转目标 |
+| created_at | TEXT | |
+
 ### app_settings（全局，单行）
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -147,8 +199,9 @@ Workspace 1───* Note
 | backup_path | TEXT | |
 | auto_backup | INTEGER | 0/1 |
 | backup_interval_hours | INTEGER | |
-| default_view | TEXT | timeline/characters/outline/statistics |
+| default_view | TEXT | timeline/characters/outline/statistics/notebook/map/vn |
 | timeline_zoom | TEXT | year/month/day/hour |
+| font_theme | TEXT | sans/mono/pixel（v1.3 新增） |
 
 ---
 
@@ -182,5 +235,5 @@ export interface Workspace {
 
 ---
 
-> 文档版本：v1.2.0  
+> 文档版本：v1.3.0  
 > 最后更新：2026-06-22

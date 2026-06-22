@@ -34,6 +34,50 @@
 若两者都缺失，`pnpm tauri build` 会在打包阶段失败但 Rust 部分会成功编译。
 推荐通过 GitHub Actions 的 `release.yml` 完成跨平台打包，本机仅做开发预览。
 
+## [1.3.0] - 2026-06-22
+
+**目标**：补齐地图/VN 视图、修复性能与交互问题、重绘图标、实现番茄钟多主题与全局字体切换，构建发布 Windows 安装包。
+
+### 新增
+- **故事地图** (`src/components/views/MapView.tsx` + `src/features/map/*` + `src-tauri/src/services/location.rs`)：
+  SVG 画布地点节点、拖拽编辑、路径连线、关联事件/角色。
+- **视觉小说脚本编辑器** (`src/components/views/VnView.tsx` + `src/features/vn/*` + `src-tauri/src/services/vn.rs`)：
+  场景列表、对话/旁白/选项台词、预览模式与分支跳转。
+- **番茄钟组件** (`src/components/ui/PomodoroTimer.tsx` + `src/stores/pomodoro.ts`)：
+  支持 25/5/15 分钟三档，warm / mc / minimal 三种主题；MC 主题使用像素字体与方块进度条。
+- **全局字体主题** (`src/styles/themes.css` + `src/stores/ui.ts` + `SettingsView`)：
+  设置页支持无衬线 / 等宽 / 像素三种界面字体主题，切换后即时生效。
+- **高清应用图标** (`scripts/generate-icons.mjs`)：用 Node.js + Canvas 8x 超采样生成所有尺寸，替代 Python 脚本。
+- **前端单元测试**：新增 `features/map/api.test.ts`、`features/vn/api.test.ts`、
+  `components/views/MapView.test.tsx`、`components/views/VnView.test.tsx`、
+  `components/ui/PomodoroTimer.test.tsx`。
+- **Rust 单元测试**：扩展 `services::location::tests` 与 `services::vn::tests`。
+- **ADR-017 至 ADR-022**：记录地图/VN、图标生成、滚轮交互、视图切换动画、番茄钟、全局字体主题等决策。
+
+### 变更
+- **应用版本号** 从 `1.2.0` 同步升级到 `1.3.0`（`package.json`、`src-tauri/Cargo.toml`、
+  `src-tauri/tauri.conf.json`、`WorkspaceLayout`、`SettingsView`、E2E 脚本、发布脚本等）。
+- **视图切换动画降级**：`AppRoutes.tsx` `AnimatePresence mode="wait"` 改为 `mode="sync"`，
+  duration 降到 `MOTION_FAST`，避免快速切换卡死。
+- **列表入场 stagger delay** 统一限制到 0.1s 以内，减少动画拖慢感。
+- **时间轴滚轮交互**：垂直滚轮映射为水平滚动（上滚向左、下滚向右），按住 Ctrl 时滚轮切换缩放级别。
+- **UI 自适应**：Toolbar 按钮组支持换行/隐藏文字，Sidebar 折叠态保持 56px，小窗口下布局不断裂。
+
+### 文档
+- 更新 `AGENTS.md` v0.4.0：新增 v1.3 迭代重点、番茄钟/字体/图标规范。
+- 更新 `产品需求与设计文档.md`：路线图拆分为 v1.2/v1.3/v1.4。
+- 更新 `docs/ARCHITECTURE.md` v1.3.0：补充 map/vn/PomodoroTimer、性能与滚轮章节。
+- 更新 `docs/DECISIONS.md` v1.3.0：新增 6 条 ADR。
+- 更新 `docs/DATA_MODEL.md` v1.3.0：补充 locations/location_links/vn_scenes/vn_lines 与 font_theme。
+- 更新 `docs/TESTING.md` v1.3.0：补充 map/vn/番茄钟测试要求与 pnpm 不可用时的替代命令。
+- 更新 `README.md`：特性列表加入地图/VN/番茄钟/字体主题/高清图标。
+
+### 修复
+- 修复 `VnView.tsx` 调用 `VnPreview` 时传入未声明的 `scenes` prop 导致的类型错误。
+- 修复时间轴滚轮方向与用户需求不一致的问题。
+
+---
+
 ## [1.2.0] - 2026-06-22
 
 **统计**：本轮迭代完成 PRD §8 第四阶段路线图全部 4 项产品能力，新增 12 个文件

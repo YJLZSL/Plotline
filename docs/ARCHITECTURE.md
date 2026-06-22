@@ -57,8 +57,11 @@ plotline/
 │   ├── app/                  # 应用级（路由、Provider、根布局）
 │   ├── components/
 │   │   ├── ui/               # 基础原子组件（Button、Card、Dialog...）
+│   │   │   └── PomodoroTimer.tsx  # 番茄钟浮层组件（v1.3）
 │   │   ├── layout/           # 应用布局（Sidebar、Toolbar、StatusBar）
 │   │   └── views/            # 顶级视图 + 第四阶段可视化（甘特图、树状图、关系矩阵、高级统计图表）
+│   │       ├── MapView.tsx   # 故事地图（v1.3）
+│   │       └── VnView.tsx    # 视觉小说脚本编辑器 + 预览（v1.3）
 │   ├── features/             # 按业务领域拆分
 │   │   ├── workspace/        # 工作区
 │   │   ├── timeline/         # 时间轴
@@ -66,7 +69,9 @@ plotline/
 │   │   ├── outline/          # 大纲
 │   │   ├── statistics/       # 统计
 │   │   ├── notebook/         # 笔记
-│   │   └── settings/         # 设置
+│   │   ├── settings/         # 设置
+│   │   ├── map/              # 故事地图（v1.3）
+│   │   └── vn/               # 视觉小说脚本（v1.3）
 │   ├── stores/               # Zustand stores
 │   ├── hooks/                # 通用 hooks
 │   ├── lib/                  # ipc 封装、格式化、工具函数
@@ -207,6 +212,10 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
 - **崩溃恢复**：应用启动时检测 `.db.lock`，若存在则提示恢复。
 - **动效一致性**：`src/lib/motion.ts` 暴露 fast/base/slow 三档 token，所有
   framer-motion `transition` 必须引用 token，禁止字面量。详见 ADR-008。
+- **视图切换性能**：v1.3 将 `AppRoutes.tsx` 的 `AnimatePresence mode="wait"` 降级为
+  `mode="sync"` / `MOTION_FAST`，避免快速切换时 exit + enter 动画堆积导致卡死。
+- **时间轴滚轮交互**：画布容器监听 `wheel`，垂直滚轮映射为水平滚动（上滚向左、
+  下滚向右），按住 `Ctrl` 时滚轮调用 `cycleZoom()` 缩放时/日/月/年。详见 ADR-019。
 
 ---
 
@@ -232,5 +241,5 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
 
 ---
 
-> 文档版本：v1.2.0  
+> 文档版本：v1.3.0  
 > 最后更新：2026-06-22

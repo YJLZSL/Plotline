@@ -29,13 +29,23 @@
 | 加基础组件 | `src/components/ui/` |
 | 改主题/颜色 | `src/styles/themes.css` |
 | 改翻译 | `src/i18n/locales/<lang>.json` |
+| 改番茄钟 | `src/components/ui/PomodoroTimer.tsx` + `src/stores/pomodoro.ts` |
+| 改全局字体主题 | `src/styles/themes.css` + `src/styles/tailwind.css` + `src/stores/ui.ts` |
 
 必读文档：
+- `AGENTS.md` — 本文件（AI 协作规范）
 - `docs/ARCHITECTURE.md` — 整体架构
 - `docs/TESTING.md` — 测试流程
 - `docs/DECISIONS.md` — 关键技术决策
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
+
+### 当前迭代重点（v1.3.0）
+- 地图（Map）与视觉小说（VN）视图已合并到 `main`，需补齐测试、i18n 与空状态插画。
+- 性能与交互：视图切换动画已降级，避免快速切换卡死；时间轴滚轮支持水平滚动与 Ctrl 缩放。
+- 番茄钟：v1.3.0 实现基础浮层组件，支持 warm / mc / minimal 三种主题；完整写作目标留到 v1.4。
+- 全局字体主题：设置页支持无衬线 / 等宽 / 像素三种界面字体主题，像素字体优先使用系统 `Zpix` 或 `站酷快乐体` fallback。
+- 图标：v1.3.0 已用 `scripts/generate-icons.mjs`（Node.js）重绘，不再依赖 Python。
 
 ---
 
@@ -215,7 +225,12 @@ docs(agents): 补充 IPC 调用规范
 - 尺寸：按钮内 16px、导航 20px、空状态 24px。
 - 颜色跟随文字色或 accent，**不单独引入其他图标库**。
 
-### 6.5 文案
+### 6.5 字体
+- 界面字体通过 `--font-sans` 统一控制；编辑器字体通过 `--font-mono` 控制。
+- 像素字体栈 `--font-pixel` 用于番茄钟 MC 主题与全局字体主题，fallback 顺序：`"Zpix", "站酷快乐体", "Microsoft YaHei", monospace`。
+- 切换字体主题时通过 CSS 变量即时生效，禁止在组件内硬编码 `font-family`。
+
+### 6.6 文案
 - 中文优先，所有文案必须走 i18n。
 - 错误提示友好具体，给出解决方案（如"路径不存在，请检查后重试"）。
 - 空状态必须有引导文案 + CTA 按钮。
@@ -234,6 +249,8 @@ docs(agents): 补充 IPC 调用规范
 | 改已发布迁移 | 新增迁移补丁 |
 | 删除测试 | 改测试以匹配新行为 |
 | 引入新依赖未经 ADR | 在 `docs/DECISIONS.md` 记录 |
+| 用 Python 脚本生成图标 | 使用 `scripts/generate-icons.mjs`（Node.js） |
+| 组件内硬编码 `font-family` | 使用 CSS 变量 `--font-sans` / `--font-mono` / `--font-pixel` |
 | 冷蓝色主色 | 暖色调主题 |
 | 旋转 loading | 骨架屏 |
 | 弹性/闪烁动画 | 200-300ms ease-out |
@@ -244,11 +261,12 @@ docs(agents): 补充 IPC 调用规范
 
 1. `Read` 本文件 + `docs/ARCHITECTURE.md` + `产品需求与设计文档.md`。
 2. `git log --oneline -20` 看最近提交，了解项目节奏。
-3. `pnpm install && pnpm dev` 跑起来，体验当前状态。
-4. 用 `Grep`/`Glob` 定位要改的文件，**不要凭文件名猜路径**。
-5. 改动后立即 `pnpm lint && pnpm typecheck && pnpm test`，全绿再提交。
+3. 若 `pnpm` 不可用，可直接使用 `node_modules/.bin` 中的 `tsc`、`eslint`、`vitest`、`tauri` 等命令。
+4. `pnpm install && pnpm dev`（或 `./node_modules/.bin/vite`）跑起来，体验当前状态。
+5. 用 `Grep`/`Glob` 定位要改的文件，**不要凭文件名猜路径**。
+6. 改动后立即 `pnpm lint && pnpm typecheck && pnpm test:run && cargo test --manifest-path src-tauri/Cargo.toml`，全绿再提交。
 
 ---
 
-> 文档版本：v0.3.0  
+> 文档版本：v0.4.0  
 > 最后更新：2026-06-22

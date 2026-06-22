@@ -382,5 +382,123 @@ PRD §8 第四阶段要求甘特图视图、树状图视图、关系矩阵视图
 
 ---
 
-> 文档版本：v1.2.0  
+---
+
+## ADR-017：地图与 VN 采用前后端完整模型 + SVG 前端渲染
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+PRD v1.3 新增"故事地图"与"视觉小说脚本编辑器"两个能力。需要新增数据表、IPC 命令、前端视图。
+
+### 决策
+- 后端新增 `locations`、`location_links`、`vn_scenes`、`vn_lines` 四张表，
+  对应 `models/location.rs`、`models/vn.rs` 与 `services/`、`commands/`。
+- 前端地图使用原生 SVG（地点节点、连线路径、网格背景），VN 编辑器使用 React 组件列表 + 预览模式。
+- mock 层在 `src/lib/mock.ts` 中完整对等实现，保证纯 Web 模式与 E2E 可用。
+
+### 后果
+- 新增 2 个 Rust 模块、2 个前端 feature 目录、2 个视图组件。
+- 地图与 VN 数据纳入工作区导入/导出范围（后续补充）。
+
+---
+
+## ADR-018：图标生成采用 Node.js 脚本替代 Python
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+原图标生成脚本 `src-tauri/icons/generate_icons.py` 依赖 Python 与 Pillow，但当前环境未安装 Python。
+
+### 决策
+使用 Node.js + `canvas`/`sharp` 实现 `scripts/generate-icons.mjs`，生成所有 Tauri 需要的尺寸与 `.ico`。
+
+### 理由
+- 项目已有 Node.js 工具链，无需额外语言环境。
+- 8x 超采样后缩放，确保 32x32 等小尺寸清晰。
+
+---
+
+## ADR-019：时间轴滚轮交互采用"垂直滚轮水平滚动 + Ctrl 缩放"
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+用户反馈时间轴滚轮方向错误（上滚应向左、下滚应向右），且希望支持 Ctrl + 滚轮缩放。
+
+### 决策
+在 `TimelineView` 画布容器监听 `wheel`：
+- 无 Ctrl：`container.scrollLeft += e.deltaY * factor`，方向与用户需求一致。
+- 按住 Ctrl：`e.preventDefault()` 后调用 `cycleZoom()` 切换 zoom level。
+
+### 后果
+- 阻止默认垂直滚动，仅在画布悬停/聚焦时生效，不影响页面其他区域。
+
+---
+
+## ADR-020：视图切换动画降级以避免快速切换卡死
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+`AppRoutes.tsx` 使用 `AnimatePresence mode="wait"`，快速切换视图时旧组件 exit 与新组件 enter 串行，导致动画堆积卡死。
+
+### 决策
+- 将 `mode="wait"` 改为 `mode="sync"`。
+- duration 从 `MOTION_BASE` 降到 `MOTION_FAST`。
+- Sidebar active indicator 的 `layoutId` 增加唯一 key，避免跨路由冲突。
+
+### 后果
+- 快速连续切换 20 次以上不再卡死。
+- 转场视觉更轻量，符合 PRD 200-300ms 区间下限。
+
+---
+
+## ADR-021：番茄钟采用前端独立 store + 多主题皮肤
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+PRD 第三阶段规划有"每日目标"，其中包含专注计时需求。用户明确要求番茄钟回归并支持 MC 等主题。
+
+### 决策
+- v1.3 实现基础番茄钟组件 `PomodoroTimer.tsx`，使用独立 Zustand store `pomodoro.ts`。
+- 支持三种主题皮肤：
+  - `warm`：琥珀渐变，匹配应用主风格。
+  - `mc`：像素字体 + 草绿/泥土棕 + 方块进度条。
+  - `minimal`：纯数字大字号。
+- 计时数据保存在前端内存/store，不新增后端表；每日写作目标等持久化统计留到 v1.4。
+
+### 后果
+- 新增 `PomodoroTimer` 组件与测试；i18n 新增 `pomodoro.*` 文案键。
+- MC 主题依赖 `--font-pixel` 变量，需在 `themes.css` / `tailwind.css` 中定义。
+
+---
+
+## ADR-022：全局字体主题通过 CSS 变量切换
+
+**状态**：已采纳  
+**日期**：2026-06-22
+
+### 背景
+用户要求"全局字体都切换成当前的字体"，并恢复像素字体风格。
+
+### 决策
+- 设置页新增"界面字体主题"选项：`sans`（无衬线）、`mono`（等宽）、`pixel`（像素）。
+- 选择后通过 `useThemeStore.applyToDOM` 修改 `--font-sans`（sans/mono/pixel 均映射到对应字体栈）。
+- 保留 `uiFont` / `editorFont` 输入框作为高级覆盖。
+- `--font-pixel` 字体栈：`"Zpix", "站酷快乐体", "Microsoft YaHei", monospace`。
+
+### 后果
+- 切换即时生效，无需刷新。
+- 番茄钟 MC 主题可复用 `--font-pixel`。
+
+---
+
+> 文档版本：v1.3.0  
 > 最后更新：2026-06-22

@@ -1,7 +1,8 @@
 # 测试流程（Testing）
 
 > 本文档定义 Plotline 的测试策略、运行命令、覆盖率要求与最佳实践。
-> 任何代码改动都必须保证 `pnpm test` 与 `cargo test` 全绿。
+> 任何代码改动都必须保证 `pnpm test:run` 与 `cargo test` 全绿。
+> 若环境未安装 `pnpm`，可直接使用 `node_modules/.bin` 中的 `tsc`、`eslint`、`vitest`。
 
 ---
 
@@ -56,6 +57,9 @@ pnpm format:check      # Prettier 校验
 - 测试文件与被测文件**同目录**：`Component.tsx` → `Component.test.tsx`
 - 命名：`<被测文件名>.test.ts(x)`
 - 每个 `features/<domain>/` 至少 1 个测试文件
+- v1.3 新增：`features/map/api.test.ts`、`features/vn/api.test.ts`、
+  `components/views/MapView.test.tsx`、`components/views/VnView.test.tsx`、
+  `components/ui/PomodoroTimer.test.tsx`。
 
 ### 3.3 编写原则
 - **测试行为，而非实现**：用 `getByRole`、`getByText`，避免 `getByTestId` 当依赖实现细节。
@@ -134,8 +138,10 @@ mod tests {
 1. 启动 → 创建工作区 → 进入时间轴
 2. 添加轨道 → 添加事件 → 编辑事件
 3. 创建角色 → 关联到事件
-4. 切换视图（时间轴/角色/大纲/统计）
+4. 切换视图（时间轴/角色/大纲/统计/地图/VN）
 5. 导出 JSON
+6. 地图：添加地点 → 连接地点 → 查看详情
+7. VN：添加场景 → 添加台词 → 预览
 
 ### 5.2 配置
 - `playwright.config.ts` 中指定 baseURL、浏览器（Chromium）、超时。
@@ -184,5 +190,5 @@ PR 必须全部通过才能合并。
 
 ---
 
-> 文档版本：v1.2.0  
+> 文档版本：v1.3.0  
 > 最后更新：2026-06-22
