@@ -75,4 +75,15 @@ export default [
       globals: { ...globals.node },
     },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      'no-console': 'off',
+    },
+  },
 ];

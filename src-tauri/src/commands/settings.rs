@@ -86,3 +86,71 @@ fn write_settings(conn: &rusqlite::Connection, s: &AppSettings) -> AppResult<()>
     )?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrate;
+
+    fn test_conn() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        migrate::run(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn default_font_theme_is_sans() {
+        let settings = AppSettings::default();
+        assert_eq!(settings.font_theme, "sans");
+    }
+
+    #[test]
+    fn reads_default_settings_from_migrated_db() {
+        let conn = test_conn();
+        let settings = read_settings(&conn).unwrap();
+        assert_eq!(settings.theme, "light");
+        assert_eq!(settings.font_theme, "sans");
+        assert_eq!(settings.accent_color, "#C68A3E");
+    }
+
+    #[test]
+    fn writes_and_reads_font_theme() {
+        let conn = test_conn();
+        let mut settings = read_settings(&conn).unwrap();
+        settings.font_theme = "pixel".into();
+        write_settings(&conn, &settings).unwrap();
+
+        let updated = read_settings(&conn).unwrap();
+        assert_eq!(updated.font_theme, "pixel");
+    }
+
+    #[test]
+    fn update_settings_merges_font_theme() {
+        let conn = test_conn();
+        let input = UpdateSettingsInput {
+            font_theme: Some("mono".into()),
+            ..Default::default()
+        };
+
+        let existing = read_settings(&conn).unwrap();
+        let merged = AppSettings {
+            theme: input.theme.unwrap_or(existing.theme),
+            accent_color: input.accent_color.unwrap_or(existing.accent_color),
+            language: input.language.unwrap_or(existing.language),
+            editor_font: input.editor_font.unwrap_or(existing.editor_font),
+            ui_font: input.ui_font.unwrap_or(existing.ui_font),
+            font_size: input.font_size.unwrap_or(existing.font_size),
+            backup_path: input.backup_path.unwrap_or(existing.backup_path),
+            auto_backup: input.auto_backup.unwrap_or(existing.auto_backup),
+            backup_interval_hours: input
+                .backup_interval_hours
+                .unwrap_or(existing.backup_interval_hours),
+            default_view: input.default_view.unwrap_or(existing.default_view),
+            timeline_zoom: input.timeline_zoom.unwrap_or(existing.timeline_zoom),
+            font_theme: input.font_theme.unwrap_or(existing.font_theme),
+        };
+
+        assert_eq!(merged.font_theme, "mono");
+        assert_eq!(merged.theme, "light");
+    }
+}

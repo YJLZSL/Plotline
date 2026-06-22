@@ -4,12 +4,10 @@
  * 输出 Tauri 需要的所有尺寸与格式：PNG、ICO、Square 系列。
  */
 
-import { createWriteStream } from 'node:fs';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
-import { Readable } from 'node:stream';
 import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(__dirname, '../src-tauri/icons');
@@ -517,7 +515,11 @@ async function main() {
   console.log('generated icon.ico');
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+export { MiniCanvas, parseColor, createGradient, interpolateStops, drawIcon, pngEncode };
