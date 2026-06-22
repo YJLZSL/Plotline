@@ -1,0 +1,11 @@
+{
+  "version": "v1.4.0",
+  "notes": "Plotline v1.4.0：AI 创作助手（KV 缓存 + RAG）、VN 与地图增强、全新开场动画、应用内一键自动更新。详见 CHANGELOG.md。",
+  "pub_date": "2026-06-22T15:45:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSEFhNThtQVJDRldKYmFBQkQyWXpQTFpsLzVBU3VIY0xmSVdmL3pCU2JJWHVQWmdJNVJWMEEwZitpbDh5L1Z0YnBjaXpRclRqajlJamhGUGdjUWpCbWdEcnVmYlgrdncwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTQyNzMwCWZpbGU6UGxvdGxpbmVfMS40LjBfeDY0LXNldHVwLmV4ZQo5ejIvclhhRzYxQkhoZkZOU3gwcGJ2OC8zUmNVc1dvSlp5Q3BHYTBBcENJdlJLNy9KQyt1d0UxbERXVzFleFhzTTVRbGNyOFdQY1dJNmF3Mkc0akVDUT09Cg==",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v1.4.0/Plotline_1.4.0_x64-setup.exe"
+    }
+  }
+}
