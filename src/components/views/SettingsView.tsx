@@ -2,6 +2,59 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sun, Moon, BookOpen, Check, RotateCcw, RefreshCw, ExternalLink } from 'lucide-react';
 
+const FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
+  { labelKey: 'settings.fontPresetDefault', value: '' },
+  { labelKey: 'settings.fontPresetInter', value: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
+  { labelKey: 'settings.fontPresetSans', value: '"PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
+  { labelKey: 'settings.fontPresetMono', value: '"JetBrains Mono", "Cascadia Code", Consolas, monospace' },
+  { labelKey: 'settings.fontPresetPixel', value: '"Fusion Pixel 10px", monospace' },
+];
+
+function FontPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { t } = useI18n();
+  const matched = FONT_PRESETS.find((p) => p.value === value);
+  const mode = matched ? matched.value : '__custom__';
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>{label}</Label>
+      <select
+        value={mode}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v !== '__custom__') onChange(v);
+        }}
+        className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
+      >
+        {FONT_PRESETS.map((p) => (
+          <option key={p.value} value={p.value}>
+            {t(p.labelKey)}
+          </option>
+        ))}
+        <option value="__custom__">{t('settings.fontPresetCustom')}</option>
+      </select>
+      {mode === '__custom__' && (
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={t('settings.fontCustomPlaceholder')}
+        />
+      )}
+      <p className="text-xs text-text-secondary" style={{ fontFamily: value || undefined }}>
+        {t('settings.fontPreview')}
+      </p>
+    </div>
+  );
+}
+
 import {
   Button,
   Card,
@@ -279,18 +332,16 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
 
             {tab === 'editor' && (
               <div className="flex flex-col gap-6">
-                <Section title={t('settings.uiFont')}>
-                  <Input
-                    value={draft.uiFont}
-                    onChange={(e) => set({ uiFont: e.target.value })}
-                  />
-                </Section>
-                <Section title={t('settings.editorFont')}>
-                  <Input
-                    value={draft.editorFont}
-                    onChange={(e) => set({ editorFont: e.target.value })}
-                  />
-                </Section>
+                <FontPicker
+                  label={t('settings.uiFont')}
+                  value={draft.uiFont}
+                  onChange={(v) => set({ uiFont: v })}
+                />
+                <FontPicker
+                  label={t('settings.editorFont')}
+                  value={draft.editorFont}
+                  onChange={(v) => set({ editorFont: v })}
+                />
                 <Section title={t('settings.fontSize')}>
                   <div className="flex items-center gap-4">
                     <input

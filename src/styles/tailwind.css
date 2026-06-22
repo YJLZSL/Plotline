@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Fusion Pixel 10px";
+  src: url("/fonts/fusion-pixel-10px-monospaced-zh_hans.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --color-bg-base: var(--bg-base);
   --color-bg-surface: var(--bg-surface);
@@ -28,5 +36,5 @@
 
   --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
-  --font-pixel: "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
+  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
 }

@@ -9,7 +9,7 @@
   --accent-soft: #e8c988;
   --border: #e5ddc9;
   --shadow-color: rgba(58, 46, 38, 0.08);
-  --font-pixel: "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
+  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
 }
 
 [data-theme="dark"] {
