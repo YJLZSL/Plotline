@@ -41,21 +41,21 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v1.3.0 已完成）
-- **性能与交互**：视图切换动画已降级（`AnimatePresence mode="sync"` + 200ms 快速曲线），快速切换不再卡死；时间轴滚轮支持水平滚动与 `Ctrl`/`Cmd`+滚轮缩放。
-- **地图 / VN**：`MapView` 拖拽已改为窗口级鼠标事件，`VnView` 基础视图与后端 API 已就绪；空状态插画、完整 i18n 与更多交互细节留到 v1.4。
-- **番茄钟**：`PomodoroTimer` 浮层组件支持 `warm` / `mc` / `minimal` 三种主题，状态机覆盖 focus / shortBreak / longBreak 自动切换。
-- **全局字体主题**：设置页支持 `sans` / `mono` / `pixel` 三种界面字体主题，像素字体优先使用系统 `Zpix` 或 `站酷快乐体` fallback，通过 `--font-sans` / `--font-mono` CSS 变量全局生效。
-- **图标**：已用 `scripts/render-icon.py`（基于 SVG 矢量源 + Skia 渲染）重绘所有 Tauri 尺寸，统一应用与仓库图标；不再依赖位图绘制。
-- **测试**：新增 `pomodoro.test.ts`、`ui.test.ts` 与 Rust `settings` 测试；本地 `vitest run`、`cargo test` 与 `eslint` 全绿。
-- **构建**：v1.3.0 Windows 安装包（NSIS + MSI）已发布到 [GitHub Release](https://github.com/YJLZSL/Plotline/releases/tag/v1.3.0)。
+### 当前迭代状态（v1.4.0 已完成）
+- **AI 创作助手**：`AiAssistantPanel` 已集成到工作区右侧滑出面板；后端实现会话/消息/KV 缓存（`ai_kv`）与 RAG 倒排索引（`ai_chunks` / `ai_chunk_terms`），支持 OpenAI 兼容 API，可在设置中配置 provider / baseUrl / model / key 并开关 RAG。
+- **VN 增强**：台词支持排序与类型切换，新增场景关系图，预览模式升级，支持导出 Ren'Py 脚本。
+- **地图增强**：地点节点支持自定义 emoji / Lucide 图标，连线可编辑标签，新增角色足迹连线，支持将地图导出为 PNG。
+- **开场动画与美术**：`SplashOverlay` 羽毛笔沿时间线书写动画，可在设置中开关并调整时长；全局动画统一使用 `MOTION_FAST` / `MOTION_BASE` token，避免拖沓。
+- **应用内自动更新**：关闭 Tauri 原生更新弹窗，改为启动时应用内 `ConfirmDialog` 提示 + 设置页一键安装，旧版无需卸载即可更新。
+- **测试**：新增 `SplashOverlay.test.tsx`、`MapView.test.tsx`、`VnView.test.tsx`、Rust `services::ai::tests` / `services::vn::tests`；本地 `vitest run`（122 passed）、`cargo test`（35 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
+- **构建与发布**：v1.4.0 Windows 安装包（NSIS + MSI）与签名 `latest.json` 已发布到 [GitHub Release](https://github.com/YJLZSL/Plotline/releases/tag/v1.4.0)。
 
-### 下一迭代方向（v1.4 候选）
-- 地图：地点节点自定义图标、角色在地图上的足迹连线、导出为图片。
-- VN：台词编辑器、角色立绘插槽、预览模式、导出为 Ren'Py / 自研播放器脚本。
-- 番茄钟：与写作目标绑定、每日统计、通知提醒。
-- UI 美术：统一空状态插画、卡片质感升级、更多主题预设。
-- i18n：补全英文/日文翻译。
+### 下一迭代方向（v1.5 候选）
+- **AI 闭环**：AI 助手与写作目标绑定、每日创作统计、系统通知提醒；RAG 支持按文档类型过滤与重排序。
+- **VN 编辑器**：台词富文本编辑、角色立绘插槽、预览播放器、分支调试器。
+- **地图 polish**：地点分组/图层、更丰富的图标库、地图打印/PDF 导出。
+- **UI 美术**：统一空状态插画、卡片质感升级、更多主题预设、日文翻译补全。
+- **质量整顿**：全面代码审查、竞品调研、bug 扫荡、性能与可访问性审计。
 
 ---
 
@@ -163,40 +163,37 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 
 ### 4.1 分支
 
+> **2026-06-22 更新**：本项目当前规模较小、迭代节奏快，经项目负责人确认，后续开发直接在 `main` 分支上进行，不再切功能分支。每次提交前必须保证本地检查全绿。
+
 | 分支 | 用途 | 生命周期 |
 |---|---|---|
-| `main` | 可发布的稳定分支，始终与最新 Release 对应 | 长期 |
-| `dev` | 开发集成分支，日常开发合并点 | 长期 |
-| `feat/<domain>-<short>` | 新功能开发 | 合并后删除 |
-| `fix/<domain>-<short>` | 修 bug | 合并后删除 |
-| `docs/<short>` | 纯文档修改 | 合并后删除 |
+| `main` | 唯一长期分支，开发线与最新 Release 对齐 | 长期 |
 
-**开发流程（单版本迭代）**：
+**开发流程**：
 
 ```
-1. 从 main 切出功能分支：
+1. 确保本地 main 为最新：
    git checkout main && git pull origin main
-   git checkout -b feat/v1.4-map-polish
 
-2. 开发并提交（遵循 Conventional Commits）：
+2. 直接在 main 上开发并提交（遵循 Conventional Commits）：
    git commit -m "feat(map): 地点节点自定义图标"
 
-3. 开发完成后发 PR → main，通过代码审查后合并
+3. 推送前必须全量检查通过：
+   pnpm lint && pnpm typecheck && pnpm test:run && cargo test --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
-4. 合并后删除远程和本地 feature 分支：
-   git push origin --delete feat/v1.4-map-polish
-   git branch -d feat/v1.4-map-polish
+4. 推送 main：
+   git push origin main
 
-5. 打 tag 发布（或触发 CI 自动发布）：
-   git tag v1.4.0
-   git push origin v1.4.0
+5. 需要发布时打 tag 触发 CI：
+   git tag v1.5.0
+   git push origin v1.5.0
 ```
 
 **重要原则**：
 - `main` 上的代码必须始终可发布（已通过完整测试）
-- 不要直接在 `main` 上开发，必须通过 PR 合并
-- 功能分支合并后**立即删除**，避免分支堆积
-- Release tag 应指向 `main` 上的某个 commit，而非 feature 分支
+- 禁止从 main 切出长期存在的功能分支；所有改动直接提交到 main
+- Release tag 应指向 `main` 上的某个 commit
+- 发布前统一版本号、CHANGELOG、releases/vX.Y.Z/latest.json
 
 ### 4.2 Commit 信息
 遵循 **Conventional Commits**：
@@ -218,14 +215,15 @@ fix(characters): 修复删除角色未清理关联事件
 docs(agents): 补充 IPC 调用规范
 ```
 
-### 4.3 PR 检查清单
+### 4.3 提交检查清单
 - [ ] 本地 `pnpm lint` 无报错
 - [ ] 本地 `pnpm typecheck` 无报错
-- [ ] 本地 `pnpm test` 全绿
+- [ ] 本地 `pnpm test:run` 全绿
+- [ ] 本地 `cargo test` 全绿且 `cargo clippy -- -D warnings` 无告警
 - [ ] 新增功能有对应测试
 - [ ] 改动 IPC 时同步了前后端类型
 - [ ] 改动数据库时新增了迁移文件
-- [ ] UI 改动截图/录屏附在 PR 描述
+- [ ] UI 改动截图/录屏附在提交说明或相关 issue 中
 
 ---
 
