@@ -162,11 +162,41 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 ## 4. 提交与分支规范
 
 ### 4.1 分支
-- `main`：可发布的稳定分支。
-- `dev`：开发集成分支。
-- `feat/<domain>-<short>`：新功能。
-- `fix/<domain>-<short>`：修 bug。
-- `docs/<short>`：纯文档。
+
+| 分支 | 用途 | 生命周期 |
+|---|---|---|
+| `main` | 可发布的稳定分支，始终与最新 Release 对应 | 长期 |
+| `dev` | 开发集成分支，日常开发合并点 | 长期 |
+| `feat/<domain>-<short>` | 新功能开发 | 合并后删除 |
+| `fix/<domain>-<short>` | 修 bug | 合并后删除 |
+| `docs/<short>` | 纯文档修改 | 合并后删除 |
+
+**开发流程（单版本迭代）**：
+
+```
+1. 从 main 切出功能分支：
+   git checkout main && git pull origin main
+   git checkout -b feat/v1.4-map-polish
+
+2. 开发并提交（遵循 Conventional Commits）：
+   git commit -m "feat(map): 地点节点自定义图标"
+
+3. 开发完成后发 PR → main，通过代码审查后合并
+
+4. 合并后删除远程和本地 feature 分支：
+   git push origin --delete feat/v1.4-map-polish
+   git branch -d feat/v1.4-map-polish
+
+5. 打 tag 发布（或触发 CI 自动发布）：
+   git tag v1.4.0
+   git push origin v1.4.0
+```
+
+**重要原则**：
+- `main` 上的代码必须始终可发布（已通过完整测试）
+- 不要直接在 `main` 上开发，必须通过 PR 合并
+- 功能分支合并后**立即删除**，避免分支堆积
+- Release tag 应指向 `main` 上的某个 commit，而非 feature 分支
 
 ### 4.2 Commit 信息
 遵循 **Conventional Commits**：
