@@ -41,14 +41,14 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v1.5.0 已完成）
+### 当前迭代状态（v1.5.0 代码已完成，发布待收尾）
 - **AI 多服务商支持**：设置页 AI 标签新增可视化服务商选择卡片（`src/features/ai/providers.tsx`），内置 OpenAI、硅基流动、火山方舟、腾讯混元、DeepSeek、Moonshot、智谱 AI、Ollama 本地、自定义共 9 种预设，每个预设携带官方品牌色、简化单色 SVG 图标、推荐 baseUrl 与模型名，点击自动填充并提供「获取 API Key」直达链接；AI 助手面板顶部同步显示当前服务商品牌图标。
 - **统一应用图标**：重新设计羽毛笔沿时间线书写的优雅图标（`src-tauri/icons/icon.svg` + `src/components/ui/BrandMark.tsx`），应用内外使用同一构图，消除此前 BrandMark 与 icon.svg 不一致问题；Skia 重新渲染全部 19 个 PNG/ICO 尺寸。
 - **数据导入修复**：修复工作区导入时笔记归属错误工作区（HIGH）、大纲父子层级丢失（HIGH）、笔记文件夹层级丢失（MEDIUM）三个数据损坏 bug，新增 4 项 Rust 回归测试。
 - **错误处理加固**：移除 AI `kv_set` 生产路径 `unwrap()`（HIGH）；统计/计数查询 `unwrap_or(0)` 统一改为 `?` 传播（13 处）；JSON 解析损坏时 `log::warn` 而非静默吞错（4 处）；地点连接新增跨工作区校验。
 - **竞品调研与问题审计**：新增 `docs/COMPETITOR_RESEARCH.md`（5 款竞品对比）与 `docs/ISSUE_AUDIT.md`（16 项问题，10 项已修复）。
 - **测试**：本地 `vitest run`（129 passed）、`cargo test`（40 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
-- **构建与发布**：v1.5.0 Windows 安装包（NSIS + MSI）与签名 `latest.json` 已发布到 GitHub Release。
+- **构建与发布**：代码已推送 `main`（commit `38a3981`），`v1.5.0` tag 已推送，CI 构建成功，草稿 Release 已创建（含 NSIS + MSI）。**遗留：安装包签名 + latest.json 填充 + 发布草稿**（本地非 TTY 环境 `tauri signer sign` 挂起，需在有 TTY 的终端中完成，详见 `HANDOFF.md` 第 2 节）。
 
 ### 下一迭代方向（v1.6 候选）
 - **导出格式扩展**：增加 ePub、PDF、Word 导出，对标 Scrivener 编译系统。
