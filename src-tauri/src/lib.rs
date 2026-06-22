@@ -40,7 +40,9 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
-            std::fs::create_dir_all(&app_data_dir).ok();
+            if let Err(e) = std::fs::create_dir_all(&app_data_dir) {
+                log::warn!("[setup] create_dir_all failed: {e}");
+            }
             let db_path = app_data_dir.join("plotline.db");
 
             // 启动时滚动备份当前数据库（首次启动时数据库尚未创建，备份会被跳过）。

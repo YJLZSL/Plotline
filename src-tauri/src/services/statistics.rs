@@ -42,63 +42,47 @@ pub struct TrackEventCount {
 }
 
 pub fn get(conn: &Connection, workspace_id: &str) -> AppResult<Statistics> {
-    let total_events: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM events WHERE workspace_id=?1",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let total_characters: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM characters WHERE workspace_id=?1",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let total_tracks: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM tracks WHERE workspace_id=?1",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let total_notes: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM notes WHERE workspace_id=?1",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let total_outline_nodes: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM outline_nodes WHERE workspace_id=?1",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+    let total_events: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM events WHERE workspace_id=?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let total_characters: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM characters WHERE workspace_id=?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let total_tracks: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tracks WHERE workspace_id=?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let total_notes: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM notes WHERE workspace_id=?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let total_outline_nodes: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM outline_nodes WHERE workspace_id=?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
 
-    let draft: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM events WHERE workspace_id=?1 AND status='draft'",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let done: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM events WHERE workspace_id=?1 AND status='done'",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let revise: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM events WHERE workspace_id=?1 AND status='revise'",
-            params![workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+    let draft: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM events WHERE workspace_id=?1 AND status='draft'",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let done: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM events WHERE workspace_id=?1 AND status='done'",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let revise: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM events WHERE workspace_id=?1 AND status='revise'",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
 
     let mut stmt = conn.prepare(
         "SELECT c.id, c.name, COUNT(ec.event_id) AS cnt

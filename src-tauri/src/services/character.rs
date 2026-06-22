@@ -9,7 +9,10 @@ use crate::models::{
 };
 
 fn parse_json_array(s: &str) -> Vec<String> {
-    serde_json::from_str(s).unwrap_or_default()
+    serde_json::from_str(s).unwrap_or_else(|e| {
+        log::warn!("[character] corrupted JSON array, defaulting to empty: {e}");
+        Vec::new()
+    })
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Character>> {

@@ -87,13 +87,11 @@ pub fn update(conn: &Connection, input: UpdateTrackInput) -> AppResult<Track> {
 }
 
 pub fn delete(conn: &Connection, id: &str) -> AppResult<()> {
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM tracks WHERE workspace_id=(SELECT workspace_id FROM tracks WHERE id=?1)",
-            params![id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tracks WHERE workspace_id=(SELECT workspace_id FROM tracks WHERE id=?1)",
+        params![id],
+        |r| r.get(0),
+    )?;
     if count <= 1 {
         return Err(AppError::Forbidden("至少保留一个轨道".into()));
     }

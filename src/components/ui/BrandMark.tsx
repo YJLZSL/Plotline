@@ -8,7 +8,8 @@ export interface BrandMarkProps extends Omit<React.SVGAttributes<SVGSVGElement>,
 }
 
 /**
- * Plotline 品牌标记：羽毛笔与书脊融合的手绘风 SVG。
+ * Plotline 品牌标记：羽毛笔沿时间线书写的简约线性图标。
+ * 与应用图标（src-tauri/icons/icon.svg）使用同一构图，保证内外一致。
  * 默认颜色继承父级文字色（currentColor），可通过外部 `text-accent` 等类切换。
  */
 export const BrandMark = React.forwardRef<SVGSVGElement, BrandMarkProps>(
@@ -27,45 +28,29 @@ export const BrandMark = React.forwardRef<SVGSVGElement, BrandMarkProps>(
         {...props}
       >
         <title id={titleId}>{title}</title>
-        {/* 书脊底色 */}
+        {/* 时间线主轴 */}
+        <line x1="8" y1="36" x2="40" y2="36" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.5" />
+        {/* 时间线节点 */}
+        <circle cx="14" cy="36" r="2.2" fill="currentColor" opacity="0.75" />
+        <circle cx="24" cy="36" r="2.6" fill="currentColor" />
+        <circle cx="34" cy="36" r="2.2" fill="currentColor" opacity="0.75" />
+        {/* 羽毛笔笔身 */}
         <path
-          d="M10 8 Q9 7 10 6 L18 6 Q19 6 19 7 L19 41 Q19 42 18 42 L11 42 Q10 42 10 41 Z"
+          d="M37 6 Q38.5 6.5 38.5 8.5 Q38 10.5 36 12 L25 23 Q23 25 22.5 27.5 L22.5 36 L21.8 36 Q21.5 27 21.2 25.5 Q21 24 22.5 22.5 L34.5 10.5 Q36.5 8.5 37 6 Z"
           fill="currentColor"
-          fillOpacity="0.12"
-        />
-        {/* 书脊勾线 */}
-        <path
-          d="M10 8 Q9 7 10 6 L18 6 Q19 6 19 7 L19 41 Q19 42 18 42 L11 42 Q10 42 10 41 Z"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-        {/* 书脊纹理 */}
-        <path
-          d="M13 10 L16 10 M13 14 L16 14"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeOpacity="0.55"
-        />
-        {/* 羽毛笔笔杆 */}
-        <path
-          d="M40 7 Q42 9 40 12 L25 27 Q23 29 22 32 L21 36 L25 35 Q28 34 30 32 L41 21"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          fillOpacity="0.95"
         />
         {/* 羽毛叶脉 */}
         <path
-          d="M33 14 L37 18 M30 17 L34 21 M27 20 L31 24"
+          d="M34.5 11 Q36 10 36.5 8.8 M32.5 13 Q34 12 34.5 10.8 M30.5 15 Q32 14 32.5 12.8 M28.5 17 Q30 16 30.5 14.8 M26.5 19 Q28 18 28.5 16.8"
           stroke="currentColor"
-          strokeWidth="1.2"
+          strokeWidth="1.1"
           strokeLinecap="round"
-          strokeOpacity="0.7"
+          opacity="0.55"
+          fill="none"
         />
-        {/* 墨点 */}
-        <circle cx="22" cy="36" r="1.4" fill="currentColor" />
+        {/* 墨点光晕 */}
+        <circle cx="24" cy="36" r="3.2" fill="currentColor" opacity="0.18" />
       </svg>
     );
   },

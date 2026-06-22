@@ -14,6 +14,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { useSettingsQuery } from '@/features/settings/hooks';
+import { getProviderPreset } from '@/features/ai/providers';
 import {
   useAiChat,
   useAiIndexWorkspace,
@@ -110,7 +111,17 @@ export function AiAssistantPanel({
           >
             <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-bg-base flex-shrink-0">
               <div className="flex items-center gap-2 text-text-primary">
-                <Bot className="h-4 w-4 text-accent" />
+                {(() => {
+                  const preset = getProviderPreset(settings?.aiProvider ?? 'openai');
+                  return (
+                    <span
+                      className="flex h-6 w-6 items-center justify-center rounded-[6px]"
+                      style={{ backgroundColor: `${preset.color}1A`, color: preset.color }}
+                    >
+                      {preset.icon}
+                    </span>
+                  );
+                })()}
                 <span className="text-sm font-semibold">{t('ai.title')}</span>
               </div>
               <div className="flex items-center gap-1">

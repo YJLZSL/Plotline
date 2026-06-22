@@ -54,13 +54,11 @@ fn get_scene(conn: &Connection, id: &str) -> AppResult<VnScene> {
 pub fn create_scene(conn: &Connection, input: CreateVnSceneInput) -> AppResult<VnScene> {
     let id = Uuid::new_v4().to_string();
     let now_str = Utc::now().to_rfc3339();
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM vn_scenes WHERE workspace_id=?1",
-            params![input.workspace_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM vn_scenes WHERE workspace_id=?1",
+        params![input.workspace_id],
+        |r| r.get(0),
+    )?;
     conn.execute(
         "INSERT INTO vn_scenes
          (id, workspace_id, title, background, outline_node_id, sort_order, created_at, updated_at)
@@ -186,13 +184,11 @@ fn get_line(conn: &Connection, id: &str) -> AppResult<VnLine> {
 pub fn create_line(conn: &Connection, input: CreateVnLineInput) -> AppResult<VnLine> {
     let id = Uuid::new_v4().to_string();
     let now_str = Utc::now().to_rfc3339();
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM vn_lines WHERE scene_id=?1",
-            params![input.scene_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM vn_lines WHERE scene_id=?1",
+        params![input.scene_id],
+        |r| r.get(0),
+    )?;
     conn.execute(
         "INSERT INTO vn_lines
          (id, scene_id, sort_order, line_type, character_id, speaker_name, text,

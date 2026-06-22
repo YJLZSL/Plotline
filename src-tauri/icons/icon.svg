@@ -1,50 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- 径向暖色渐变背景 -->
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
-      <stop offset="0%" stop-color="#F0B982" />
-      <stop offset="40%" stop-color="#DC873C" />
-      <stop offset="75%" stop-color="#B46423" />
-      <stop offset="100%" stop-color="#964B19" />
-    </radialGradient>
-    
-    <!-- 柔和阴影滤镜 -->
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#502A14" flood-opacity="0.25" />
-    </filter>
-    
-    <!-- 内边框高光 -->
-    <linearGradient id="highlight" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.45)" />
-      <stop offset="100%" stop-color="rgba(255,255,255,0.15)" />
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D9A05B" />
+      <stop offset="55%" stop-color="#C68A3E" />
+      <stop offset="100%" stop-color="#A86A2C" />
     </linearGradient>
+    <linearGradient id="featherGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F5EFE3" />
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#3A2E26" flood-opacity="0.18" />
+    </filter>
   </defs>
-  
-  <!-- 背景圆角矩形 -->
-  <rect x="36" y="36" width="440" height="440" rx="113" ry="113" fill="url(#bgGrad)" />
-  
-  <!-- 内边框高光 -->
-  <rect x="40" y="40" width="432" height="432" rx="109" ry="109" fill="none" stroke="url(#highlight)" stroke-width="2.5" />
-  
-  <!-- 笔杆 -->
-  <path d="M 199,170 L 229,160 L 270,275 L 240,285 Z" fill="white" filter="url(#shadow)" />
-  
-  <!-- 笔尖（菱形） -->
-  <path d="M 270,275 L 295,295 L 270,315 L 245,295 Z" fill="white" filter="url(#shadow)" />
-  
-  <!-- 羽毛小装饰（左） -->
-  <path d="M 214,165 Q 200,145 185,150 Q 195,160 199,170" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="6" stroke-linecap="round" filter="url(#shadow)" />
-  
-  <!-- 羽毛小装饰（右） -->
-  <path d="M 214,165 Q 228,145 243,150 Q 233,160 229,170" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="6" stroke-linecap="round" filter="url(#shadow)" />
-  
-  <!-- 波浪故事线 -->
-  <path d="M 180,320 C 220,300 240,360 280,340 C 320,320 340,380 380,360" fill="none" stroke="white" stroke-width="13" stroke-linecap="round" filter="url(#shadow)" opacity="0.96" />
-  
-  <!-- 节点 1 -->
-  <circle cx="220" cy="336" r="7" fill="white" filter="url(#shadow)" />
-  <!-- 节点 2 -->
-  <circle cx="280" cy="340" r="7" fill="white" filter="url(#shadow)" />
-  <!-- 节点 3 -->
-  <circle cx="340" cy="356" r="7" fill="white" filter="url(#shadow)" />
+
+  <rect x="32" y="32" width="448" height="448" rx="104" ry="104" fill="url(#bgGrad)" />
+
+  <rect x="36" y="36" width="440" height="440" rx="100" ry="100" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" />
+
+  <!-- 时间线主轴 -->
+  <line x1="120" y1="360" x2="392" y2="360" stroke="rgba(255,255,255,0.55)" stroke-width="6" stroke-linecap="round" />
+
+  <!-- 时间线节点 -->
+  <circle cx="168" cy="360" r="10" fill="#FFFFFF" opacity="0.92" />
+  <circle cx="256" cy="360" r="11" fill="#FFFFFF" />
+  <circle cx="344" cy="360" r="10" fill="#FFFFFF" opacity="0.92" />
+
+  <!-- 羽毛笔笔身（从右上向左下斜插至时间线中央节点） -->
+  <path
+    d="M 372 108
+       Q 386 112 388 128
+       Q 386 144 368 158
+       L 272 254
+       Q 258 268 256 284
+       L 256 360
+       L 250 360
+       Q 248 280 246 268
+       Q 244 256 258 242
+       L 360 140
+       Q 372 128 372 108 Z"
+    fill="url(#featherGrad)"
+    filter="url(#softShadow)"
+  />
+
+  <!-- 羽毛叶脉（笔身右侧的柔和羽枝） -->
+  <path
+    d="M 362 138 Q 374 130 380 118
+       M 352 150 Q 364 142 370 130
+       M 342 162 Q 354 154 360 142
+       M 332 174 Q 344 166 350 154
+       M 322 186 Q 334 178 340 166"
+    stroke="rgba(255,255,255,0.7)"
+    stroke-width="3"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- 墨点（笔尖触碰时间线节点处） -->
+  <circle cx="256" cy="360" r="14" fill="#FFFFFF" opacity="0.3" />
 </svg>

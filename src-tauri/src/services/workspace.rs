@@ -8,6 +8,13 @@ use crate::models::{
     CreateWorkspaceInput, UpdateWorkspaceInput, Workspace, WorkspaceBundle,
 };
 
+fn parse_settings(s: &str) -> Value {
+    serde_json::from_str(s).unwrap_or_else(|e| {
+        log::warn!("[workspace] corrupted settings JSON, defaulting to null: {e}");
+        Value::Null
+    })
+}
+
 pub fn list(conn: &Connection) -> AppResult<Vec<Workspace>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, description, template, cover_color, settings_json,
@@ -16,7 +23,7 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Workspace>> {
     )?;
     let rows = stmt.query_map([], |row| {
         let settings_str: String = row.get(5)?;
-        let settings: Value = serde_json::from_str(&settings_str).unwrap_or(Value::Null);
+        let settings = parse_settings(&settings_str);
         Ok(Workspace {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -39,7 +46,7 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Workspace> {
         params![id],
         |row| {
             let settings_str: String = row.get(5)?;
-            let settings: Value = serde_json::from_str(&settings_str).unwrap_or(Value::Null);
+            let settings = parse_settings(&settings_str);
             Ok(Workspace {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -294,15 +301,22 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
         )?;
     }
 
+    let mut note_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for n in &bundle.notes {
+        note_map.insert(n.id.clone(), Uuid::new_v4().to_string());
+    }
+    let note_ws_id = Some(new_ws_id.clone());
     for n in bundle.notes.drain(..) {
-        let new_id = Uuid::new_v4().to_string();
+        let new_id = note_map.get(&n.id).cloned().unwrap_or_else(|| Uuid::new_v4().to_string());
+        let new_folder = n.folder_id.and_then(|fid| note_map.get(&fid).cloned());
         tx.execute(
             "INSERT INTO notes
              (id, workspace_id, folder_id, title, content, tags, is_folder, sort_order, created_at, updated_at)
-             VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 new_id,
-                n.workspace_id,
+                note_ws_id,
+                new_folder,
                 n.title,
                 n.content,
                 serde_json::to_string(&n.tags)?,
@@ -314,19 +328,25 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
         )?;
     }
 
+    let mut outline_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for o in &bundle.outline_nodes {
+        outline_map.insert(o.id.clone(), Uuid::new_v4().to_string());
+    }
     for o in bundle.outline_nodes.drain(..) {
-        let new_id = Uuid::new_v4().to_string();
+        let new_id = outline_map.get(&o.id).cloned().unwrap_or_else(|| Uuid::new_v4().to_string());
         let new_event = o.event_id.and_then(|eid| event_map.get(&eid).cloned());
+        let new_parent = o.parent_id.and_then(|pid| outline_map.get(&pid).cloned());
         tx.execute(
             "INSERT INTO outline_nodes
              (id, workspace_id, type, title, content, parent_id, sort_order, event_id, status, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8, ?9, ?10)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 new_id,
                 new_ws_id,
                 o.r#type,
                 o.title,
                 o.content,
+                new_parent,
                 o.sort_order,
                 new_event,
                 o.status,
@@ -338,4 +358,201 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
 
     tx.commit()?;
     Ok(new_ws)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrate::run;
+    use crate::models::{Event, Note, OutlineNode, Track};
+    use tempfile::NamedTempFile;
+
+    fn test_conn() -> Connection {
+        let file = NamedTempFile::new().unwrap();
+        let conn = Connection::open(file.path()).unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        run(&conn).unwrap();
+        conn
+    }
+
+    fn now() -> chrono::DateTime<Utc> {
+        Utc::now()
+    }
+
+    fn sample_bundle() -> WorkspaceBundle {
+        let t = now();
+        let ws = Workspace {
+            id: "old-ws".into(),
+            name: "测试工作区".into(),
+            description: "".into(),
+            template: "blank".into(),
+            cover_color: "#C68A3E".into(),
+            settings: serde_json::json!({}),
+            created_at: t,
+            updated_at: t,
+        };
+        let track = Track {
+            id: "t1".into(),
+            workspace_id: "old-ws".into(),
+            name: "主线".into(),
+            color: "#F4B6C2".into(),
+            sort_order: 0,
+            is_visible: true,
+            created_at: t,
+        };
+        let event = Event {
+            id: "e1".into(),
+            workspace_id: "old-ws".into(),
+            track_id: "t1".into(),
+            title: "开端".into(),
+            description: "".into(),
+            date_type: "point".into(),
+            date_value: "".into(),
+            sort_order: 0,
+            status: "draft".into(),
+            color: None,
+            character_ids: vec![],
+            connected_event_ids: vec![],
+            created_at: t,
+            updated_at: t,
+        };
+        let folder_note = Note {
+            id: "n-folder".into(),
+            workspace_id: Some("old-ws".into()),
+            folder_id: None,
+            title: "素材夹".into(),
+            content: "".into(),
+            tags: vec![],
+            is_folder: true,
+            sort_order: 0,
+            created_at: t,
+            updated_at: t,
+        };
+        let child_note = Note {
+            id: "n-child".into(),
+            workspace_id: Some("old-ws".into()),
+            folder_id: Some("n-folder".into()),
+            title: "灵感".into(),
+            content: "记下点东西".into(),
+            tags: vec!["idea".into()],
+            is_folder: false,
+            sort_order: 1,
+            created_at: t,
+            updated_at: t,
+        };
+        let parent_outline = OutlineNode {
+            id: "o-parent".into(),
+            workspace_id: "old-ws".into(),
+            r#type: "chapter".into(),
+            title: "第一章".into(),
+            content: "".into(),
+            parent_id: None,
+            sort_order: 0,
+            event_id: None,
+            status: "draft".into(),
+            created_at: t,
+            updated_at: t,
+        };
+        let child_outline = OutlineNode {
+            id: "o-child".into(),
+            workspace_id: "old-ws".into(),
+            r#type: "section".into(),
+            title: "第一节".into(),
+            content: "".into(),
+            parent_id: Some("o-parent".into()),
+            sort_order: 0,
+            event_id: None,
+            status: "draft".into(),
+            created_at: t,
+            updated_at: t,
+        };
+        WorkspaceBundle {
+            version: 1,
+            workspace: ws,
+            tracks: vec![track],
+            events: vec![event],
+            characters: vec![],
+            relationships: vec![],
+            event_connections: vec![],
+            outline_nodes: vec![parent_outline, child_outline],
+            notes: vec![folder_note, child_note],
+        }
+    }
+
+    #[test]
+    fn import_preserves_note_workspace_id() {
+        let conn = test_conn();
+        let bundle = sample_bundle();
+        let old_ws_id = bundle.workspace.id.clone();
+        let new_ws = import_bundle(&conn, bundle).unwrap();
+
+        let notes = crate::services::note::list(&conn, &new_ws.id).unwrap();
+        assert_eq!(notes.len(), 2);
+        for n in &notes {
+            assert_eq!(
+                n.workspace_id,
+                Some(new_ws.id.clone()),
+                "imported notes must belong to the new workspace, not the old one"
+            );
+            assert_ne!(
+                n.workspace_id,
+                Some(old_ws_id.clone()),
+                "imported notes must NOT keep the old workspace_id"
+            );
+        }
+    }
+
+    #[test]
+    fn import_preserves_note_folder_hierarchy() {
+        let conn = test_conn();
+        let bundle = sample_bundle();
+        let new_ws = import_bundle(&conn, bundle).unwrap();
+
+        let notes = crate::services::note::list(&conn, &new_ws.id).unwrap();
+        let folder = notes.iter().find(|n| n.is_folder).expect("folder note missing");
+        let child = notes.iter().find(|n| !n.is_folder).expect("child note missing");
+        assert!(
+            child.folder_id.is_some(),
+            "child note should have a folder_id after import"
+        );
+        assert_eq!(
+            child.folder_id,
+            Some(folder.id.clone()),
+            "child note folder_id should point to the remapped folder note id"
+        );
+    }
+
+    #[test]
+    fn import_preserves_outline_parent_hierarchy() {
+        let conn = test_conn();
+        let bundle = sample_bundle();
+        let new_ws = import_bundle(&conn, bundle).unwrap();
+
+        let nodes = crate::services::outline::list(&conn, &new_ws.id).unwrap();
+        assert_eq!(nodes.len(), 2, "both outline nodes should be imported");
+        let parent = nodes
+            .iter()
+            .find(|n| n.title == "第一章")
+            .expect("parent node missing");
+        let child = nodes
+            .iter()
+            .find(|n| n.title == "第一节")
+            .expect("child node missing");
+        assert!(parent.parent_id.is_none(), "parent should have no parent");
+        assert_eq!(
+            child.parent_id,
+            Some(parent.id.clone()),
+            "child outline node parent_id should point to the remapped parent id"
+        );
+    }
+
+    #[test]
+    fn import_generates_new_workspace_id() {
+        let conn = test_conn();
+        let bundle = sample_bundle();
+        let old_id = bundle.workspace.id.clone();
+        let new_ws = import_bundle(&conn, bundle).unwrap();
+        assert_ne!(new_ws.id, old_id, "imported workspace should get a new ID");
+        assert!(new_ws.name.contains("导入"), "imported name should have suffix");
+    }
 }

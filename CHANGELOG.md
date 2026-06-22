@@ -4,6 +4,65 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [1.5.0] - 2026-06-23
+
+**目标**：完善 AI 助手多服务商支持、统一应用图标、修复数据导入与错误处理缺陷，发布 v1.5.0 小版本。
+
+### 新增
+- **AI 服务商预设** (`src/features/ai/providers.tsx` +
+  `src/components/views/SettingsView.tsx`)：
+  设置页 AI 标签新增可视化服务商选择卡片，内置 OpenAI、硅基流动、火山方舟、
+  腾讯混元、DeepSeek、Moonshot、智谱 AI、Ollama 本地、自定义共 9 种预设，
+  每个预设携带官方品牌色、简化单色 SVG 图标、推荐 baseUrl 与模型名。
+  点击预设自动填充 baseUrl 并补全推荐模型，并提供「获取 API Key」直达链接。
+  AI 助手面板顶部同步显示当前服务商品牌图标，保证视觉一致。
+- **全新统一应用图标** (`src-tauri/icons/icon.svg` + `scripts/render-icon.py` +
+  `src/components/ui/BrandMark.tsx`)：
+  重新设计羽毛笔沿时间线书写的优雅图标，应用内外使用同一构图。
+  应用内 `BrandMark` 线性图标与应用图标（512×512 渐变背景）完全统一，
+  消除此前 BrandMark（书本+羽毛笔）与 icon.svg（波浪线+羽毛笔）不一致问题。
+  使用 Skia 重新渲染所有 19 个 PNG/ICO 尺寸。
+- **竞品调研文档** `docs/COMPETITOR_RESEARCH.md`。
+- **问题审计文档** `docs/ISSUE_AUDIT.md`。
+- **新单元测试**：
+  前端 `src/features/ai/providers.test.ts`（7 项）验证预设完整性、
+  主流厂商覆盖、Ollama 本地端点、未知 id 回退逻辑；
+  Rust 端 `services::workspace::tests`（4 项）验证导入笔记归属正确工作区、
+  笔记文件夹层级保留、大纲父子层级保留、生成新工作区 ID；
+  Rust 端 `services::location::tests::should_reject_link_across_workspaces`
+  验证跨工作区连接被拒绝。
+
+### 变更
+- **应用版本号** 从 `1.4.0` 同步升级到 `1.5.0`（`package.json`、
+  `src-tauri/tauri.conf.json`、`SettingsView`）。
+- `services::location::link` 新增 `workspace_id` 校验，拒绝跨工作区连接地点，
+  移除 `models::location::LinkLocationsInput.workspace_id` 上的 `#[allow(dead_code)]`。
+- `services::ai::kv_set` 移除生产路径上的 `unwrap()`，改用 `ok_or_else` 返回
+  `AppError::Internal`，避免极端情况下 panic。
+- 统计与计数查询（`services::statistics`、`services::track`、`services::outline`、
+  `services::vn`）将 `.unwrap_or(0)` 替换为 `?` 错误传播，避免数据库错误被静默吞掉。
+- `services::note` 与 `services::character` 的 `parse_json_array` 在 JSON 损坏时
+  记录 `log::warn` 而非静默返回空数组。
+- `services::workspace` 的设置 JSON 解析在损坏时记录 `log::warn`。
+- `lib.rs` 启动时 `create_dir_all` 失败记录 `log::warn` 而非静默 `.ok()`。
+
+### 修复
+- **HIGH 修复导入笔记归属错误** (`services::workspace::import_bundle`)：
+  导入工作区时笔记使用了原始 `workspace_id` 而非新生成的 `new_ws_id`，
+  导致笔记成为孤儿数据不可见。现已修正并保留笔记文件夹层级（`folder_id` 重映射）。
+- **HIGH 修复导入大纲层级丢失** (`services::workspace::import_bundle`)：
+  导入时大纲节点 `parent_id` 被硬编码为 `NULL`，导致整棵大纲树扁平化。
+  现已构建 `outline_map` 重映射父子关系。
+- **修复 `services::track::delete` 计数吞错**：
+  COUNT 查询使用 `unwrap_or(0)`，数据库故障时计数变为 0 触发"至少保留一个轨道"
+  误报；改用 `?` 传播真实错误。
+
+### 文档
+- 更新 `AGENTS.md` 当前迭代状态至 v1.5.0 完成。
+- 重写 `HANDOFF.md` 为 v1.5.0 交接文档。
+
+---
+
 ## v1.4.0 发布操作手册（运营者步骤）
 
 > **状态**：v1.4.0 已发布 ✅  

@@ -41,21 +41,25 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v1.4.0 已完成）
-- **AI 创作助手**：`AiAssistantPanel` 已集成到工作区右侧滑出面板；后端实现会话/消息/KV 缓存（`ai_kv`）与 RAG 倒排索引（`ai_chunks` / `ai_chunk_terms`），支持 OpenAI 兼容 API，可在设置中配置 provider / baseUrl / model / key 并开关 RAG。
-- **VN 增强**：台词支持排序与类型切换，新增场景关系图，预览模式升级，支持导出 Ren'Py 脚本。
-- **地图增强**：地点节点支持自定义 emoji / Lucide 图标，连线可编辑标签，新增角色足迹连线，支持将地图导出为 PNG。
-- **开场动画与美术**：`SplashOverlay` 羽毛笔沿时间线书写动画，可在设置中开关并调整时长；全局动画统一使用 `MOTION_FAST` / `MOTION_BASE` token，避免拖沓。
-- **应用内自动更新**：关闭 Tauri 原生更新弹窗，改为启动时应用内 `ConfirmDialog` 提示 + 设置页一键安装，旧版无需卸载即可更新。
-- **测试**：新增 `SplashOverlay.test.tsx`、`MapView.test.tsx`、`VnView.test.tsx`、Rust `services::ai::tests` / `services::vn::tests`；本地 `vitest run`（122 passed）、`cargo test`（35 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
-- **构建与发布**：v1.4.0 Windows 安装包（NSIS + MSI）与签名 `latest.json` 已发布到 [GitHub Release](https://github.com/YJLZSL/Plotline/releases/tag/v1.4.0)。
+### 当前迭代状态（v1.5.0 已完成）
+- **AI 多服务商支持**：设置页 AI 标签新增可视化服务商选择卡片（`src/features/ai/providers.tsx`），内置 OpenAI、硅基流动、火山方舟、腾讯混元、DeepSeek、Moonshot、智谱 AI、Ollama 本地、自定义共 9 种预设，每个预设携带官方品牌色、简化单色 SVG 图标、推荐 baseUrl 与模型名，点击自动填充并提供「获取 API Key」直达链接；AI 助手面板顶部同步显示当前服务商品牌图标。
+- **统一应用图标**：重新设计羽毛笔沿时间线书写的优雅图标（`src-tauri/icons/icon.svg` + `src/components/ui/BrandMark.tsx`），应用内外使用同一构图，消除此前 BrandMark 与 icon.svg 不一致问题；Skia 重新渲染全部 19 个 PNG/ICO 尺寸。
+- **数据导入修复**：修复工作区导入时笔记归属错误工作区（HIGH）、大纲父子层级丢失（HIGH）、笔记文件夹层级丢失（MEDIUM）三个数据损坏 bug，新增 4 项 Rust 回归测试。
+- **错误处理加固**：移除 AI `kv_set` 生产路径 `unwrap()`（HIGH）；统计/计数查询 `unwrap_or(0)` 统一改为 `?` 传播（13 处）；JSON 解析损坏时 `log::warn` 而非静默吞错（4 处）；地点连接新增跨工作区校验。
+- **竞品调研与问题审计**：新增 `docs/COMPETITOR_RESEARCH.md`（5 款竞品对比）与 `docs/ISSUE_AUDIT.md`（16 项问题，10 项已修复）。
+- **测试**：本地 `vitest run`（129 passed）、`cargo test`（40 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
+- **构建与发布**：v1.5.0 Windows 安装包（NSIS + MSI）与签名 `latest.json` 已发布到 GitHub Release。
 
-### 下一迭代方向（v1.5 候选）
-- **AI 闭环**：AI 助手与写作目标绑定、每日创作统计、系统通知提醒；RAG 支持按文档类型过滤与重排序。
+### 下一迭代方向（v1.6 候选）
+- **导出格式扩展**：增加 ePub、PDF、Word 导出，对标 Scrivener 编译系统。
+- **导出包补全**：`WorkspaceBundle` 加入 VN 场景/台词、地点、地点连线，消除静默数据丢失。
+- **AI 流式输出**：支持 SSE 流式响应，AI 回复逐字显示；AI 系统提示词可配置。
 - **VN 编辑器**：台词富文本编辑、角色立绘插槽、预览播放器、分支调试器。
 - **地图 polish**：地点分组/图层、更丰富的图标库、地图打印/PDF 导出。
+- **世界观模块**：参考 Campfire 增加种族/物种/宗教等实体管理。
 - **UI 美术**：统一空状态插画、卡片质感升级、更多主题预设、日文翻译补全。
-- **质量整顿**：全面代码审查、竞品调研、bug 扫荡、性能与可访问性审计。
+- **E2E 测试**：补充 Playwright spec 覆盖关键用户流程。
+- **CSP 配置**：`tauri.conf.json` 配置 CSP 白名单替代 `null`。
 
 ---
 
@@ -306,5 +310,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.4.0  
-> 最后更新：2026-06-22
+> 文档版本：v0.5.0  
+> 最后更新：2026-06-23

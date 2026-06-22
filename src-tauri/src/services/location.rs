@@ -168,6 +168,18 @@ pub fn list_links(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Locati
 }
 
 pub fn link(conn: &Connection, input: LinkLocationsInput) -> AppResult<()> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM locations
+         WHERE id IN (?1, ?2) AND workspace_id=?3",
+        params![input.source_id, input.target_id, input.workspace_id],
+        |r| r.get(0),
+    )?;
+    if count < 2 {
+        return Err(AppError::InvalidInput(format!(
+            "地点 {} 或 {} 不属于工作区 {}，无法建立连接",
+            input.source_id, input.target_id, input.workspace_id
+        )));
+    }
     conn.execute(
         "INSERT INTO location_links (source_id, target_id, label) VALUES (?1, ?2, ?3)
          ON CONFLICT(source_id, target_id) DO UPDATE SET label = excluded.label",
@@ -400,5 +412,73 @@ mod tests {
         delete(&conn, &loc.id).unwrap();
         let list = list(&conn, "w1").unwrap();
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn should_reject_link_across_workspaces() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w2', 'other', 't', 't')",
+            [],
+        )
+        .unwrap();
+        let a = create(
+            &conn,
+            CreateLocationInput {
+                workspace_id: "w1".into(),
+                name: "王城".into(),
+                description: None,
+                pos_x: None,
+                pos_y: None,
+                color: None,
+                icon: None,
+                linked_event_id: None,
+                character_ids: None,
+            },
+        )
+        .unwrap();
+        let b = create(
+            &conn,
+            CreateLocationInput {
+                workspace_id: "w2".into(),
+                name: "异域".into(),
+                description: None,
+                pos_x: None,
+                pos_y: None,
+                color: None,
+                icon: None,
+                linked_event_id: None,
+                character_ids: None,
+            },
+        )
+        .unwrap();
+
+        let result = link(
+            &conn,
+            LinkLocationsInput {
+                workspace_id: "w1".into(),
+                source_id: a.id.clone(),
+                target_id: b.id.clone(),
+                label: None,
+            },
+        );
+        assert!(
+            result.is_err(),
+            "linking locations from different workspaces must be rejected"
+        );
+
+        let result = link(
+            &conn,
+            LinkLocationsInput {
+                workspace_id: "w1".into(),
+                source_id: a.id.clone(),
+                target_id: a.id.clone(),
+                label: None,
+            },
+        );
+        assert!(
+            result.is_err(),
+            "self-link must be rejected since COUNT < 2 distinct locations"
+        );
     }
 }

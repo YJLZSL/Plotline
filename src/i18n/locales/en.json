@@ -316,6 +316,7 @@
     "aiModel": "Model",
     "aiApiKey": "API Key",
     "aiRagEnabled": "Enable RAG retrieval",
+    "aiGetKey": "Get API Key",
     "splashEnabled": "Show splash animation",
     "splashDuration": "Splash duration"
   },

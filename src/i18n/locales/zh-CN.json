@@ -332,6 +332,7 @@
     "aiModel": "模型",
     "aiApiKey": "API Key",
     "aiRagEnabled": "启用 RAG 检索增强",
+    "aiGetKey": "获取 API Key",
     "splashEnabled": "显示开场动画",
     "splashDuration": "开场动画时长"
   },

@@ -173,7 +173,8 @@ pub fn kv_set(conn: &Connection, entry: AiKvEntry) -> AppResult<AiKvEntry> {
          ON CONFLICT(workspace_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
         params![entry.workspace_id, entry.key, entry.value, now],
     )?;
-    kv_get(conn, &entry.workspace_id, &entry.key).map(|e| e.unwrap())
+    kv_get(conn, &entry.workspace_id, &entry.key)?
+        .ok_or_else(|| AppError::Internal("kv_set upsert succeeded but kv_get returned None".into()))
 }
 
 pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sun, Moon, BookOpen, Check, RotateCcw, RefreshCw } from 'lucide-react';
+import { Sun, Moon, BookOpen, Check, RotateCcw, RefreshCw, ExternalLink } from 'lucide-react';
 
 import {
   Button,
@@ -18,8 +18,9 @@ import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/typ
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { useThemeStore } from '@/stores/ui';
+import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 interface SettingsViewProps {
   workspaceId: string;
@@ -405,11 +406,46 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                   </button>
                 </Section>
                 <Section title={t('settings.aiProvider')}>
-                  <Input
-                    value={draft.aiProvider}
-                    onChange={(e) => set({ aiProvider: e.target.value })}
-                    placeholder="openai"
-                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    {AI_PROVIDERS.map((p) => {
+                      const active = draft.aiProvider === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            const patch: Partial<AppSettings> = { aiProvider: p.id };
+                            if (p.baseUrl) {
+                              patch.aiBaseUrl = p.baseUrl;
+                            }
+                            if (p.defaultModel && !draft.aiModel) {
+                              patch.aiModel = p.defaultModel;
+                            }
+                            set(patch);
+                          }}
+                          className={cn(
+                            'flex items-center gap-2 rounded-[8px] border px-3 py-2.5 text-left transition-all',
+                            active
+                              ? 'border-accent bg-accent/10 text-text-primary'
+                              : 'border-border bg-bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary',
+                          )}
+                        >
+                          <span
+                            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px]"
+                            style={{ backgroundColor: `${p.color}1A`, color: p.color }}
+                          >
+                            {p.icon}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{p.name}</span>
+                            <span className="block truncate text-xs text-text-secondary">
+                              {p.description}
+                            </span>
+                          </span>
+                          {active && <Check className="h-4 w-4 flex-shrink-0 text-accent" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Section>
                 <Section title={t('settings.aiBaseUrl')}>
                   <Input
@@ -417,12 +453,20 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     onChange={(e) => set({ aiBaseUrl: e.target.value })}
                     placeholder="https://api.openai.com/v1"
                   />
+                  {(() => {
+                    const preset = getProviderPreset(draft.aiProvider);
+                    return (
+                      <p className="mt-1.5 text-xs text-text-secondary">
+                        {preset.name} — {preset.description}
+                      </p>
+                    );
+                  })()}
                 </Section>
                 <Section title={t('settings.aiModel')}>
                   <Input
                     value={draft.aiModel}
                     onChange={(e) => set({ aiModel: e.target.value })}
-                    placeholder="gpt-4o-mini"
+                    placeholder={getProviderPreset(draft.aiProvider).defaultModel || 'gpt-4o-mini'}
                   />
                 </Section>
                 <Section title={t('settings.aiApiKey')}>
@@ -432,6 +476,21 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     onChange={(e) => set({ aiApiKey: e.target.value })}
                     placeholder="sk-..."
                   />
+                  {(() => {
+                    const preset = getProviderPreset(draft.aiProvider);
+                    if (!preset.keyUrl) return null;
+                    return (
+                      <a
+                        href={preset.keyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                      >
+                        {t('settings.aiGetKey')}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    );
+                  })()}
                 </Section>
                 <Section title={t('settings.aiRagEnabled')}>
                   <button

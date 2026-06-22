@@ -60,13 +60,11 @@ pub fn create(conn: &Connection, input: CreateOutlineNodeInput) -> AppResult<Out
     let id = Uuid::new_v4().to_string();
     let now_str = Utc::now().to_rfc3339();
     let ntype = input.r#type.unwrap_or_else(|| "chapter".into());
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM outline_nodes WHERE workspace_id=?1 AND IFNULL(parent_id, '')=IFNULL(?2, '')",
-            params![input.workspace_id, input.parent_id],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM outline_nodes WHERE workspace_id=?1 AND IFNULL(parent_id, '')=IFNULL(?2, '')",
+        params![input.workspace_id, input.parent_id],
+        |r| r.get(0),
+    )?;
     conn.execute(
         "INSERT INTO outline_nodes
          (id, workspace_id, type, title, content, parent_id, sort_order, event_id, status, created_at, updated_at)
