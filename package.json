@@ -81,6 +81,7 @@
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.15.0",
     "jsdom": "^25.0.1",
+    "minisign": "^2.2.0",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",

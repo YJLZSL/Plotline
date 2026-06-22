@@ -8,9 +8,8 @@ import { HistoryControls } from './HistoryControls';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { PomodoroTimer } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
-
-const APP_VERSION = '1.4.0';
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();

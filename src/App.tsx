@@ -7,8 +7,7 @@ import { ConfirmDialog } from './components/ui/Dialog';
 import { useI18n } from './hooks/useI18n';
 import { checkForUpdates } from './features/settings/updater';
 import { toastError, toastInfo } from './stores/toast';
-
-const APP_VERSION = '1.4.0';
+import { APP_VERSION } from './lib/version';
 
 function UpdatePrompt() {
   const { t } = useI18n();
