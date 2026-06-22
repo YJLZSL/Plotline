@@ -160,6 +160,7 @@ pub fn export_bundle(conn: &Connection, workspace_id: &str) -> AppResult<Workspa
         events: crate::services::event::list(conn, workspace_id)?,
         characters: crate::services::character::list(conn, workspace_id)?,
         relationships: crate::services::character::list_relationships(conn, workspace_id)?,
+        event_connections: crate::services::event::list_connections(conn, workspace_id)?,
         outline_nodes: crate::services::outline::list(conn, workspace_id)?,
         notes: crate::services::note::list(conn, workspace_id)?,
     })
@@ -282,6 +283,15 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
              (id, workspace_id, source_id, target_id, type, description, strength)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![new_id, new_ws_id, new_source, new_target, rel.r#type, rel.description, rel.strength],
+        )?;
+    }
+
+    for ec in bundle.event_connections.drain(..) {
+        let new_source = event_map.get(&ec.source_id).cloned().unwrap_or_default();
+        let new_target = event_map.get(&ec.target_id).cloned().unwrap_or_default();
+        tx.execute(
+            "INSERT OR IGNORE INTO event_connections (source_id, target_id, type) VALUES (?1, ?2, ?3)",
+            params![new_source, new_target, ec.connection_type],
         )?;
     }
 

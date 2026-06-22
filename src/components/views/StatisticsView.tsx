@@ -5,6 +5,7 @@ import {
   Users,
   Layers,
   ListTree,
+  Link2,
 } from 'lucide-react';
 import {
   BarChart,
@@ -23,8 +24,10 @@ import { Card, CardContent, EmptyState } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { useStatisticsQuery } from '@/features/statistics/hooks';
+import { useEventConnectionsQuery } from '@/features/timeline/hooks';
+import { MOTION_BASE } from '@/lib/motion';
 
-const TRANSITION = { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const };
+const TRANSITION = MOTION_BASE;
 
 const STATUS_COLORS: Record<string, string> = {
   draft: '#9b9b9b',
@@ -40,6 +43,8 @@ interface StatisticsViewProps {
 export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewProps) {
   const { t } = useI18n();
   const { data, isLoading } = useStatisticsQuery(workspaceId);
+  const { data: connections = [] } = useEventConnectionsQuery(workspaceId);
+  const foreshadows = connections.filter((c) => c.connectionType === 'foreshadow');
 
   return (
     <>
@@ -212,6 +217,37 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="sm:col-span-2 lg:col-span-3">
+              <CardContent>
+                <div className="flex items-center gap-2 mb-4">
+                  <Link2 className="h-4 w-4 text-text-secondary" />
+                  <h3 className="text-sm font-semibold text-text-primary">{t('statistics.foreshadowTracker')}</h3>
+                  <span className="text-xs text-text-secondary ml-auto">{foreshadows.length}</span>
+                </div>
+                {foreshadows.length === 0 ? (
+                  <p className="text-xs text-text-secondary/60 py-4 text-center">
+                    {t('statistics.foreshadowEmpty')}
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {foreshadows.map((c) => (
+                      <li
+                        key={`${c.sourceId}-${c.targetId}`}
+                        className="text-sm flex items-center gap-2 p-2 rounded-[6px] bg-bg-elevated/40"
+                      >
+                        <span className="text-text-primary truncate max-w-[40%]">{c.sourceTitle}</span>
+                        <span className="text-accent">→</span>
+                        <span className="text-text-primary truncate max-w-[40%]">{c.targetTitle}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent ml-auto">
+                          {t('timeline.connectionTypeForeshadow')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </CardContent>
             </Card>

@@ -4,6 +4,7 @@ import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react'
 
 import { useToastStore, type ToastKind } from '@/stores/toast';
 import { cn } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 
 const iconMap: Record<ToastKind, React.ComponentType<{ className?: string }>> = {
   success: CheckCircle2,
@@ -42,7 +43,7 @@ export function ToastViewport() {
               initial={{ opacity: 0, x: 40, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, scale: 0.95 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              transition={MOTION_BASE}
               className={cn(
                 'pointer-events-auto flex items-start gap-3 p-3 pr-2',
                 'border rounded-[8px] shadow-[var(--shadow-card)] bg-bg-surface',

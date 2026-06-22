@@ -103,8 +103,25 @@ body {
   }
 }
 
+@keyframes pulse-dot {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .animate-fade-in {
-  animation: fade-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fade-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite both;
 }
 
 .skeleton {

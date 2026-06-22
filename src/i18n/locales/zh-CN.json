@@ -49,7 +49,8 @@
       "tracks": "轨道"
     },
     "createdAt": "创建于 {{date}}",
-    "updatedAt": "更新于 {{date}}"
+    "updatedAt": "更新于 {{date}}",
+    "exportMarkdown": "导出 Markdown"
   },
   "timeline": {
     "title": "时间轴",
@@ -70,6 +71,13 @@
     "day": "日",
     "hour": "时",
     "fit": "适应",
+    "consistencyCheck": "一致性检查",
+    "consistencyClean": "时间线一致性正常，未发现冲突",
+    "consistencyConflicts": "发现 {{count}} 处一致性冲突（同一角色在同一时间出现在多个轨道）",
+    "connectionTypeCausal": "因果",
+    "connectionTypeForeshadow": "伏笔",
+    "foreshadowTracker": "伏笔追踪",
+    "connectionHint": "点击目标事件以建立 {{type}} 连接，或",
     "event": {
       "title": "事件标题",
       "description": "描述",
@@ -121,6 +129,7 @@
     "addScene": "添加场景",
     "expandAll": "全部展开",
     "collapseAll": "全部折叠",
+    "exportMarkdown": "导出 Markdown",
     "empty": {
       "title": "大纲是空的",
       "description": "添加第一卷开始组织你的故事结构。"
@@ -128,6 +137,13 @@
     "statusDraft": "草稿",
     "statusDone": "完成",
     "statusRevise": "待修改"
+  },
+  "notebook": {
+    "title": "资料库",
+    "editorPlaceholder": "开始写下你的灵感与笔记…（支持富文本）",
+    "emptyContent": "（空笔记）",
+    "tagPlaceholder": "按回车添加标签…",
+    "saving": "保存中"
   },
   "statistics": {
     "title": "统计",
@@ -140,6 +156,8 @@
     "statusBreakdown": "状态分布",
     "characterAppearances": "角色出场频率",
     "trackEvents": "轨道事件数",
+    "foreshadowTracker": "伏笔追踪",
+    "foreshadowEmpty": "暂无伏笔连接。在时间轴中选择「伏笔」类型并连接两个事件即可创建。",
     "empty": "尚无数据，开始创作后这里会显示统计。"
   },
   "settings": {
@@ -164,7 +182,12 @@
     "autoBackup": "自动备份",
     "backupInterval": "备份间隔（小时）",
     "reset": "恢复默认",
-    "saveSuccess": "设置已保存"
+    "saveSuccess": "设置已保存",
+    "checkUpdateTitle": "检查更新",
+    "checkUpdateDesc": "联网检查是否有新版本发布。仅在桌面应用中可用。",
+    "checkUpdateCta": "立即检查",
+    "updateAvailable": "发现新版本 v{{version}}，请前往 GitHub Releases 下载安装",
+    "updateUpToDate": "当前已是最新版本"
   },
   "common": {
     "save": "保存",
@@ -174,6 +197,8 @@
     "edit": "编辑",
     "create": "创建",
     "update": "更新",
+    "undo": "撤销",
+    "redo": "重做",
     "close": "关闭",
     "search": "搜索",
     "yes": "是",
@@ -199,6 +224,7 @@
     "outlineCreated": "节点已创建",
     "outlineUpdated": "节点已更新",
     "outlineDeleted": "节点已删除",
-    "settingsSaved": "设置已保存"
+    "settingsSaved": "设置已保存",
+    "backupFailed": "自动备份失败：{{reason}}"
   }
 }

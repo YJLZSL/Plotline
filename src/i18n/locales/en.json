@@ -49,7 +49,8 @@
       "tracks": "tracks"
     },
     "createdAt": "Created {{date}}",
-    "updatedAt": "Updated {{date}}"
+    "updatedAt": "Updated {{date}}",
+    "exportMarkdown": "Export Markdown"
   },
   "timeline": {
     "title": "Timeline",
@@ -70,6 +71,13 @@
     "day": "Day",
     "hour": "Hour",
     "fit": "Fit",
+    "consistencyCheck": "Consistency check",
+    "consistencyClean": "Timeline is consistent — no conflicts found",
+    "consistencyConflicts": "Found {{count}} consistency conflict(s) (same character on multiple tracks at the same time)",
+    "connectionTypeCausal": "Causal",
+    "connectionTypeForeshadow": "Foreshadow",
+    "foreshadowTracker": "Foreshadow Tracker",
+    "connectionHint": "Click target event to create a {{type}} connection, or",
     "event": {
       "title": "Event title",
       "description": "Description",
@@ -121,6 +129,7 @@
     "addScene": "Add Scene",
     "expandAll": "Expand All",
     "collapseAll": "Collapse All",
+    "exportMarkdown": "Export Markdown",
     "empty": {
       "title": "Outline is empty",
       "description": "Add the first volume to structure your story."
@@ -128,6 +137,13 @@
     "statusDraft": "Draft",
     "statusDone": "Done",
     "statusRevise": "Revise"
+  },
+  "notebook": {
+    "title": "Notebook",
+    "editorPlaceholder": "Write down your ideas and notes… (rich text supported)",
+    "emptyContent": "(empty note)",
+    "tagPlaceholder": "Press Enter to add a tag…",
+    "saving": "Saving"
   },
   "statistics": {
     "title": "Statistics",
@@ -140,6 +156,8 @@
     "statusBreakdown": "Status Breakdown",
     "characterAppearances": "Character Appearances",
     "trackEvents": "Events per Track",
+    "foreshadowTracker": "Foreshadow Tracker",
+    "foreshadowEmpty": "No foreshadow connections yet. Select Foreshadow type on the timeline and connect two events.",
     "empty": "No data yet. Start creating and insights will appear here."
   },
   "settings": {
@@ -164,7 +182,12 @@
     "autoBackup": "Auto Backup",
     "backupInterval": "Backup Interval (hours)",
     "reset": "Reset to default",
-    "saveSuccess": "Settings saved"
+    "saveSuccess": "Settings saved",
+    "checkUpdateTitle": "Check for Updates",
+    "checkUpdateDesc": "Check online for a newer release. Only available in the desktop app.",
+    "checkUpdateCta": "Check now",
+    "updateAvailable": "New version v{{version}} available. Visit GitHub Releases to download.",
+    "updateUpToDate": "You're up to date"
   },
   "common": {
     "save": "Save",
@@ -174,6 +197,8 @@
     "edit": "Edit",
     "create": "Create",
     "update": "Update",
+    "undo": "Undo",
+    "redo": "Redo",
     "close": "Close",
     "search": "Search",
     "yes": "Yes",
@@ -199,6 +224,7 @@
     "outlineCreated": "Node created",
     "outlineUpdated": "Node updated",
     "outlineDeleted": "Node deleted",
-    "settingsSaved": "Settings saved"
+    "settingsSaved": "Settings saved",
+    "backupFailed": "Auto backup failed: {{reason}}"
   }
 }

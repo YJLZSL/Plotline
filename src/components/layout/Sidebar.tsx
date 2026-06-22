@@ -14,8 +14,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import { useUIStore } from '@/stores/ui';
-
-const TRANSITION = { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const };
+import { MOTION_BASE } from '@/lib/motion';
+import { AppIcon, BrandMark } from '@/components/ui';
 
 interface NavItem {
   to: string;
@@ -41,7 +41,7 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
   return (
     <motion.aside
       animate={{ width: collapsed ? 56 : 240 }}
-      transition={TRANSITION}
+      transition={MOTION_BASE}
       className={cn(
         'flex flex-col bg-bg-surface border-r border-border',
         'flex-shrink-0 overflow-hidden',
@@ -49,13 +49,8 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
       data-tauri-drag-region
     >
       <div className="flex items-center gap-2 h-12 px-3 border-b border-border">
-        <span
-          className={cn(
-            'h-7 w-7 rounded-[6px] bg-accent text-white grid place-items-center font-bold text-sm flex-shrink-0',
-            'shadow-sm',
-          )}
-        >
-          P
+        <span className="flex-shrink-0 grid place-items-center h-8 w-8 rounded-[8px] bg-accent/15">
+          <BrandMark size={20} title="Plotline" />
         </span>
         {!collapsed && (
           <span className="text-sm font-semibold text-text-primary truncate">
@@ -74,7 +69,7 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
               key={item.to}
               to={fullPath}
               className={cn(
-                'group flex items-center gap-3 rounded-[6px] px-3 h-9 transition-colors',
+                'group flex items-center gap-3 rounded-[6px] px-2 h-10 transition-colors',
                 'text-sm font-medium relative',
                 active
                   ? 'text-accent bg-accent/10'
@@ -86,10 +81,12 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
                 <motion.span
                   layoutId="sidebar-active"
                   className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-accent"
-                  transition={TRANSITION}
+                  transition={MOTION_BASE}
                 />
               )}
-              <Icon className="h-5 w-5 flex-shrink-0" />
+              <AppIcon size="sm" tone={active ? 'accent' : 'muted'}>
+                <Icon />
+              </AppIcon>
               {!collapsed && <span className="truncate">{t(item.labelKey)}</span>}
             </NavLink>
           );

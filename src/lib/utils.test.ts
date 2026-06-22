@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { cn, truncate, relativeTime, formatDate } from './utils';
+import { cn, truncate, relativeTime, formatDate, stripHtml } from './utils';
 
 describe('cn', () => {
   it('should merge classes', () => {
@@ -55,5 +55,15 @@ describe('relativeTime', () => {
   it('should return N 小时前 for hours', () => {
     const past = new Date(Date.now() - 3 * 3_600_000).toISOString();
     expect(relativeTime(past)).toBe('3 小时前');
+  });
+});
+
+describe('stripHtml', () => {
+  it('removes html tags and returns plain text', () => {
+    expect(stripHtml('<p>Hello <strong>world</strong></p>')).toBe('Hello world');
+  });
+
+  it('returns empty string for empty input', () => {
+    expect(stripHtml('')).toBe('');
   });
 });

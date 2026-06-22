@@ -10,16 +10,17 @@ import {
 } from 'lucide-react';
 
 import {
+  AppIcon,
   Badge,
   Button,
   EmptyState,
   Input,
-  Textarea,
+  RichEditor,
   ConfirmDialog,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
-import { cn, relativeTime, truncate } from '@/lib/utils';
+import { cn, relativeTime, stripHtml, truncate } from '@/lib/utils';
 import {
   useCreateNote,
   useDeleteNote,
@@ -167,7 +168,7 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-medium text-text-primary truncate">{n.title}</h4>
                       <p className="text-[11px] text-text-secondary mt-0.5 line-clamp-2">
-                        {truncate(n.content || '（空笔记）', 60)}
+                        {truncate(stripHtml(n.content) || t('notebook.emptyContent'), 60)}
                       </p>
                       <div className="flex items-center gap-1.5 mt-1.5">
                         {n.tags.slice(0, 2).map((tag) => (
@@ -227,7 +228,7 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
                       addTag();
                     }
                   }}
-                  placeholder="按回车添加标签…"
+                  placeholder={t('notebook.tagPlaceholder')}
                   className="flex-1 h-7 text-xs border-transparent bg-transparent"
                 />
                 <div className="flex gap-1">
@@ -248,28 +249,31 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
                 {dirty && (
                   <span className="text-[10px] text-accent flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                    保存中
+                    {t('notebook.saving')}
                   </span>
                 )}
               </div>
 
               <div className="flex-1 overflow-auto p-6 bg-bg-base">
-                <Textarea
+                <RichEditor
                   value={editorContent}
-                  onChange={(e) => {
-                    setEditorContent(e.target.value);
+                  onChange={(v) => {
+                    setEditorContent(v);
                     setDirty(true);
                   }}
-                  placeholder="开始写下你的灵感与笔记…（支持纯文本）"
-                  className="min-h-full h-auto border-0 rounded-none bg-transparent resize-none focus-visible:ring-0 text-sm leading-relaxed font-mono p-0"
-                  style={{ minHeight: 'calc(100vh - 220px)' }}
+                  placeholder={t('notebook.editorPlaceholder')}
+                  minHeight="calc(100vh - 260px)"
                 />
               </div>
             </>
           ) : (
             <div className="flex-1 grid place-items-center">
               <EmptyState
-                icon={<StickyNote className="h-10 w-10" />}
+                icon={
+                  <AppIcon size="lg" tone="accent">
+                    <StickyNote />
+                  </AppIcon>
+                }
                 title={t('nav.notebook')}
                 description="选择左侧笔记开始编辑，或点击右上角创建新笔记。"
                 action={

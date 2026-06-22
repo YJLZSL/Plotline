@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import {
+  AppIcon,
   Badge,
   Button,
   Card,
@@ -26,6 +27,7 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn, truncate } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 import type { Character } from '@/types';
 import {
   useCreateCharacter,
@@ -140,7 +142,7 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
                 initial={{ x: 320, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: 320, opacity: 0 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                transition={MOTION_BASE}
                 className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
               >
                 <CharacterDetailPanel
@@ -202,7 +204,11 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
               </div>
             ) : filtered.length === 0 ? (
               <EmptyState
-                icon={<Users className="h-10 w-10" />}
+                icon={
+                  <AppIcon size="lg" tone="accent">
+                    <Users />
+                  </AppIcon>
+                }
                 title={t('characters.empty.title')}
                 description={t('characters.empty.description')}
                 action={
@@ -222,7 +228,7 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
                       initial={{ opacity: 0, scale: 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.96 }}
-                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      transition={MOTION_BASE}
                     >
                       <Card
                         hover
@@ -282,7 +288,7 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
               initial={{ x: 320, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 320, opacity: 0 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              transition={MOTION_BASE}
               className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
             >
               <CharacterDetailPanel

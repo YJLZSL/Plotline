@@ -49,6 +49,25 @@ export function randomColor(): string {
   return '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
 }
 
+/** 去除 HTML 标签，返回纯文本。 */
+export function stripHtml(html: string): string {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
+
+/** 下载文本为文件（Web 模式用）。 */
+export function downloadText(filename: string, content: string): void {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** 下载 JSON 文本为文件（Web 模式用）。 */
 export function downloadJSON(filename: string, data: unknown): void {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

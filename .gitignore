@@ -53,5 +53,8 @@ blob-report/
 # Vite
 .vite/
 
+# 本地规格与任务跟踪
+.trae/
+
 # TypeScript 增量
 *.tsbuildinfo

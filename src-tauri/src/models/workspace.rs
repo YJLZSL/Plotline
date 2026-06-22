@@ -43,6 +43,7 @@ pub struct WorkspaceBundle {
     pub events: Vec<crate::models::Event>,
     pub characters: Vec<crate::models::Character>,
     pub relationships: Vec<crate::models::CharacterRelationship>,
+    pub event_connections: Vec<crate::models::EventConnection>,
     pub outline_nodes: Vec<crate::models::OutlineNode>,
     pub notes: Vec<crate::models::Note>,
 }

@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
+import { MOTION_FAST } from '@/lib/motion';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -115,7 +116,7 @@ export function ConfirmDialog({
           </DialogClose>
           <motion.button
             whileTap={{ scale: 0.98 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            transition={MOTION_FAST}
             onClick={() => {
               onConfirm();
               onOpenChange(false);

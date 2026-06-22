@@ -16,6 +16,7 @@ import type {
   CreateTrackInput,
   CreateWorkspaceInput,
   Event,
+  EventConnection,
   MoveOutlineNodeInput,
   Note,
   OutlineNode,
@@ -40,6 +41,7 @@ interface MockDB {
   events: Event[];
   characters: Character[];
   relationships: CharacterRelationship[];
+  eventConnections: EventConnection[];
   outlineNodes: OutlineNode[];
   notes: Note[];
   settings: AppSettings;
@@ -77,6 +79,7 @@ function loadDB(): MockDB {
     events: [],
     characters: [],
     relationships: [],
+    eventConnections: [],
     outlineNodes: [],
     notes: [],
     settings: { ...DEFAULT_SETTINGS },
@@ -213,10 +216,78 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         events: db.events.filter((e) => e.workspaceId === id).map(deepClone),
         characters: db.characters.filter((c) => c.workspaceId === id).map(deepClone),
         relationships: db.relationships.filter((r) => r.workspaceId === id).map(deepClone),
+        eventConnections: db.eventConnections
+          .filter(
+            (c) =>
+              db.events.find((e) => e.id === c.sourceId)?.workspaceId === id &&
+              db.events.find((e) => e.id === c.targetId)?.workspaceId === id,
+          )
+          .map(deepClone),
         outlineNodes: db.outlineNodes.filter((o) => o.workspaceId === id).map(deepClone),
         notes: db.notes.filter((n) => n.workspaceId === id).map(deepClone),
       };
       return bundle;
+    }
+    case 'export_workspace_markdown': {
+      const id = args.id as string;
+      const ws = db.workspaces.find((w) => w.id === id);
+      if (!ws) notFound(`工作区 ${id} 不存在`);
+      const events = db.events.filter((e) => e.workspaceId === id);
+      const tracks = db.tracks.filter((t) => t.workspaceId === id);
+      const characters = db.characters.filter((c) => c.workspaceId === id);
+      const outline = db.outlineNodes.filter((o) => o.workspaceId === id);
+      const notes = db.notes.filter((n) => n.workspaceId === id);
+
+      let md = `# ${ws.name}\n\n`;
+      if (ws.description) md += `${ws.description}\n\n`;
+      md += '## 角色\n\n';
+      for (const c of characters) {
+        md += `### ${c.name}\n\n${c.description || ''}\n\n`;
+      }
+      md += '## 时间线\n\n';
+      for (const t of tracks) {
+        md += `### ${t.name}\n\n`;
+        for (const e of events.filter((e) => e.trackId === t.id)) {
+          const status = e.status === 'done' ? '完成' : e.status === 'revise' ? '待修改' : '草稿';
+          md += `#### ${e.title}（${e.dateValue || '无日期'} - ${status}）\n\n${e.description || '（无描述）'}\n\n`;
+        }
+      }
+      md += '## 大纲\n\n';
+      const appendOutline = (parentId: string | null, depth: number) => {
+        const prefix = '#'.repeat(depth + 2);
+        const children = outline.filter((o) => o.parentId === parentId).sort((a, b) => a.sortOrder - b.sortOrder);
+        for (let i = 0; i < children.length; i++) {
+          const node = children[i]!;
+          md += `${prefix} ${i + 1}. ${node.title}\n\n`;
+          if (node.content) md += `${node.content}\n\n`;
+          appendOutline(node.id, depth + 1);
+        }
+      };
+      appendOutline(null, 0);
+      md += '## 笔记\n\n';
+      for (const n of notes) {
+        md += `### ${n.title}\n\n${n.content}\n\n`;
+      }
+      return md;
+    }
+    case 'export_outline_markdown': {
+      const id = args.id as string;
+      const ws = db.workspaces.find((w) => w.id === id);
+      if (!ws) notFound(`工作区 ${id} 不存在`);
+      const outline = db.outlineNodes.filter((o) => o.workspaceId === id);
+      let md = `# ${ws.name} - 大纲\n\n`;
+      const appendOutline = (parentId: string | null, depth: number) => {
+        const prefix = '#'.repeat(depth + 2);
+        const children = outline.filter((o) => o.parentId === parentId).sort((a, b) => a.sortOrder - b.sortOrder);
+        for (let i = 0; i < children.length; i++) {
+          const node = children[i]!;
+          md += `${prefix} ${i + 1}. ${node.title}\n\n`;
+          if (node.content) md += `${node.content}\n\n`;
+          appendOutline(node.id, depth + 1);
+        }
+      };
+      appendOutline(null, 0);
+      return md;
     }
     case 'import_workspace': {
       const bundle = args.bundle as WorkspaceBundle;
@@ -262,6 +333,17 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
           workspaceId: newWsId,
           sourceId: charMap.get(r.sourceId) ?? r.sourceId,
           targetId: charMap.get(r.targetId) ?? r.targetId,
+        });
+      }
+      for (const ec of bundle.eventConnections) {
+        db.eventConnections.push({
+          ...deepClone(ec),
+          sourceId: eventMap.get(ec.sourceId) ?? ec.sourceId,
+          targetId: eventMap.get(ec.targetId) ?? ec.targetId,
+          sourceTitle:
+            bundle.events.find((e) => e.id === ec.sourceId)?.title ?? ec.sourceTitle,
+          targetTitle:
+            bundle.events.find((e) => e.id === ec.targetId)?.title ?? ec.targetTitle,
         });
       }
       for (const o of bundle.outlineNodes) {
@@ -358,6 +440,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         status: input.status ?? 'draft',
         color: input.color ?? null,
         characterIds: input.characterIds ?? [],
+        connectedEventIds: [],
         createdAt: now,
         updatedAt: now,
       };
@@ -404,11 +487,72 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       return null;
     }
     case 'connect_events': {
-      // mock 简化：连接关系不持久化，因为没有单独表存储
+      const input = args.input as { sourceId: string; targetId: string; connectionType?: 'causal' | 'foreshadow' };
+      const source = db.events.find((e) => e.id === input.sourceId);
+      const target = db.events.find((e) => e.id === input.targetId);
+      if (!source || !target) notFound('事件不存在');
+      if (!source.connectedEventIds.includes(input.targetId)) {
+        source.connectedEventIds.push(input.targetId);
+      }
+      db.eventConnections = db.eventConnections.filter(
+        (c) => !(c.sourceId === input.sourceId && c.targetId === input.targetId),
+      );
+      db.eventConnections.push({
+        sourceId: input.sourceId,
+        targetId: input.targetId,
+        sourceTitle: source.title,
+        targetTitle: target.title,
+        connectionType: input.connectionType ?? 'causal',
+      });
       return null;
     }
-    case 'disconnect_events':
+    case 'disconnect_events': {
+      const { sourceId, targetId } = args as { sourceId: string; targetId: string };
+      const source = db.events.find((e) => e.id === sourceId);
+      if (source) {
+        source.connectedEventIds = source.connectedEventIds.filter((id) => id !== targetId);
+      }
+      db.eventConnections = db.eventConnections.filter(
+        (c) => !(c.sourceId === sourceId && c.targetId === targetId),
+      );
       return null;
+    }
+    case 'list_event_connections': {
+      const wsId = args.workspaceId as string;
+      return db.eventConnections.filter(
+        (c) =>
+          db.events.find((e) => e.id === c.sourceId)?.workspaceId === wsId &&
+          db.events.find((e) => e.id === c.targetId)?.workspaceId === wsId,
+      );
+    }
+
+    case 'check_consistency': {
+      const events = db.events.filter((e) => e.workspaceId === args.workspaceId);
+      const buckets = new Map<string, { eventIds: Set<string>; trackIds: Set<string>; characterId: string; dateValue: string }>();
+      for (const ev of events) {
+        if (!ev.dateValue) continue;
+        for (const characterId of ev.characterIds) {
+          const key = `${characterId}|${ev.dateValue}`;
+          const slot = buckets.get(key) ?? {
+            eventIds: new Set<string>(),
+            trackIds: new Set<string>(),
+            characterId,
+            dateValue: ev.dateValue,
+          };
+          slot.eventIds.add(ev.id);
+          slot.trackIds.add(ev.trackId);
+          buckets.set(key, slot);
+        }
+      }
+      return Array.from(buckets.values())
+        .filter((b) => b.trackIds.size >= 2)
+        .map((b) => ({
+          characterId: b.characterId,
+          dateValue: b.dateValue,
+          eventIds: [...b.eventIds].sort(),
+          trackIds: [...b.trackIds].sort(),
+        }));
+    }
 
     // ===== character =====
     case 'list_characters':

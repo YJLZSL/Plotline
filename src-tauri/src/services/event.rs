@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{ConnectEventsInput, CreateEventInput, Event, UpdateEventInput};
+use crate::models::{ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput};
 
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
     let mut stmt = conn.prepare(
@@ -24,6 +24,7 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
             status: row.get(8)?,
             color: row.get(9)?,
             character_ids: Vec::new(),
+            connected_event_ids: Vec::new(),
             created_at: row.get(10)?,
             updated_at: row.get(11)?,
         })
@@ -31,6 +32,7 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
     let mut events: Vec<Event> = rows.collect::<Result<_, _>>()?;
     for ev in events.iter_mut() {
         ev.character_ids = list_character_ids(conn, &ev.id)?;
+        ev.connected_event_ids = list_connected_event_ids(conn, &ev.id)?;
     }
     Ok(events)
 }
@@ -38,6 +40,13 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
 fn list_character_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<String>> {
     let mut stmt =
         conn.prepare("SELECT character_id FROM event_characters WHERE event_id = ?1")?;
+    let rows = stmt.query_map(params![event_id], |r| r.get::<_, String>(0))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+fn list_connected_event_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<String>> {
+    let mut stmt =
+        conn.prepare("SELECT target_id FROM event_connections WHERE source_id = ?1")?;
     let rows = stmt.query_map(params![event_id], |r| r.get::<_, String>(0))?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
@@ -62,12 +71,14 @@ fn get(conn: &Connection, id: &str) -> AppResult<Event> {
                 status: row.get(8)?,
                 color: row.get(9)?,
                 character_ids: Vec::new(),
+                connected_event_ids: Vec::new(),
                 created_at: row.get(10)?,
                 updated_at: row.get(11)?,
             })
         })
         .map_err(|_| AppError::NotFound(format!("事件 {} 不存在", id)))?;
     event.character_ids = list_character_ids(conn, id)?;
+    event.connected_event_ids = list_connected_event_ids(conn, id)?;
     Ok(event)
 }
 
@@ -182,4 +193,112 @@ pub fn disconnect(conn: &Connection, source_id: &str, target_id: &str) -> AppRes
         params![source_id, target_id],
     )?;
     Ok(())
+}
+
+pub fn list_connections(conn: &Connection, workspace_id: &str) -> AppResult<Vec<EventConnection>> {
+    let mut stmt = conn.prepare(
+        "SELECT ec.source_id, ec.target_id, ec.type, s.title, t.title
+         FROM event_connections ec
+         JOIN events s ON s.id = ec.source_id
+         JOIN events t ON t.id = ec.target_id
+         WHERE s.workspace_id = ?1 AND t.workspace_id = ?1
+         ORDER BY s.sort_order, t.sort_order",
+    )?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        Ok(EventConnection {
+            source_id: row.get(0)?,
+            target_id: row.get(1)?,
+            connection_type: row.get(2)?,
+            source_title: row.get(3)?,
+            target_title: row.get(4)?,
+        })
+    })?;
+    rows.collect::<Result<_, _>>().map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn in_memory_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrate::run(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn event_loads_connected_event_ids() {
+        let conn = in_memory_db();
+        conn.execute(
+            "INSERT INTO workspaces (id, name, description, template, cover_color, settings_json, created_at, updated_at)
+             VALUES ('ws', 'WS', '', 'blank', '#C68A3E', '{}', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
+             VALUES ('t1', 'ws', 'T1', '#F4B6C2', 0, 1, '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
+             VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
+             VALUES ('e2', 'ws', 't1', 'Target', '', 'relative', '', 1, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        connect(
+            &conn,
+            ConnectEventsInput {
+                source_id: "e1".into(),
+                target_id: "e2".into(),
+                connection_type: Some("foreshadow".into()),
+            },
+        ).unwrap();
+
+        let events = list(&conn, "ws").unwrap();
+        let source = events.iter().find(|e| e.id == "e1").unwrap();
+        assert_eq!(source.connected_event_ids, vec!["e2"]);
+    }
+
+    #[test]
+    fn list_connections_returns_typed_connections() {
+        let conn = in_memory_db();
+        conn.execute(
+            "INSERT INTO workspaces (id, name, description, template, cover_color, settings_json, created_at, updated_at)
+             VALUES ('ws', 'WS', '', 'blank', '#C68A3E', '{}', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
+             VALUES ('t1', 'ws', 'T1', '#F4B6C2', 0, 1, '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
+             VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
+             VALUES ('e2', 'ws', 't1', 'Target', '', 'relative', '', 1, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        connect(
+            &conn,
+            ConnectEventsInput {
+                source_id: "e1".into(),
+                target_id: "e2".into(),
+                connection_type: Some("causal".into()),
+            },
+        ).unwrap();
+
+        let conns = list_connections(&conn, "ws").unwrap();
+        assert_eq!(conns.len(), 1);
+        assert_eq!(conns[0].connection_type, "causal");
+        assert_eq!(conns[0].source_title, "Source");
+        assert_eq!(conns[0].target_title, "Target");
+    }
 }

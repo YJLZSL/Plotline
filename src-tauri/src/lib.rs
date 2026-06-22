@@ -20,6 +20,7 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -27,6 +28,18 @@ pub fn run() {
                 .expect("failed to resolve app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
             let db_path = app_data_dir.join("plotline.db");
+
+            // 启动时滚动备份当前数据库（首次启动时数据库尚未创建，备份会被跳过）。
+            if db_path.exists() {
+                match services::backup::backup_workspace_db(
+                    &db_path,
+                    services::backup::DEFAULT_MAX_BACKUPS,
+                ) {
+                    Ok(path) => log::info!("[backup] created {}", path.display()),
+                    Err(err) => log::warn!("[backup] failed: {err}"),
+                }
+            }
+
             let database = Database::open(&db_path).expect("failed to open database");
             app.manage(AppState {
                 db: Mutex::new(database),
@@ -55,6 +68,11 @@ pub fn run() {
             commands::event::delete_event,
             commands::event::connect_events,
             commands::event::disconnect_events,
+            commands::event::list_event_connections,
+            commands::event::check_consistency,
+            // export
+            commands::export::export_workspace_markdown,
+            commands::export::export_outline_markdown,
             // character
             commands::character::list_characters,
             commands::character::get_character,

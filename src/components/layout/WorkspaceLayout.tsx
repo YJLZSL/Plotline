@@ -2,6 +2,9 @@ import { Outlet, useParams } from 'react-router-dom';
 
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
+import { HistoryControls } from './HistoryControls';
+
+const APP_VERSION = '1.1.0';
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -12,7 +15,7 @@ export function WorkspaceLayout() {
       <Sidebar workspaceId={workspaceId} />
       <div className="flex flex-1 flex-col min-w-0">
         <Outlet />
-        <StatusBar left={<span>就绪</span>} right={<span>v0.2.0</span>} />
+        <StatusBar left={<HistoryControls />} right={<span>v{APP_VERSION}</span>} />
       </div>
     </div>
   );

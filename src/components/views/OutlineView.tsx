@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -11,9 +11,11 @@ import {
   Circle,
   ArrowUp,
   ArrowDown,
+  Download,
 } from 'lucide-react';
 
 import {
+  AppIcon,
   Button,
   EmptyState,
   Input,
@@ -27,7 +29,8 @@ import {
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
-import { cn } from '@/lib/utils';
+import { cn, downloadText } from '@/lib/utils';
+import { MOTION_FAST } from '@/lib/motion';
 import type { OutlineNode, OutlineNodeType } from '@/types';
 import {
   useCreateOutlineNode,
@@ -35,6 +38,7 @@ import {
   useOutlineQuery,
   useUpdateOutlineNode,
 } from '@/features/outline/hooks';
+import { useExportOutlineMarkdown } from '@/features/workspace/hooks';
 import { useMoveOutlineNode } from '@/features/outline/moveHooks';
 
 interface OutlineViewProps {
@@ -56,6 +60,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const updateMutation = useUpdateOutlineNode(workspaceId);
   const deleteMutation = useDeleteOutlineNode(workspaceId);
   const moveMutation = useMoveOutlineNode(workspaceId);
+  const exportMdMutation = useExportOutlineMarkdown();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -108,10 +113,21 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         right={
-          <Button size="sm" onClick={() => void handleAdd('volume', null)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{t('outline.addVolume')}</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void exportMdMutation.mutateAsync(workspaceId).then((md) => downloadText(`${workspaceName || t('outline.title')}.md`, md))}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('outline.exportMarkdown')}</span>
+            </Button>
+            <Button size="sm" onClick={() => void handleAdd('volume', null)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('outline.addVolume')}</span>
+            </Button>
+          </div>
         }
       />
 
@@ -125,7 +141,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
             </div>
           ) : tree.length === 0 ? (
             <EmptyState
-              icon={<ListTree className="h-10 w-10" />}
+              icon={<AppIcon size="lg" tone="accent"><ListTree /></AppIcon>}
               title={t('outline.empty.title')}
               description={t('outline.empty.description')}
               action={
@@ -206,7 +222,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
             </div>
           ) : (
             <EmptyState
-              icon={<ListTree className="h-10 w-10" />}
+              icon={<AppIcon size="lg" tone="accent"><ListTree /></AppIcon>}
               title={t('outline.title')}
               description={t('outline.subtitle')}
             />
@@ -381,7 +397,7 @@ function TreeView({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            transition={MOTION_FAST}
             className="overflow-hidden"
           >
             {node.children.map((child) => (

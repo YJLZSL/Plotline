@@ -3,6 +3,7 @@ import { Slot } from '@radix-ui/react-slot';
 import { motion, type HTMLMotionProps } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
+import { MOTION_FAST } from '@/lib/motion';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type Size = 'sm' | 'md' | 'lg' | 'icon';
@@ -72,11 +73,18 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={classes}
         disabled={disabled || loading}
         whileTap={disabled || loading ? {} : { scale: 0.98 }}
-        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+        transition={MOTION_FAST}
         {...rest}
       >
         {loading && (
-          <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+          <span
+            className="inline-flex gap-0.5 items-center"
+            aria-hidden="true"
+          >
+            <span className="h-1 w-1 rounded-full bg-current opacity-70 animate-pulse-dot [animation-delay:-0.32s]" />
+            <span className="h-1 w-1 rounded-full bg-current opacity-70 animate-pulse-dot [animation-delay:-0.16s]" />
+            <span className="h-1 w-1 rounded-full bg-current opacity-70 animate-pulse-dot" />
+          </span>
         )}
         {children as React.ReactNode}
       </motion.button>

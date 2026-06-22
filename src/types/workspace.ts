@@ -33,12 +33,13 @@ export interface WorkspaceBundle {
   events: Event[];
   characters: Character[];
   relationships: CharacterRelationship[];
+  eventConnections: EventConnection[];
   outlineNodes: OutlineNode[];
   notes: Note[];
 }
 
 import type { Track } from './track';
-import type { Event } from './event';
+import type { Event, EventConnection } from './event';
 import type { Character, CharacterRelationship } from './character';
 import type { OutlineNode } from './outline';
 import type { Note } from './note';

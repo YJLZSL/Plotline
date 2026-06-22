@@ -13,8 +13,17 @@ export interface Event {
   status: EventStatus;
   color: string | null;
   characterIds: string[];
+  connectedEventIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EventConnection {
+  sourceId: string;
+  targetId: string;
+  sourceTitle: string;
+  targetTitle: string;
+  connectionType: 'causal' | 'foreshadow';
 }
 
 export interface CreateEventInput {

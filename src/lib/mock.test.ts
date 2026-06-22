@@ -170,4 +170,59 @@ describe('mock ipc', () => {
     })) as CharacterRelationship;
     expect(rel.strength).toBe(5);
   });
+
+  it('should detect cross-track character conflicts in check_consistency', async () => {
+    const w = await ws('w');
+    const ts = await tracksOf(w.id);
+    const trackA = ts[0];
+    const trackB = ts[1] ?? ts[0];
+    if (!trackA || !trackB || trackA.id === trackB.id) {
+      // template should give us at least 2 tracks; skip if not
+      return;
+    }
+    const character = await charOf(w.id, 'X');
+    await eventOf(w.id, trackA.id, 'A', {
+      dateValue: '2025-01-01',
+      characterIds: [character.id],
+    } as Partial<Event>);
+    await eventOf(w.id, trackB.id, 'B', {
+      dateValue: '2025-01-01',
+      characterIds: [character.id],
+    } as Partial<Event>);
+    const conflicts = (await mockIpc('check_consistency', {
+      workspaceId: w.id,
+    })) as Array<{ characterId: string; trackIds: string[] }>;
+    expect(conflicts.length).toBeGreaterThan(0);
+    const first = conflicts[0]!;
+    expect(first.characterId).toBe(character.id);
+    expect(first.trackIds.length).toBe(2);
+  });
+
+  it('should connect events and persist eventConnections in bundle', async () => {
+    const w = await ws('w');
+    const t = (await tracksOf(w.id))[0]!;
+    const e1 = await eventOf(w.id, t.id, '伏笔');
+    const e2 = await eventOf(w.id, t.id, '回收');
+    await mockIpc('connect_events', {
+      input: { sourceId: e1.id, targetId: e2.id, connectionType: 'foreshadow' },
+    });
+    const bundle = (await mockIpc('export_workspace', { id: w.id })) as {
+      eventConnections: Array<{ sourceId: string; targetId: string; connectionType: string }>;
+    };
+    expect(bundle.eventConnections).toHaveLength(1);
+    expect(bundle.eventConnections[0]!.connectionType).toBe('foreshadow');
+  });
+
+  it('should export workspace markdown', async () => {
+    const w = await ws('导出测试');
+    const md = (await mockIpc('export_workspace_markdown', { id: w.id })) as string;
+    expect(md).toContain('# 导出测试');
+    expect(md).toContain('## 角色');
+  });
+
+  it('should export outline markdown', async () => {
+    const w = await ws('大纲导出');
+    const md = (await mockIpc('export_outline_markdown', { id: w.id })) as string;
+    expect(md).toContain('# 大纲导出 - 大纲');
+  });
 });

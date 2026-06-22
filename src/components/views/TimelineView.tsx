@@ -10,6 +10,7 @@ import {
   ZoomOut,
   Clock4,
   Link2,
+  ShieldCheck,
 } from 'lucide-react';
 
 import {
@@ -25,7 +26,8 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
-import type { Character, Event, EventStatus, Track } from '@/types';
+import { EASE_STANDARD } from '@/lib/motion';
+import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
 import {
   useCreateEvent,
   useCreateTrack,
@@ -35,8 +37,12 @@ import {
   useTracksQuery,
   useUpdateEvent,
   useUpdateTrack,
+  useConnectEvents,
+  useEventConnectionsQuery,
 } from '@/features/timeline/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
+import { checkConsistency } from '@/features/timeline/eventApi';
+import { toastError, toastInfo, toastWarning } from '@/stores/toast';
 
 // ===== 常量 =====
 const TRACK_HEIGHT = 92;
@@ -90,6 +96,26 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<Track | null>(null);
   const [newTrackName, setNewTrackName] = useState('');
   const [showConnections, setShowConnections] = useState(true);
+  const [checkingConsistency, setCheckingConsistency] = useState(false);
+  const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
+  const connectEvents = useConnectEvents(workspaceId);
+  const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
+
+  const handleConsistencyCheck = async () => {
+    setCheckingConsistency(true);
+    try {
+      const conflicts = await checkConsistency(workspaceId);
+      if (conflicts.length === 0) {
+        toastInfo(t('timeline.consistencyClean'));
+      } else {
+        toastWarning(t('timeline.consistencyConflicts', { count: conflicts.length }));
+      }
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setCheckingConsistency(false);
+    }
+  };
   const [pendingConnection, setPendingConnection] = useState<string | null>(null);
 
   const visibleTracks = tracks.filter((tr) => tr.isVisible);
@@ -303,6 +329,25 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
             >
               <Link2 className="h-3.5 w-3.5" />
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConnectionType((t) => (t === 'causal' ? 'foreshadow' : 'causal'))}
+              className="gap-1.5 text-[11px]"
+              title={`${t('timeline.connectionType')}: ${connectionType === 'causal' ? t('timeline.connectionTypeCausal') : t('timeline.connectionTypeForeshadow')}`}
+            >
+              {connectionType === 'causal' ? t('timeline.connectionTypeCausal') : t('timeline.connectionTypeForeshadow')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={checkingConsistency}
+              onClick={handleConsistencyCheck}
+              className="gap-1.5"
+              title={t('timeline.consistencyCheck')}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+            </Button>
           </div>
         }
       />
@@ -394,6 +439,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 timeToX={timeToX}
                 pendingConnection={pendingConnection}
                 selectedEventId={selectedEventId}
+                eventConnections={eventConnections}
               />
               )}
 
@@ -410,14 +456,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   pendingConnection={pendingConnection}
                   onSelectEvent={(id) => {
                     if (pendingConnection && pendingConnection !== id) {
-                      const source = events.find((e) => e.id === pendingConnection);
-                      const target = events.find((e) => e.id === id);
-                      if (target && source) {
-                        void updateEvent.mutateAsync({
-                          id: target.id,
-                          description: target.description + `\n[← ${source.title}]`,
-                        });
-                      }
+                      void connectEvents.mutateAsync({
+                        sourceId: pendingConnection,
+                        targetId: id,
+                        connectionType: connectionType,
+                      });
                       setPendingConnection(null);
                     } else {
                       setSelectedEventId(id);
@@ -442,12 +485,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           {pendingConnection && (
             <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-accent text-white px-4 py-2 rounded-[8px] shadow-[var(--shadow-elevated)] text-sm flex items-center gap-2">
               <Link2 className="h-4 w-4" />
-              <span>点击目标事件以建立连接，或</span>
+              <span>{t('timeline.connectionHint', { type: connectionType === 'causal' ? t('timeline.connectionTypeCausal') : t('timeline.connectionTypeForeshadow') })}</span>
               <button
                 onClick={() => setPendingConnection(null)}
                 className="underline hover:no-underline"
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           )}
@@ -582,6 +625,7 @@ function ConnectionLayer({
   timeToX,
   pendingConnection,
   selectedEventId,
+  eventConnections,
 }: {
   events: Event[];
   tracks: Track[];
@@ -589,23 +633,8 @@ function ConnectionLayer({
   timeToX: (t: number) => number;
   pendingConnection: string | null;
   selectedEventId: string | null;
+  eventConnections: EventConnection[];
 }) {
-  // 基于 description 中的 [← xxx] 标记解析连接关系
-  const connections = useMemo(() => {
-    const result: Array<{ source: Event; target: Event }> = [];
-    for (const ev of events) {
-      const matches = ev.description.matchAll(/\[←\s*(.+?)\]/g);
-      for (const m of matches) {
-        const sourceTitle = m[1]!.trim();
-        const source = events.find((e) => e.title === sourceTitle);
-        if (source && source.id !== ev.id) {
-          result.push({ source, target: ev });
-        }
-      }
-    }
-    return result;
-  }, [events]);
-
   const trackIndex = (id: string) => tracks.findIndex((t) => t.id === id);
   const eventY = (ev: Event) => {
     const ti = trackIndex(ev.trackId);
@@ -618,26 +647,30 @@ function ConnectionLayer({
       className="absolute top-0 left-0 pointer-events-none"
       style={{ width: '100%', height: '100%' }}
     >
-      {connections.map((conn, i) => {
-        const sx = timeToX(eventPositions.get(conn.source.id) ?? 0);
-        const sy = eventY(conn.source);
-        const tx = timeToX(eventPositions.get(conn.target.id) ?? 0);
-        const ty = eventY(conn.target);
+      {eventConnections.map((conn) => {
+        const source = events.find((e) => e.id === conn.sourceId);
+        const target = events.find((e) => e.id === conn.targetId);
+        if (!source || !target) return null;
+        const sx = timeToX(eventPositions.get(conn.sourceId) ?? 0);
+        const sy = eventY(source);
+        const tx = timeToX(eventPositions.get(conn.targetId) ?? 0);
+        const ty = eventY(target);
         const midX = (sx + tx) / 2;
         const isActive =
-          pendingConnection === conn.source.id ||
-          pendingConnection === conn.target.id ||
-          selectedEventId === conn.source.id ||
-          selectedEventId === conn.target.id;
+          pendingConnection === conn.sourceId ||
+          pendingConnection === conn.targetId ||
+          selectedEventId === conn.sourceId ||
+          selectedEventId === conn.targetId;
+        const isForeshadow = conn.connectionType === 'foreshadow';
         const path = `M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ty}, ${tx} ${ty}`;
         return (
-          <g key={i}>
+          <g key={`${conn.sourceId}-${conn.targetId}`}>
             <path
               d={path}
               fill="none"
-              stroke={isActive ? 'var(--accent)' : 'var(--text-secondary)'}
+              stroke={isForeshadow ? 'var(--accent-soft)' : isActive ? 'var(--accent)' : 'var(--text-secondary)'}
               strokeWidth={isActive ? 2 : 1.5}
-              strokeDasharray="4 3"
+              strokeDasharray={isForeshadow ? '6 4' : '4 3'}
               opacity={isActive ? 0.9 : 0.4}
             />
             <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} />
@@ -791,7 +824,7 @@ function EventCard({
       initial={{ opacity: 0, scale: 0.9, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.02, 0.2) }}
+      transition={{ duration: 0.22, ease: EASE_STANDARD, delay: Math.min(index * 0.02, 0.2) }}
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.15}

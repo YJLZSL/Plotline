@@ -2,6 +2,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 
 /** 骨架屏：用于加载状态。 */
 export function Skeleton({ className }: { className?: string }) {
@@ -19,7 +20,7 @@ export function LoadingVeil({ label = '加载中' }: { label?: string }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.2 }}
+      transition={MOTION_BASE}
       className="flex flex-col items-center justify-center gap-3 py-12 text-text-secondary"
       role="status"
     >
@@ -59,7 +60,7 @@ export function EmptyState({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      transition={MOTION_BASE}
       className="flex flex-col items-center justify-center text-center py-16 px-6"
     >
       {icon && <div className="text-text-secondary mb-4 opacity-60">{icon}</div>}

@@ -2,9 +2,7 @@ use tauri::State;
 
 use crate::commands::with_db;
 use crate::error::AppResult;
-use crate::models::{
-    ConnectEventsInput, CreateEventInput, Event, UpdateEventInput,
-};
+use crate::models::{ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput};
 use crate::AppState;
 
 #[tauri::command]
@@ -52,4 +50,25 @@ pub fn disconnect_events(
     with_db!(state, |conn| {
         crate::services::event::disconnect(conn, &source_id, &target_id)
     })
+}
+
+#[tauri::command]
+pub fn list_event_connections(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> AppResult<Vec<EventConnection>> {
+    with_db!(state, |conn| {
+        crate::services::event::list_connections(conn, &workspace_id)
+    })
+}
+
+#[tauri::command]
+pub fn check_consistency(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> AppResult<Vec<crate::services::consistency::Conflict>> {
+    let events = with_db!(state, |conn| {
+        crate::services::event::list(conn, &workspace_id)
+    })?;
+    Ok(crate::services::consistency::check_event_conflicts(&events))
 }

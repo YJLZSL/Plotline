@@ -14,6 +14,7 @@ import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
+import { MOTION_BASE } from '@/lib/motion';
 
 function WorkspaceRoutes() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -55,7 +56,7 @@ function AnimatedRoutes() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -6 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        transition={MOTION_BASE}
         className="h-screen w-screen"
       >
         <Routes location={location}>

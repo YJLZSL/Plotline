@@ -6,26 +6,28 @@ import {
   Search,
   Upload,
   Settings as SettingsIcon,
-  Sparkles,
   Clock4,
   Users,
   Layers,
+  FileText,
 } from 'lucide-react';
 
-import { Button, Card, CardContent, EmptyState, Input } from '@/components/ui';
+import { AppIcon, BrandMark, Button, Card, CardContent, EmptyState, Input } from '@/components/ui';
 import {
   useCreateWorkspace,
   useDeleteWorkspace,
   useExportWorkspace,
+  useExportWorkspaceMarkdown,
   useImportWorkspace,
   useWorkspacesQuery,
 } from '@/features/workspace/hooks';
 import { ConfirmDialog, Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { useI18n } from '@/hooks/useI18n';
-import { relativeTime, truncate, downloadJSON } from '@/lib/utils';
+import { relativeTime, truncate, downloadJSON, downloadText } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 import type { WorkspaceTemplate, WorkspaceBundle } from '@/types';
 
-const TRANSITION = { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const };
+const TRANSITION = MOTION_BASE;
 
 const TEMPLATES: Array<{ value: WorkspaceTemplate; labelKey: string; descKey: string }> = [
   { value: 'blank', labelKey: 'workspace.form.templateBlank', descKey: 'workspace.form.templateBlankDesc' },
@@ -42,6 +44,7 @@ export function WorkspaceSelector() {
   const createMutation = useCreateWorkspace();
   const deleteMutation = useDeleteWorkspace();
   const exportMutation = useExportWorkspace();
+  const exportMdMutation = useExportWorkspaceMarkdown();
   const importMutation = useImportWorkspace();
 
   const [search, setSearch] = useState('');
@@ -74,6 +77,11 @@ export function WorkspaceSelector() {
     downloadJSON(`plotline-${id}.json`, bundle);
   };
 
+  const handleExportMarkdown = async (id: string, name: string) => {
+    const md = await exportMdMutation.mutateAsync(id);
+    downloadText(`${name}.md`, md);
+  };
+
   const handleImport = async (file: File) => {
     const text = await file.text();
     try {
@@ -91,8 +99,8 @@ export function WorkspaceSelector() {
         data-tauri-drag-region
       >
         <div className="flex items-center gap-2">
-          <span className="h-8 w-8 rounded-[6px] bg-accent text-white grid place-items-center font-bold shadow-sm">
-            P
+          <span className="h-9 w-9 rounded-[8px] bg-accent/15 grid place-items-center shadow-sm">
+            <BrandMark size={22} title={t('app.name')} />
           </span>
           <div>
             <h1 className="text-base font-semibold text-text-primary leading-tight">
@@ -171,7 +179,11 @@ export function WorkspaceSelector() {
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
-              icon={<Sparkles className="h-10 w-10" />}
+              icon={
+                <AppIcon size="lg" tone="accent">
+                  <BrandMark size={28} />
+                </AppIcon>
+              }
               title={t('workspace.empty.title')}
               description={t('workspace.empty.description')}
               action={
@@ -224,6 +236,16 @@ export function WorkspaceSelector() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                void handleExportMarkdown(w.id, w.name);
+                              }}
+                              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
+                              title="导出 Markdown"
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 void handleExport(w.id);
                               }}
                               className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
@@ -256,35 +278,47 @@ export function WorkspaceSelector() {
           <Card>
             <CardContent>
               <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-accent" />
-                快速操作
+                <BrandMark size={16} className="text-accent" />
+                {t('workspace.quickActions')}
               </h3>
-              <div className="flex flex-col gap-2 mt-3">
-                <Button
-                  variant="secondary"
-                  className="justify-start"
-                  onClick={() => setCreateOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                  {t('workspace.create')}
-                </Button>
-                <label className="inline-flex">
-                  <Button variant="secondary" className="justify-start cursor-pointer w-full">
-                    <Upload className="h-4 w-4" />
-                    {t('workspace.import')}
+                <div className="flex flex-col gap-2 mt-3">
+                  <Button
+                    variant="secondary"
+                    className="justify-start"
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('workspace.create')}
                   </Button>
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void handleImport(f);
-                      e.currentTarget.value = '';
+                  <label className="inline-flex">
+                    <Button variant="secondary" className="justify-start cursor-pointer w-full">
+                      <Upload className="h-4 w-4" />
+                      {t('workspace.import')}
+                    </Button>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleImport(f);
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                  <Button
+                    variant="secondary"
+                    className="justify-start"
+                    onClick={() => {
+                      const ws = (workspaces ?? [])[0];
+                      if (ws) void handleExportMarkdown(ws.id, ws.name);
                     }}
-                  />
-                </label>
-              </div>
+                    disabled={(workspaces ?? []).length === 0}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {t('workspace.exportMarkdown')}
+                  </Button>
+                </div>
             </CardContent>
           </Card>
 
@@ -317,14 +351,14 @@ export function WorkspaceSelector() {
             <CardContent>
               <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                 <Users className="h-4 w-4 text-accent" />
-                核心
+                {t('workspace.coreFeatures')}
               </h3>
               <ul className="text-xs text-text-secondary mt-3 space-y-1.5">
                 <li>• 时间轴、轨道、事件</li>
                 <li>• 角色档案与关系</li>
                 <li>• 大纲、统计、笔记</li>
                 <li>• 三套暖色主题</li>
-                <li>• JSON 导入/导出</li>
+                <li>• JSON / Markdown 导入/导出</li>
               </ul>
             </CardContent>
           </Card>

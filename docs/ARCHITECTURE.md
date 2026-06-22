@@ -24,6 +24,8 @@
 | UI 原语 | **Radix UI** | 无障碍交互（对话框、菜单、Tooltip） |
 | 表单 | **React Hook Form + Zod** | 类型安全的表单与校验 |
 | 日期 | **date-fns** | 日期处理 |
+| Markdown 导出 | **后端字符串模板** | v1.1 新增 |
+| HTML 转 Markdown | **turndown** | 未来用于反向转换 |
 | 后端语言 | **Rust（stable）** | Tauri 原生 |
 | 数据库 | **SQLite + rusqlite** | 嵌入式本地数据库 |
 | 序列化 | **serde + serde_json** | Rust ↔ JSON |
@@ -184,9 +186,23 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
 - **虚拟列表**：角色卡片、笔记列表用 `@tanstack/react-virtual`。
 - **数据库索引**：`events(workspace_id, track_id, date)`、`characters(workspace_id)` 等关键查询索引。
 - **事务**：所有跨表写入使用 SQLite 事务，失败回滚。
-- **自动备份**：每次启动时复制 `.db` 到 `backups/`，保留最近 10 份。
+- **自动备份**：v1.0 起在 Tauri `setup` hook 中调用
+  `services::backup::backup_workspace_db`，每次启动把当前 `.db` 滚动复制到
+  `<app-data>/backups/plotline-<ISO8601>.db`，按文件名时间戳保留最近 10 份；
+  失败仅 `log::warn!`，不阻塞主流程。
+- **自动更新**：v1.0 起集成 `tauri-plugin-updater`，manifest endpoint 指向
+  GitHub Releases，签名采用 Ed25519。详见 ADR-010。
+- **一致性检查**：`services::consistency::check_event_conflicts` 检测同一角色
+  在同一时间点跨多轨道的冲突，前端 `TimelineView` 工具栏可手动触发。
+- **事件连接与伏笔追踪**：v1.1 起 `event_connections` 表正式启用，`TimelineView`
+  可创建因果/伏笔连接，`StatisticsView` 展示伏笔生命周期。详见 ADR-015。
+- **撤销/重做**：v1.1 起前端维护命令历史栈（Zustand middleware），覆盖事件、轨道、
+  角色、笔记、大纲节点的创建/更新/删除。详见 ADR-014。
+- **Markdown 导出**：v1.1 起后端 `services::export` 支持导出工作区/大纲为 Markdown。
+  详见 ADR-013。
 - **崩溃恢复**：应用启动时检测 `.db.lock`，若存在则提示恢复。
-- **撤销/重做**：前端维护操作历史栈（Zustand middleware），仅对编辑类操作生效。
+- **动效一致性**：`src/lib/motion.ts` 暴露 fast/base/slow 三档 token，所有
+  framer-motion `transition` 必须引用 token，禁止字面量。详见 ADR-008。
 
 ---
 
@@ -200,8 +216,16 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
 4. **ADR-004**：时间轴用 SVG + Framer Motion —— 矢量、可访问、动画自然。
 5. **ADR-005**：前后端类型同步采用手工维护 + Zod 运行时校验 —— 避免 codegen 复杂度。
 6. **ADR-006**：自动保存采用"每次变更立即落库"而非定时保存 —— 数据零丢失。
+7. **ADR-008**：集中化动效 token（fast/base/slow）—— 一致缓动 + 微交互提速。
+8. **ADR-009**：启动时滚动备份 SQLite —— 本地优先的数据保护兜底。
+9. **ADR-010**：自动更新通过 `tauri-plugin-updater` + GitHub Releases —— Ed25519 签名。
+10. **ADR-011**：一致性检查先做最小切片 —— 同一角色跨轨道时间点冲突。
+11. **ADR-012**：富文本编辑器采用 TipTap 2 —— 可扩展、React 友好。
+12. **ADR-013**：Markdown 导出采用后端模板生成 —— 创作者通用格式。
+13. **ADR-014**：撤销/重做采用前端命令历史栈 —— 不改动后端、覆盖主要 CRUD。
+14. **ADR-015**：事件连接与伏笔追踪 —— 启用 `event_connections` 并暴露到前端。
 
 ---
 
-> 文档版本：v0.2.0  
+> 文档版本：v1.1.0  
 > 最后更新：2026-06-22

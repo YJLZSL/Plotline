@@ -3,6 +3,7 @@ import type {
   ConnectEventsInput,
   CreateEventInput,
   Event,
+  EventConnection,
   UpdateEventInput,
 } from '@/types';
 
@@ -28,4 +29,19 @@ export function connectEvents(input: ConnectEventsInput): Promise<void> {
 
 export function disconnectEvents(sourceId: string, targetId: string): Promise<void> {
   return invoke<void>('disconnect_events', { sourceId, targetId });
+}
+
+export function listEventConnections(workspaceId: string): Promise<EventConnection[]> {
+  return invoke<EventConnection[]>('list_event_connections', { workspaceId });
+}
+
+export interface ConsistencyConflict {
+  characterId: string;
+  dateValue: string;
+  eventIds: string[];
+  trackIds: string[];
+}
+
+export function checkConsistency(workspaceId: string): Promise<ConsistencyConflict[]> {
+  return invoke<ConsistencyConflict[]>('check_consistency', { workspaceId });
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sun, Moon, BookOpen, Check, RotateCcw } from 'lucide-react';
+import { Sun, Moon, BookOpen, Check, RotateCcw, RefreshCw } from 'lucide-react';
 
 import {
   Button,
@@ -12,9 +12,14 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
+import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
 import type { AppSettings, Language, Theme } from '@/types';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
+import { checkForUpdates } from '@/features/settings/updater';
 import { useThemeStore } from '@/stores/ui';
+
+const APP_VERSION = '1.1.0';
 
 interface SettingsViewProps {
   workspaceId: string;
@@ -46,6 +51,25 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      const result = await checkForUpdates(APP_VERSION);
+      if (result.available) {
+        toastSuccess(
+          `${t('settings.updateAvailable', { version: result.latestVersion ?? '?' })}`,
+        );
+      } else {
+        toastInfo(t('settings.updateUpToDate'));
+      }
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   useEffect(() => {
     if (settings && !draft) {
@@ -120,7 +144,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
             key={tab}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            transition={MOTION_BASE}
             className="max-w-2xl mx-auto"
           >
             {tab === 'appearance' && (
@@ -331,13 +355,33 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                 <Card>
                   <CardContent>
                     <h2 className="text-base font-bold text-text-primary">Plotline</h2>
-                    <p className="text-xs text-text-secondary mt-1">v0.2.0</p>
+                    <p className="text-xs text-text-secondary mt-1">v{APP_VERSION}</p>
                     <p className="text-sm text-text-secondary mt-3">
                       面向小说作者、编剧与游戏叙事设计师的本地优先创作工作台。
                     </p>
                     <p className="text-xs text-text-secondary/60 mt-4">
                       技术栈：Tauri 2 + React 18 + TypeScript + Tailwind CSS v4 + SQLite
                     </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent>
+                    <h3 className="text-sm font-semibold text-text-primary">
+                      {t('settings.checkUpdateTitle')}
+                    </h3>
+                    <p className="text-xs text-text-secondary mt-1">
+                      {t('settings.checkUpdateDesc')}
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-3 gap-2"
+                      loading={checkingUpdate}
+                      onClick={handleCheckUpdate}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      {t('settings.checkUpdateCta')}
+                    </Button>
                   </CardContent>
                 </Card>
               </div>

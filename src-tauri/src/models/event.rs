@@ -15,8 +15,19 @@ pub struct Event {
     pub status: String,
     pub color: Option<String>,
     pub character_ids: Vec<String>,
+    pub connected_event_ids: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventConnection {
+    pub source_id: String,
+    pub target_id: String,
+    pub source_title: String,
+    pub target_title: String,
+    pub connection_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
