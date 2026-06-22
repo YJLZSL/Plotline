@@ -4,7 +4,7 @@
   "pub_date": "2026-06-23T00:35:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "PENDING_CI_SIGNATURE",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSEFhNThtQVJDRmNzQldpcUdoa1NZUjRaeVZoeVo1bXZZdHQ5MWZTRnVIQXRlUDVESm4yQ3cwSnEySHFrc0xqQTlGc0NSaWR5L0dnTHZ4YzhINXd1c1hrenhzdGE1cHdJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTQ4NTU1CWZpbGU6UGxvdGxpbmVfMS41LjBfeDY0LXNldHVwLmV4ZQpXbGR4TnB3YWp3Tm4wam5RZG9tY2J6VFhWTmM2djlvYnRsUlpvMWQyYkp1WGlxbU5tam9PVE1uaWtJbGU1UVU4NVdSWHF1N2NHTTB4QVljMGNHOVVEZz09Cg==",
       "url": "https://github.com/YJLZSL/Plotline/releases/download/v1.5.0/Plotline_1.5.0_x64-setup.exe"
     }
   }
