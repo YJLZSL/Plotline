@@ -4,12 +4,17 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## v1.3.0 发布操作手册（运营者步骤）
+## v1.4.0 发布操作手册（运营者步骤）
 
-> **状态**：v1.3.0 已发布 ✅  
-> Release 地址：https://github.com/YJLZSL/Plotline/releases/tag/v1.3.0
+> **状态**：v1.4.0 已发布 ✅  
+> Release 地址：https://github.com/YJLZSL/Plotline/releases/tag/v1.4.0
 
-后续版本（v1.4.0+）可按以下步骤发布：
+v1.4.0 由 `feat/v1.4-ai-vn-map` 分支经 GitHub Actions `release.yml` 自动构建并上传，
+产物包括 `Plotline_1.4.0_x64-setup.exe`、`Plotline_1.4.0_x64_en-US.msi` 与 `latest.json`。
+旧版客户端（v1.3.0+）通过 `https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json`
+检测更新并可在应用内一键安装。
+
+后续版本（v1.5.0+）可按以下步骤发布：
 
 1. **签名密钥对**（已在 v1.3.0 生成，私钥务必安全保管，不可提交）：
    - 私钥：`keys/plotline.key`（已加入 `.gitignore`）
@@ -43,8 +48,10 @@
    一起上传到对应的 GitHub Release（应用内更新客户端轮询的就是 `latest.json`）。
    
    > 若 CI 构建失败或需要手动上传，可使用 [GitHub MCP 插件](https://github.com/cli/cli) 或 `gh` CLI 直接创建 Release 并上传产物。
-6. **验证自动更新**：启动已安装的旧版本，应用在启动时会自动检查更新；
-   也可在 *设置 → 关于 → 检查更新* 手动触发。检测到新版本后会自动下载并安装。
+6. **验证自动更新**：启动已安装的旧版本，应用在启动时会自动弹出应用内更新提示；
+   也可在 *设置 → 关于 → 检查更新* 手动触发。点击「下载并安装」后应用会自动关闭并替换为新版本。
+
+---
 
 ### Windows 本地构建前置条件
 
@@ -55,6 +62,54 @@
 
 若两者都缺失，`pnpm tauri build` 会在打包阶段失败但 Rust 部分会成功编译。
 推荐通过 GitHub Actions 的 `release.yml` 完成跨平台打包，本机仅做开发预览。
+
+---
+
+## [1.4.0] - 2026-06-22
+
+**目标**：补齐 AI 创作助手（KV 缓存 + RAG 检索增强）、VN 与地图高级功能、
+全新开场动画与美术动效打磨，并发布 v1.4.0 Windows 安装包，实现旧版应用内自动更新。
+
+### 新增
+- **AI 创作助手** (`src/components/layout/AiAssistantPanel.tsx` +
+  `src-tauri/src/services/ai.rs` + `src-tauri/src/commands/ai.rs`)：
+  工作区右侧滑出面板，支持多会话、角色消息、OpenAI 兼容 API 调用。
+  引入 KV 缓存 (`ai_kv`) 保存常用上下文，RAG 倒排索引 (`ai_chunks` /
+  `ai_chunk_terms`) 基于工作区内容检索增强生成，降低 Token 消耗并提升回答相关性。
+- **VN 功能增强** (`src/components/views/VnView.tsx` + `src/features/vn/*` +
+  `src-tauri/src/services/vn.rs`)：
+  台词支持排序与类型切换，新增场景关系图，预览模式升级，支持导出 Ren'Py 脚本。
+- **地图功能增强** (`src/components/views/MapView.tsx` + `src/features/map/*` +
+  `src-tauri/src/services/location.rs`)：
+  地点节点支持自定义 emoji / Lucide 图标，连线可编辑标签，新增角色足迹连线，
+  支持将地图导出为 PNG。
+- **全新开场动画** (`src/components/layout/SplashOverlay.tsx`)：
+  羽毛笔沿时间线书写的品牌动画，支持在设置中关闭或调整时长 (0.8s–4s)，
+  并遵循 `prefers-reduced-motion`。
+- **应用内自动更新升级** (`src/App.tsx` + `src/features/settings/updater.ts` +
+  `src/components/views/SettingsView.tsx`)：
+  关闭 Tauri 原生更新弹窗，改为启动时应用内 ConfirmDialog 提示，
+  设置页保留手动检查入口，均可一键下载安装，无需用户手动卸载旧版。
+- **新数据迁移** `004_ai_assistant.sql`：扩展 `app_settings` 的 AI 配置与开场动画开关。
+- **新单元测试**：`SplashOverlay.test.tsx`、`MapView.test.tsx`、`VnView.test.tsx`、
+  Rust 端 `services::ai::tests` 与 `services::vn::tests`。
+
+### 变更
+- **应用版本号** 从 `1.3.0` 同步升级到 `1.4.0`（`package.json`、
+  `src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`SettingsView`、
+  `WorkspaceLayout`、`App` 等）。
+- `tauri.conf.json` 中 `plugins.updater.dialog` 设为 `false`，由前端完全接管更新交互。
+- `release.yml` 增加 NSIS 安装步骤，确保 Windows NSIS 安装包在 CI 中正常产出。
+
+### 修复
+- 修复 `SettingsView` 版本号硬编码不一致问题。
+- 修复地点删除后右侧面板未清空的问题。
+- 清理 Rust 端 Clippy warning（冗余闭包、无用 `Into::into`、未使用字段）。
+
+### 文档
+- 更新 `AGENTS.md` 当前迭代状态至 v1.3.0 完成、v1.4.0 方向。
+
+---
 
 ## [1.3.0] - 2026-06-22
 
