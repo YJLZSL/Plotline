@@ -239,6 +239,25 @@
       "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。"
     }
   },
+  "pomodoro": {
+    "title": "番茄钟",
+    "themeWarm": "暖色",
+    "themeMc": "MC",
+    "themeMinimal": "极简",
+    "phaseFocus": "专注",
+    "phaseShortBreak": "短休",
+    "phaseLongBreak": "长休",
+    "phaseHint": {
+      "focus": "保持专注，完成这段创作",
+      "shortBreak": "短暂休息，喝口水",
+      "longBreak": "好好休息，放松一下"
+    },
+    "completedSessions": "已完成 {{count}} 个番茄",
+    "start": "开始",
+    "pause": "暂停",
+    "reset": "重置",
+    "skip": "跳过"
+  },
   "settings": {
     "title": "设置",
     "appearance": "外观",

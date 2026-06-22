@@ -239,6 +239,25 @@
       "description": "Create your first VN scene with dialog, narration, and branching choices."
     }
   },
+  "pomodoro": {
+    "title": "Pomodoro",
+    "themeWarm": "Warm",
+    "themeMc": "MC",
+    "themeMinimal": "Minimal",
+    "phaseFocus": "Focus",
+    "phaseShortBreak": "Short Break",
+    "phaseLongBreak": "Long Break",
+    "phaseHint": {
+      "focus": "Stay focused on your creation",
+      "shortBreak": "Take a short break, drink some water",
+      "longBreak": "Take a good rest and relax"
+    },
+    "completedSessions": "{{count}} pomodoros completed",
+    "start": "Start",
+    "pause": "Pause",
+    "reset": "Reset",
+    "skip": "Skip"
+  },
   "settings": {
     "title": "Settings",
     "appearance": "Appearance",

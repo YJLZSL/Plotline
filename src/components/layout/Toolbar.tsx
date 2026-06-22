@@ -38,17 +38,19 @@ export function Toolbar({ title, workspaceId, workspaceName, right }: ToolbarPro
         <h1 className="text-sm font-medium text-text-secondary truncate">{title}</h1>
       </div>
 
-      <div className="flex-1" />
+      <div className="flex-1 min-w-0" />
 
-      <div className="relative hidden md:block">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-secondary" />
-        <Input
-          placeholder={t('common.search')}
-          className="pl-8 h-8 w-56 text-xs bg-bg-elevated border-transparent focus:border-border"
-        />
+      <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+        <div className="relative hidden md:block">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-secondary" />
+          <Input
+            placeholder={t('common.search')}
+            className="pl-8 h-8 w-56 text-xs bg-bg-elevated border-transparent focus:border-border"
+          />
+        </div>
+
+        {right}
       </div>
-
-      {right}
     </header>
   );
 }

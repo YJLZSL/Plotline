@@ -314,24 +314,33 @@ function LocationNode({
   onEdit: () => void;
 }) {
   const [dragging, setDragging] = useState(false);
-  const startRef = useRef<{ x: number; y: number; sx: number; sy: number } | null>(null);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMove = (e: MouseEvent) => {
+      if (!startRef.current) return;
+      const dx = e.clientX - startRef.current.x;
+      const dy = e.clientY - startRef.current.y;
+      onDrag(dx, dy);
+      startRef.current = { x: e.clientX, y: e.clientY };
+    };
+    const handleUp = () => {
+      setDragging(false);
+      startRef.current = null;
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [dragging, onDrag]);
 
   const handleDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     setDragging(true);
-    startRef.current = { x: e.clientX, y: e.clientY, sx: location.posX, sy: location.posY };
-  };
-
-  const handleMove = (e: React.MouseEvent) => {
-    if (!dragging || !startRef.current) return;
-    const dx = e.clientX - startRef.current.x;
-    const dy = e.clientY - startRef.current.y;
-    onDrag(dx, dy);
-  };
-
-  const handleUp = () => {
-    setDragging(false);
-    startRef.current = null;
+    startRef.current = { x: e.clientX, y: e.clientY };
   };
 
   return (
@@ -340,15 +349,12 @@ function LocationNode({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ ...MOTION_BASE, delay: Math.min(index * 0.02, 0.1) }}
       transform={`translate(${location.posX}, ${location.posY})`}
-      className="cursor-grab active:cursor-grabbing"
+      className={cn('cursor-grab', dragging && 'cursor-grabbing')}
       onClick={(e) => {
         e.stopPropagation();
         if (!dragging) onClick();
       }}
       onMouseDown={handleDown}
-      onMouseMove={handleMove}
-      onMouseUp={handleUp}
-      onMouseLeave={handleUp}
       onDoubleClick={(e) => {
         e.stopPropagation();
         onEdit();
