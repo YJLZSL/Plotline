@@ -61,3 +61,26 @@ export interface AiKvEntry {
   value: string;
   updatedAt: string;
 }
+
+export interface AiInsertInput {
+  workspaceId: string;
+  target: 'note' | 'outline' | 'event' | 'vn_scene';
+  content: string;
+  trackId?: string;
+}
+
+export interface AiInsertResult {
+  target: string;
+  id: string;
+  title: string;
+}
+
+export interface ListAiModelsInput {
+  baseUrl: string;
+  apiKey: string;
+}
+
+export interface AiModelInfo {
+  id: string;
+  ownedBy?: string;
+}

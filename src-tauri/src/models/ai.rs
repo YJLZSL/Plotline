@@ -98,3 +98,34 @@ pub struct AiKvEntry {
     pub value: String,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiInsertInput {
+    pub workspace_id: String,
+    pub target: String, // note | outline | event | vn_scene
+    pub content: String,
+    pub track_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiInsertResult {
+    pub target: String,
+    pub id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListAiModelsInput {
+    pub base_url: String,
+    pub api_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiModelInfo {
+    pub id: String,
+    pub owned_by: Option<String>,
+}

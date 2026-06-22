@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
-use crate::models::{AiChatInput, AiChatResult, AiKvEntry, AiMessage, AiSession, CreateAiMessageInput, CreateAiSessionInput};
+use crate::models::{AiChatInput, AiChatResult, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiSession, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput};
 use crate::services::settings::read_settings;
 use crate::AppState;
 
@@ -161,4 +161,16 @@ pub fn ai_kv_set(state: State<'_, AppState>, entry: AiKvEntry) -> AppResult<AiKv
     with_db!(state, |conn| crate::services::ai::kv_set(conn, entry))
 }
 
+#[tauri::command]
+pub async fn list_ai_models(input: ListAiModelsInput) -> AppResult<Vec<AiModelInfo>> {
+    crate::services::ai::list_models(&input.base_url, &input.api_key).await
+}
+
+#[tauri::command]
+pub fn apply_ai_output(
+    state: State<'_, AppState>,
+    input: AiInsertInput,
+) -> AppResult<AiInsertResult> {
+    with_db!(state, |conn| crate::services::ai::apply_output(conn, &input))
+}
 

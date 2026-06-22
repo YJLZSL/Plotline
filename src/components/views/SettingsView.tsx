@@ -72,6 +72,7 @@ import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { useThemeStore } from '@/stores/ui';
 import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
+import { useAiModelsQuery } from '@/features/ai/hooks';
 import { APP_VERSION } from '@/lib/version';
 
 interface SettingsViewProps {
@@ -112,6 +113,11 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
+  const modelsQuery = useAiModelsQuery(
+    draft?.aiBaseUrl ?? '',
+    draft?.aiApiKey ?? '',
+    Boolean(draft?.aiEnabled),
+  );
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [installUpdate, setInstallUpdate] = useState<(() => Promise<void>) | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
@@ -513,11 +519,34 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                   })()}
                 </Section>
                 <Section title={t('settings.aiModel')}>
-                  <Input
-                    value={draft.aiModel}
-                    onChange={(e) => set({ aiModel: e.target.value })}
-                    placeholder={getProviderPreset(draft.aiProvider).defaultModel || 'gpt-4o-mini'}
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={draft.aiModel}
+                      onChange={(e) => set({ aiModel: e.target.value })}
+                      className="flex-1 h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
+                    >
+                      <option value="">
+                        {getProviderPreset(draft.aiProvider).defaultModel || 'gpt-4o-mini'}
+                      </option>
+                      {modelsQuery.data?.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      loading={modelsQuery.isFetching}
+                      onClick={() => modelsQuery.refetch()}
+                      title={t('ai.refreshModels')}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {modelsQuery.error && (
+                    <p className="mt-1.5 text-xs text-red-500">{t('ai.modelListError')}</p>
+                  )}
                 </Section>
                 <Section title={t('settings.aiApiKey')}>
                   <Input

@@ -269,6 +269,28 @@
     "reset": "Reset",
     "skip": "Skip"
   },
+  "ai": {
+    "title": "AI Assistant",
+    "newSession": "New Session",
+    "sessions": "Sessions",
+    "placeholder": "Type a message and press Enter…",
+    "empty": "No sessions yet",
+    "emptyEnabled": "Select a session or type a message to start",
+    "disabledTitle": "AI Assistant Disabled",
+    "disabledDescription": "Enable AI Assistant and configure API in settings.",
+    "index": "Index Workspace",
+    "indexing": "Indexing…",
+    "thinking": "AI is thinking…",
+    "send": "Send",
+    "context": "Workspace Summary",
+    "ragHint": "RAG enabled: AI will reference workspace materials",
+    "insertNote": "Insert as Note",
+    "insertOutline": "Insert as Outline",
+    "insertEvent": "Insert as Event",
+    "insertVnScene": "Insert as VN Scene",
+    "refreshModels": "Refresh Models",
+    "modelListError": "Failed to fetch model list"
+  },
   "settings": {
     "title": "Settings",
     "appearance": "Appearance",

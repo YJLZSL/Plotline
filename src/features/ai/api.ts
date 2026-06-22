@@ -3,11 +3,15 @@ import type {
   AiChatInput,
   AiChatResult,
   AiChunk,
+  AiInsertInput,
+  AiInsertResult,
   AiKvEntry,
   AiMessage,
+  AiModelInfo,
   AiSession,
   CreateAiMessageInput,
   CreateAiSessionInput,
+  ListAiModelsInput,
 } from '@/types';
 
 export function createAiSession(input: CreateAiSessionInput): Promise<AiSession> {
@@ -59,4 +63,12 @@ export function aiSearchChunks(
   limit?: number,
 ): Promise<AiChunk[]> {
   return invoke<AiChunk[]>('ai_search_chunks', { workspaceId, query, limit });
+}
+
+export function listAiModels(input: ListAiModelsInput): Promise<AiModelInfo[]> {
+  return invoke<AiModelInfo[]>('list_ai_models', { input });
+}
+
+export function applyAiOutput(input: AiInsertInput): Promise<AiInsertResult> {
+  return invoke<AiInsertResult>('apply_ai_output', { input });
 }

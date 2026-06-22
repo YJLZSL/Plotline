@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    AiChunk, AiKvEntry, AiMessage, AiRole, AiSearchResult, AiSession, CreateAiMessageInput,
-    CreateAiSessionInput,
+    AiChunk, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRole,
+    AiSearchResult, AiSession, CreateAiMessageInput, CreateAiSessionInput,
 };
 
 const DEFAULT_SYSTEM_PROMPT: &str = "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答。";
@@ -435,6 +435,17 @@ struct OpenAiChatResponse {
     choices: Vec<OpenAiChoice>,
 }
 
+#[derive(Debug, Deserialize)]
+struct OpenAiModel {
+    id: String,
+    owned_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiModelList {
+    data: Vec<OpenAiModel>,
+}
+
 pub async fn call_chat_api(
     settings: &crate::models::AppSettings,
     history: &[AiMessage],
@@ -522,6 +533,175 @@ pub async fn call_chat_api(
         .next()
         .map(|c| c.message.content)
         .ok_or_else(|| AppError::Internal("AI 响应为空".into()))
+}
+
+pub async fn list_models(base_url: &str, api_key: &str) -> AppResult<Vec<AiModelInfo>> {
+    let base_url = base_url.trim().trim_end_matches('/');
+    if base_url.is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API 基础地址".into()));
+    }
+    if api_key.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API Key".into()));
+    }
+
+    let url = format!("{}/models", base_url);
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("获取模型列表失败: {}", e)))?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_else(|_| "未知错误".into());
+        return Err(AppError::Internal(format!("模型列表 API 错误: {}", body)));
+    }
+
+    let payload: OpenAiModelList = response
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("解析模型列表失败: {}", e)))?;
+
+    let mut models: Vec<AiModelInfo> = payload
+        .data
+        .into_iter()
+        .map(|m| AiModelInfo {
+            id: m.id,
+            owned_by: m.owned_by,
+        })
+        .collect();
+    models.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(models)
+}
+
+fn parse_title_body(content: &str) -> (String, String) {
+    let lines: Vec<&str> = content.lines().collect();
+    let title = lines
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .unwrap_or_else(|| "AI 生成内容".into());
+    let body = lines
+        .iter()
+        .skip_while(|l| l.trim().is_empty())
+        .skip(1)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string();
+    (title, body)
+}
+
+pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiInsertResult> {
+    let (title, body) = parse_title_body(&input.content);
+    match input.target.as_str() {
+        "note" => {
+            let note = crate::services::note::create(
+                conn,
+                crate::models::CreateNoteInput {
+                    workspace_id: Some(input.workspace_id.clone()),
+                    folder_id: None,
+                    title: title.clone(),
+                    content: Some(body),
+                    tags: None,
+                    is_folder: Some(false),
+                },
+            )?;
+            Ok(AiInsertResult {
+                target: "note".into(),
+                id: note.id,
+                title: note.title,
+            })
+        }
+        "outline" => {
+            let node = crate::services::outline::create(
+                conn,
+                crate::models::CreateOutlineNodeInput {
+                    workspace_id: input.workspace_id.clone(),
+                    r#type: Some("scene".into()),
+                    title: title.clone(),
+                    content: Some(body),
+                    parent_id: None,
+                    event_id: None,
+                },
+            )?;
+            Ok(AiInsertResult {
+                target: "outline".into(),
+                id: node.id,
+                title: node.title,
+            })
+        }
+        "event" => {
+            let track_id = match &input.track_id {
+                Some(id) => id.clone(),
+                None => {
+                    let tracks = crate::services::track::list(conn, &input.workspace_id)?;
+                    tracks
+                        .into_iter()
+                        .next()
+                        .map(|t| t.id)
+                        .ok_or_else(|| AppError::InvalidInput("工作区没有可用轨道，无法创建事件".into()))?
+                }
+            };
+            let event = crate::services::event::create(
+                conn,
+                crate::models::CreateEventInput {
+                    workspace_id: input.workspace_id.clone(),
+                    track_id,
+                    title: title.clone(),
+                    description: Some(body),
+                    date_type: None,
+                    date_value: None,
+                    sort_order: None,
+                    status: None,
+                    color: None,
+                    character_ids: None,
+                },
+            )?;
+            Ok(AiInsertResult {
+                target: "event".into(),
+                id: event.id,
+                title: event.title,
+            })
+        }
+        "vn_scene" => {
+            let scene = crate::services::vn::create_scene(
+                conn,
+                crate::models::CreateVnSceneInput {
+                    workspace_id: input.workspace_id.clone(),
+                    title: title.clone(),
+                    background: None,
+                    outline_node_id: None,
+                },
+            )?;
+            if !body.is_empty() {
+                let _ = crate::services::vn::create_line(
+                    conn,
+                    crate::models::CreateVnLineInput {
+                        scene_id: scene.id.clone(),
+                        line_type: Some("narration".into()),
+                        character_id: None,
+                        speaker_name: None,
+                        text: Some(body),
+                        emotion: None,
+                        choice_label: None,
+                        choice_target_scene_id: None,
+                    },
+                );
+            }
+            Ok(AiInsertResult {
+                target: "vn_scene".into(),
+                id: scene.id,
+                title: scene.title,
+            })
+        }
+        _ => Err(AppError::InvalidInput(format!(
+            "不支持的 AI 插入目标: {}",
+            input.target
+        ))),
+    }
 }
 
 #[cfg(test)]

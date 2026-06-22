@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { AiKvEntry, AiMessage, AiSession } from '@/types';
-import { toastError } from '@/stores/toast';
+import type { AiInsertInput, AiKvEntry, AiMessage, AiSession } from '@/types';
+import { toastError, toastSuccess } from '@/stores/toast';
 
 import {
   addAiMessage as apiAddMessage,
@@ -9,9 +9,11 @@ import {
   aiIndexWorkspace as apiIndexWorkspace,
   aiKvGet as apiKvGet,
   aiKvSet as apiKvSet,
+  applyAiOutput as apiApplyOutput,
   createAiSession as apiCreateSession,
   deleteAiSession as apiDeleteSession,
   listAiMessages as apiListMessages,
+  listAiModels as apiListModels,
   listAiSessions as apiListSessions,
 } from './api';
 
@@ -120,6 +122,39 @@ export function useAiKvSet(workspaceId: string, key: string) {
       apiKvSet({ workspaceId, key, value, updatedAt: new Date().toISOString() }),
     onSuccess: (entry) => {
       qc.setQueryData<AiKvEntry>(aiKvKey(workspaceId, key), entry);
+    },
+    onError: toastError,
+  });
+}
+
+export const aiModelsKey = (baseUrl: string) => ['aiModels', baseUrl] as const;
+
+export function useAiModelsQuery(baseUrl: string, apiKey: string, enabled: boolean) {
+  return useQuery({
+    queryKey: aiModelsKey(baseUrl),
+    queryFn: () => apiListModels({ baseUrl, apiKey }),
+    enabled: enabled && baseUrl.trim().length > 0 && apiKey.trim().length > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useApplyAiOutput(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<AiInsertInput, 'workspaceId'>) =>
+      apiApplyOutput({ ...input, workspaceId }),
+    onSuccess: (result) => {
+      toastSuccess(`已创建 ${result.title}`);
+      if (result.target === 'note') {
+        qc.invalidateQueries({ queryKey: ['notes', workspaceId] });
+      } else if (result.target === 'outline') {
+        qc.invalidateQueries({ queryKey: ['outlineNodes', workspaceId] });
+      } else if (result.target === 'event') {
+        qc.invalidateQueries({ queryKey: ['events', workspaceId] });
+        qc.invalidateQueries({ queryKey: ['timeline', workspaceId] });
+      } else if (result.target === 'vn_scene') {
+        qc.invalidateQueries({ queryKey: ['vnScenes', workspaceId] });
+      }
     },
     onError: toastError,
   });

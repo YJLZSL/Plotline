@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bot,
+  Calendar,
+  Clapperboard,
+  ListTree,
   MessageSquarePlus,
   PanelRightClose,
   Send,
   Sparkles,
+  StickyNote,
   X,
 } from 'lucide-react';
 
@@ -21,6 +25,7 @@ import {
   useAiKvGet,
   useAiMessagesQuery,
   useAiSessionsQuery,
+  useApplyAiOutput,
   useCreateAiSession,
   useDeleteAiSession,
 } from '@/features/ai/hooks';
@@ -186,7 +191,7 @@ export function AiAssistantPanel({
                     />
                   )}
                   {messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} />
+                    <MessageBubble key={msg.id} message={msg} workspaceId={workspaceId} />
                   ))}
                   {chat.isPending && (
                     <div className="flex items-center gap-2 text-xs text-text-secondary">
@@ -294,10 +299,26 @@ function SessionList({
   );
 }
 
-function MessageBubble({ message }: { message: { role: string; content: string } }) {
+function MessageBubble({
+  message,
+  workspaceId,
+}: {
+  message: { id: string; role: string; content: string };
+  workspaceId: string;
+}) {
+  const { t } = useI18n();
   const isUser = message.role === 'user';
+  const apply = useApplyAiOutput(workspaceId);
+
+  const actions: Array<{ target: 'note' | 'outline' | 'event' | 'vn_scene'; icon: React.ReactNode; label: string }> = [
+    { target: 'note', icon: <StickyNote className="h-3 w-3" />, label: t('ai.insertNote') },
+    { target: 'outline', icon: <ListTree className="h-3 w-3" />, label: t('ai.insertOutline') },
+    { target: 'event', icon: <Calendar className="h-3 w-3" />, label: t('ai.insertEvent') },
+    { target: 'vn_scene', icon: <Clapperboard className="h-3 w-3" />, label: t('ai.insertVnScene') },
+  ];
+
   return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex flex-col', isUser ? 'items-end' : 'items-start')}>
       <div
         className={cn(
           'max-w-[85%] rounded-[12px] px-3 py-2 text-sm whitespace-pre-wrap',
@@ -308,6 +329,22 @@ function MessageBubble({ message }: { message: { role: string; content: string }
       >
         {message.content}
       </div>
+      {!isUser && (
+        <div className="flex flex-wrap gap-1 mt-1.5 max-w-[85%]">
+          {actions.map((a) => (
+            <button
+              key={a.target}
+              onClick={() => apply.mutate({ target: a.target, content: message.content })}
+              disabled={apply.isPending}
+              className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] bg-bg-elevated border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-colors disabled:opacity-50"
+              title={a.label}
+            >
+              {a.icon}
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

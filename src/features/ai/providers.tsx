@@ -5,7 +5,7 @@
  * 因此后端 `services::ai::call_chat_api` 无需改动，只需在前端预设好
  * provider id / baseUrl / 推荐模型，用户即可一键切换。
  *
- * 图标采用各厂商官方 SVG 的简化版（单色 currentColor），
+ * 图标采用各厂商官方/高辨识度 SVG 的简化单色版（currentColor），
  * 在设置页与 AI 助手面板顶部展示，保证视觉一致。
  */
 
@@ -24,7 +24,7 @@ export interface AiProviderPreset {
   description: string;
   /** 官方品牌色（用于图标圆形背景） */
   color: string;
-  /** 官方标志的简化单色 SVG（24x24 viewBox，使用 currentColor） */
+  /** 品牌 SVG（24x24 viewBox，使用 currentColor） */
   icon: React.ReactNode;
 }
 
@@ -36,14 +36,16 @@ const iconProps = {
   xmlns: 'http://www.w3.org/2000/svg',
 } as const;
 
-/**
- * 内联品牌图标。均为各厂商官方 logo 的简化矢量版，
- * 统一使用 currentColor 以适配明暗主题。
- */
 const OpenAiIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 2 L14.5 7 L20 8 L16 12 L17 18 L12 15.5 L7 18 L8 12 L4 8 L9.5 7 Z"
+      d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M12 7l4.33 2.5v5L12 17 7.67 14.5v-5L12 7z"
       fill="currentColor"
     />
   </svg>
@@ -52,20 +54,18 @@ const OpenAiIcon = (
 const SiliconFlowIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M8 4 Q4 8 8 12 Q12 16 16 12 Q20 8 16 4 Q12 0 8 4 Z M9 20 L15 20"
+      d="M2 12c4-4 8 0 12-4s4 8 8 4M2 16c4-4 8 0 12-4s4 8 8 4"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
-      strokeLinejoin="round"
     />
-    <circle cx="12" cy="8" r="2.5" fill="currentColor" />
   </svg>
 );
 
 const VolcanoIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 3 L20 19 L4 19 Z M12 8 L16 17 L8 17 Z"
+      d="M12 3c2 4 6 6 5 11-1 3-3 5-5 6-2-1-4-3-5-6-1-5 3-7 5-11z"
       fill="currentColor"
     />
   </svg>
@@ -74,11 +74,8 @@ const VolcanoIcon = (
 const TencentIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 3 C7 3 4 6 4 10 C4 13 6 15 9 16 L8 20 L12 18 L16 20 L15 16 C18 15 20 13 20 10 C20 6 17 3 12 3 Z M9.5 9 Q12 7 14.5 9 M9 12 Q12 14 15 12"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM7 11h10v2H7v-2z"
+      fill="currentColor"
     />
   </svg>
 );
@@ -86,11 +83,14 @@ const TencentIcon = (
 const DeepSeekIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 2 L12 12 M12 12 Q8 12 6 15 M12 12 Q16 12 18 15 M12 12 Q12 16 10 20 M12 12 Q12 16 14 20"
+      d="M4 20c0-6 5-10 10-10 2 0 4 .5 6 1.5-2-1.5-4.5-2.5-7-2.5-4 0-7 3-7 7 0 1.5.5 2.8 1.5 4H4z"
+      fill="currentColor"
+    />
+    <path
+      d="M14 7c0-2 1.5-3.5 3.5-4M18 6c-1.5 1-2 3-1 5"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
-      strokeLinejoin="round"
     />
   </svg>
 );
@@ -98,7 +98,7 @@ const DeepSeekIcon = (
 const MoonshotIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M19 13 A7 7 0 0 1 10 4 A7 7 0 1 0 19 13 Z"
+      d="M20.3 15.6A9 9 0 1 1 8.4 3.7a7 7 0 1 0 11.9 11.9z"
       fill="currentColor"
     />
   </svg>
@@ -107,7 +107,7 @@ const MoonshotIcon = (
 const ZhipuIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 3 L13.5 9.5 L20 11 L13.5 12.5 L12 19 L10.5 12.5 L4 11 L10.5 9.5 Z"
+      d="M6 5h12v3l-6 8h6v3H6v-3l6-8H6V5z"
       fill="currentColor"
     />
   </svg>
@@ -116,20 +116,19 @@ const ZhipuIcon = (
 const OllamaIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M12 3 Q7 3 7 9 Q7 14 9 17 Q10 19 12 19 Q14 19 15 17 Q17 14 17 9 Q17 3 12 3 Z M10 10 L10 10.5 M14 10 L14 10.5"
+      d="M12 3c-4 0-7 3-7 7 0 2 1 4 3 5v3l4-2 4 2v-3c2-1 3-3 3-5 0-4-3-7-7-7z"
       stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
+      strokeWidth="2"
       strokeLinejoin="round"
     />
-    <path d="M9 14 Q12 15 15 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <circle cx="12" cy="10" r="2" fill="currentColor" />
   </svg>
 );
 
 const CustomIcon = (
   <svg {...iconProps} aria-hidden>
     <path
-      d="M4 6 L20 6 M4 12 L20 12 M4 18 L14 18"
+      d="M4 6h16M4 12h10M4 18h16"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"

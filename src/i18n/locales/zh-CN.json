@@ -283,7 +283,13 @@
     "thinking": "AI 思考中…",
     "send": "发送",
     "context": "工作区摘要",
-    "ragHint": "RAG 已启用，AI 会引用工作区资料"
+    "ragHint": "RAG 已启用，AI 会引用工作区资料",
+    "insertNote": "插入为笔记",
+    "insertOutline": "插入为大纲",
+    "insertEvent": "插入为事件",
+    "insertVnScene": "插入为 VN 场景",
+    "refreshModels": "刷新模型列表",
+    "modelListError": "获取模型列表失败"
   },
   "settings": {
     "title": "设置",
