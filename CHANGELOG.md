@@ -6,6 +6,11 @@
 
 ## v1.3.0 发布操作手册（运营者步骤）
 
+> **状态**：v1.3.0 已发布 ✅  
+> Release 地址：https://github.com/YJLZSL/Plotline/releases/tag/v1.3.0
+
+后续版本（v1.4.0+）可按以下步骤发布：
+
 1. **签名密钥对**（已在 v1.3.0 生成，私钥务必安全保管，不可提交）：
    - 私钥：`keys/plotline.key`（已加入 `.gitignore`）
    - 公钥：`keys/plotline.key.pub`（已填入 `src-tauri/tauri.conf.json`）
@@ -31,11 +36,13 @@
    ```
 5. **推送标签触发 CI 发布**：
    ```bash
-   git tag v1.3.0
-   git push origin v1.3.0
+   git tag v1.4.0
+   git push origin v1.4.0
    ```
    `.github/workflows/release.yml` 会构建 Windows 安装包并连同 `latest.json`
    一起上传到对应的 GitHub Release（应用内更新客户端轮询的就是 `latest.json`）。
+   
+   > 若 CI 构建失败或需要手动上传，可使用 [GitHub MCP 插件](https://github.com/cli/cli) 或 `gh` CLI 直接创建 Release 并上传产物。
 6. **验证自动更新**：启动已安装的旧版本，应用在启动时会自动检查更新；
    也可在 *设置 → 关于 → 检查更新* 手动触发。检测到新版本后会自动下载并安装。
 

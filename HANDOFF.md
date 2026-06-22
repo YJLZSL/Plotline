@@ -123,25 +123,23 @@ cmd //c "vcvarsall.bat x64 && cd /d D:\\AIKFCC\\Plotline && D:\\AIKFCC\\Plotline
 3. **Rust warning**：`src-tauri/src/models/location.rs:62` `workspace_id` 字段未使用，不影响构建，但建议 v1.4 清理或启用。
 4. **Tauri 警告**：`identifier` 以 `.app` 结尾，macOS 上可能冲突；本项目当前只发布 Windows，可忽略或在 v1.4 调整。
 5. **测试范围**：MapView / VnView 的 UI 交互测试尚未补齐，主要以端到端测试覆盖。
-6. **发布流程**：当前仅在本地构建；正式发布需推送 tag `v1.3.0` 触发 `.github/workflows/release.yml`。
-7. **GitHub 上传**：当前环境缺少 `GITHUB_TOKEN` 与可用 `gh` CLI，无法自动创建 Release。手动上传步骤见第 6 节。
+6. **发布流程**：v1.3.0 已通过 GitHub Release 手动发布成功，后续可推送 tag 触发 `.github/workflows/release.yml` 自动构建。
 
-## 6. 手动创建 GitHub Release（当前环境无法自动上传时）
+## 6. GitHub Release 发布记录（v1.3.0 已完成）
 
-若无法通过 `git push origin v1.3.0` 触发 CI，请按以下步骤手动发布：
+v1.3.0 已发布到 https://github.com/YJLZSL/Plotline/releases/tag/v1.3.0，包含 NSIS 安装包、MSI 安装包及自动更新清单 `latest.json`。
+
+后续版本若无法通过 CI 自动发布，可按以下步骤手动创建 Release：
 
 1. 在 GitHub 仓库 Settings → Secrets and variables → Actions 中设置：
    - `TAURI_SIGNING_PRIVATE_KEY` = `keys/plotline.key` 完整内容
-2. 打开 <https://github.com/YJLZSL/Plotline/releases/new>，选择 `v1.3.0` tag（或新建）。
-3. Release 标题：`Plotline v1.3.0`
-4. 上传以下文件（来自 `src-tauri/target/release/bundle/`）：
-   - `nsis/Plotline_1.3.0_x64-setup.exe`
-   - `nsis/Plotline_1.3.0_x64-setup.exe.sig`
-   - `msi/Plotline_1.3.0_x64_en-US.msi`
-   - `msi/Plotline_1.3.0_x64_en-US.msi.sig`
-   - `releases/v1.3.0/latest.json`
-5. 发布后确认 `https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问。
-6. 在旧版本客户端启动或点击"检查更新"，验证自动更新流程。
+2. 打开 <https://github.com/YJLZSL/Plotline/releases/new>，选择 tag（或新建）。
+3. 上传以下文件（来自 `src-tauri/target/release/bundle/`）：
+   - `nsis/Plotline_*.exe` 及 `.sig`
+   - `msi/Plotline_*.msi` 及 `.sig`
+   - `releases/vX.Y.Z/latest.json`
+4. 发布后确认 `https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问。
+5. 在旧版本客户端启动或点击"检查更新"，验证自动更新流程。
 
 ## 7. 推荐下一步（v1.4）
 

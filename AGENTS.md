@@ -48,7 +48,7 @@
 - **全局字体主题**：设置页支持 `sans` / `mono` / `pixel` 三种界面字体主题，像素字体优先使用系统 `Zpix` 或 `站酷快乐体` fallback，通过 `--font-sans` / `--font-mono` CSS 变量全局生效。
 - **图标**：已用 `scripts/generate-icons.mjs`（Node.js 纯内置模块）重绘所有 Tauri 尺寸，不再依赖 Python；测试覆盖颜色解析、渐变采样与图标绘制。
 - **测试**：新增 `pomodoro.test.ts`、`ui.test.ts`、`scripts/generate-icons.test.ts` 与 Rust `settings` 测试；本地 `vitest run`、`cargo test` 与 `eslint` 全绿。
-- **构建**：v1.3.0 Windows 安装包（NSIS + MSI）已在本地构建成功，产物见 `src-tauri/target/release/bundle/`。
+- **构建**：v1.3.0 Windows 安装包（NSIS + MSI）已发布到 [GitHub Release](https://github.com/YJLZSL/Plotline/releases/tag/v1.3.0)。
 
 ### 下一迭代方向（v1.4 候选）
 - 地图：地点节点自定义图标、角色在地图上的足迹连线、导出为图片。
