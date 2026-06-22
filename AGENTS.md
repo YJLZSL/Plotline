@@ -40,12 +40,21 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代重点（v1.3.0）
-- 地图（Map）与视觉小说（VN）视图已合并到 `main`，需补齐测试、i18n 与空状态插画。
-- 性能与交互：视图切换动画已降级，避免快速切换卡死；时间轴滚轮支持水平滚动与 Ctrl 缩放。
-- 番茄钟：v1.3.0 实现基础浮层组件，支持 warm / mc / minimal 三种主题；完整写作目标留到 v1.4。
-- 全局字体主题：设置页支持无衬线 / 等宽 / 像素三种界面字体主题，像素字体优先使用系统 `Zpix` 或 `站酷快乐体` fallback。
-- 图标：v1.3.0 已用 `scripts/generate-icons.mjs`（Node.js）重绘，不再依赖 Python。
+### 当前迭代状态（v1.3.0 已完成）
+- **性能与交互**：视图切换动画已降级（`AnimatePresence mode="sync"` + 200ms 快速曲线），快速切换不再卡死；时间轴滚轮支持水平滚动与 `Ctrl`/`Cmd`+滚轮缩放。
+- **地图 / VN**：`MapView` 拖拽已改为窗口级鼠标事件，`VnView` 基础视图与后端 API 已就绪；空状态插画、完整 i18n 与更多交互细节留到 v1.4。
+- **番茄钟**：`PomodoroTimer` 浮层组件支持 `warm` / `mc` / `minimal` 三种主题，状态机覆盖 focus / shortBreak / longBreak 自动切换。
+- **全局字体主题**：设置页支持 `sans` / `mono` / `pixel` 三种界面字体主题，像素字体优先使用系统 `Zpix` 或 `站酷快乐体` fallback，通过 `--font-sans` / `--font-mono` CSS 变量全局生效。
+- **图标**：已用 `scripts/generate-icons.mjs`（Node.js 纯内置模块）重绘所有 Tauri 尺寸，不再依赖 Python；测试覆盖颜色解析、渐变采样与图标绘制。
+- **测试**：新增 `pomodoro.test.ts`、`ui.test.ts`、`scripts/generate-icons.test.ts` 与 Rust `settings` 测试；本地 `vitest run`、`cargo test` 与 `eslint` 全绿。
+- **构建**：v1.3.0 Windows 安装包（NSIS + MSI）已在本地构建成功，产物见 `src-tauri/target/release/bundle/`。
+
+### 下一迭代方向（v1.4 候选）
+- 地图：地点节点自定义图标、角色在地图上的足迹连线、导出为图片。
+- VN：台词编辑器、角色立绘插槽、预览模式、导出为 Ren'Py / 自研播放器脚本。
+- 番茄钟：与写作目标绑定、每日统计、通知提醒。
+- UI 美术：统一空状态插画、卡片质感升级、更多主题预设。
+- i18n：补全英文/日文翻译。
 
 ---
 
