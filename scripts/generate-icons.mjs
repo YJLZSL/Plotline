@@ -2,6 +2,7 @@
 /**
  * 生成 Plotline 应用图标（Node.js 纯内置模块实现）。
  * 输出 Tauri 需要的所有尺寸与格式：PNG、ICO、Square 系列。
+ * v2 设计：更优雅的羽毛笔 + 时间线组合，柔和阴影，精致渐变。
  */
 
 import { writeFile, mkdir } from 'node:fs/promises';
@@ -106,7 +107,6 @@ class MiniCanvas {
   }
 
   _rasterize(fill, stroke) {
-    // 简化的扫描线光栅化：把路径拆成线段，用奇偶规则填充
     const segs = [];
     let cur = { x: 0, y: 0 };
     let start = { x: 0, y: 0 };
@@ -201,6 +201,33 @@ class MiniCanvas {
     this.quadraticCurveTo(x, y, x + rr, y);
     this.closePath();
   }
+
+  // 绘制填充多边形
+  fillPolygon(points) {
+    this._path = [];
+    if (points.length < 3) return;
+    this.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) {
+      this.lineTo(points[i][0], points[i][1]);
+    }
+    this.closePath();
+    this.fill();
+  }
+
+  // 绘制填充椭圆
+  fillEllipse(cx, cy, rx, ry) {
+    this.beginPath();
+    const n = Math.max(20, Math.ceil(Math.max(rx, ry) * 2));
+    for (let i = 0; i <= n; i++) {
+      const a = (2 * Math.PI * i) / n;
+      const x = cx + Math.cos(a) * rx;
+      const y = cy + Math.sin(a) * ry;
+      if (i === 0) this.moveTo(x, y);
+      else this.lineTo(x, y);
+    }
+    this.closePath();
+    this.fill();
+  }
 }
 
 function flattenQuad(p0, cmd, segs, n) {
@@ -270,6 +297,18 @@ function createGradient(canvas, x0, y0, x1, y1, stops) {
   };
 }
 
+function createRadialGradient(cx, cy, stops) {
+  return {
+    _gradient: true,
+    stops,
+    sample: (px, py) => {
+      const dist = Math.hypot(px - cx, py - cy) / (Math.max(cx, cy) * 1.5);
+      const t = Math.max(0, Math.min(1, dist));
+      return interpolateStops(stops, t);
+    },
+  };
+}
+
 function interpolateStops(stops, t) {
   for (let i = 0; i < stops.length - 1; i++) {
     const a = stops[i];
@@ -301,63 +340,149 @@ MiniCanvas.prototype._setPixel = function (x, y) {
   this._setPixelSolid(x, y, r, g, b, a);
 };
 
+// ===== 辅助函数 =====
+function thickPolygon(points, width) {
+  if (points.length < 2) return [];
+  const halfW = width / 2;
+  const left = [];
+  const right = [];
+  for (let i = 0; i < points.length; i++) {
+    let dx, dy;
+    if (i === 0) {
+      dx = points[1][0] - points[0][0];
+      dy = points[1][1] - points[0][1];
+    } else if (i === points.length - 1) {
+      dx = points[i][0] - points[i - 1][0];
+      dy = points[i][1] - points[i - 1][1];
+    } else {
+      dx = points[i + 1][0] - points[i - 1][0];
+      dy = points[i + 1][1] - points[i - 1][1];
+    }
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    left.push([points[i][0] + nx * halfW, points[i][1] + ny * halfW]);
+    right.push([points[i][0] - nx * halfW, points[i][1] - ny * halfW]);
+  }
+  return [...left, ...right.reverse()];
+}
+
+function curvePoints(fn, steps) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    pts.push(fn(i / steps));
+  }
+  return pts;
+}
+
 // ===== 绘制图标 =====
 function drawIcon(size) {
   const canvas = new MiniCanvas(size, size);
-  const pad = Math.round(size * 0.08);
+  const pad = Math.round(size * 0.07);
   const r = Math.round(size * 0.22);
 
-  // 暖色渐变背景
-  const grad = createGradient(
-    canvas,
-    0,
-    0,
-    size,
-    size,
-    [
-      { offset: 0, color: [214, 154, 78] },   // 亮琥珀 #D69A4E
-      { offset: 0.6, color: [198, 138, 62] }, // 琥珀 #C68A3E
-      { offset: 1, color: [168, 106, 44] },   // 深琥珀 #A86A2C
-    ],
-  );
-  canvas.fillStyle = grad;
+  // 径向暖色渐变背景
+  const bgGrad = createRadialGradient(size / 2, size / 2, [
+    { offset: 0, color: [240, 185, 130] },    // 中心暖亮
+    { offset: 0.4, color: [220, 135, 60] },    // 暖琥珀
+    { offset: 0.75, color: [180, 100, 35] },   // 深琥珀
+    { offset: 1, color: [150, 75, 25] },       // 边缘陶土
+  ]);
+  canvas.fillStyle = bgGrad;
   canvas.fillRect(pad, pad, size - pad * 2, size - pad * 2);
 
-  // 柔和内发光
-  canvas.strokeStyle = 'rgba(255,255,255,0.18)';
-  canvas.lineWidth = Math.max(1, size * 0.01);
-  canvas.roundRect(pad + size * 0.02, pad + size * 0.02, size - pad * 2 - size * 0.04, size - pad * 2 - size * 0.04, r - size * 0.02);
+  // 细内边框高光
+  canvas.strokeStyle = 'rgba(255,255,255,0.30)';
+  canvas.lineWidth = Math.max(1, size * 0.005);
+  canvas.roundRect(pad + size * 0.008, pad + size * 0.008, size - pad * 2 - size * 0.016, size - pad * 2 - size * 0.016, r - size * 0.008);
   canvas.stroke();
 
-  // 白色故事曲线（羽毛笔/时间线意象）
   const s = size;
   const cx = s / 2;
   const cy = s / 2;
-  const strokeW = Math.max(2, s * 0.035);
+  const shadowOff = Math.max(1, Math.round(s * 0.008));
+  const shadowColor = [80, 45, 20, 40];
 
-  canvas.strokeStyle = 'rgba(255,255,255,0.95)';
-  canvas.lineWidth = strokeW;
-  canvas.beginPath();
-  canvas.moveTo(cx - s * 0.22, cy + s * 0.08);
-  canvas.quadraticCurveTo(cx - s * 0.08, cy - s * 0.18, cx + s * 0.06, cy + s * 0.02);
-  canvas.bezierCurveTo(cx + s * 0.16, cy + s * 0.14, cx + s * 0.22, cy - s * 0.08, cx + s * 0.22, cy - s * 0.16);
-  canvas.stroke();
+  // 1. 笔杆（粗线）
+  const penW = Math.max(3, Math.round(s * 0.032));
+  const penPts = curvePoints((t) => {
+    const x = cx - s * 0.08 + t * s * 0.16;
+    const y = cy - s * 0.24 + t * s * 0.32 + Math.sin(t * Math.PI) * s * 0.015;
+    return [x, y];
+  }, 90);
 
-  // 笔尖圆点
-  canvas.fillStyle = 'rgba(255,255,255,0.95)';
-  canvas.beginPath();
-  const dotR = Math.max(2, s * 0.02);
-  canvas.moveTo(cx - s * 0.22 + dotR, cy + s * 0.08);
-  for (let a = 0; a < Math.PI * 2; a += 0.5) {
-    canvas.lineTo(
-      cx - s * 0.22 + Math.cos(a) * dotR,
-      cy + s * 0.08 + Math.sin(a) * dotR,
-    );
+  // 阴影
+  canvas.fillStyle = shadowColor;
+  canvas.fillPolygon(thickPolygon(penPts.map((p) => [p[0] + shadowOff, p[1] + shadowOff]), penW + 1));
+
+  // 主笔杆
+  canvas.fillStyle = [255, 255, 255, 255];
+  canvas.fillPolygon(thickPolygon(penPts, penW));
+
+  // 2. 笔尖（菱形）
+  const tipX = cx + s * 0.08;
+  const tipY = cy + s * 0.08;
+  const tipS = Math.max(4, Math.round(s * 0.020));
+
+  canvas.fillStyle = shadowColor;
+  canvas.fillPolygon([
+    [tipX + shadowOff, tipY - tipS + shadowOff],
+    [tipX + tipS * 0.8 + shadowOff, tipY + shadowOff],
+    [tipX + shadowOff, tipY + tipS + shadowOff],
+    [tipX - tipS * 0.8 + shadowOff, tipY + shadowOff],
+  ]);
+
+  canvas.fillStyle = [255, 255, 255, 255];
+  canvas.fillPolygon([
+    [tipX, tipY - tipS],
+    [tipX + tipS * 0.8, tipY],
+    [tipX, tipY + tipS],
+    [tipX - tipS * 0.8, tipY],
+  ]);
+
+  // 3. 波浪线（故事线）
+  const storyW = Math.max(2, Math.round(s * 0.025));
+  const storyPts = curvePoints((t) => {
+    const x = cx - s * 0.20 + t * s * 0.40;
+    const y = cy + s * 0.14 + Math.sin(t * Math.PI * 2) * s * 0.06;
+    return [x, y];
+  }, 120);
+
+  canvas.fillStyle = shadowColor;
+  canvas.fillPolygon(thickPolygon(storyPts.map((p) => [p[0] + shadowOff, p[1] + shadowOff]), storyW + 1));
+
+  canvas.fillStyle = [255, 255, 255, 245];
+  canvas.fillPolygon(thickPolygon(storyPts, storyW));
+
+  // 4. 节点（圆点）
+  const nodeR = Math.max(2, Math.round(s * 0.014));
+  const nodes = [
+    [cx - s * 0.14, cy + s * 0.14 + Math.sin(0.15 * Math.PI * 2) * s * 0.06],
+    [cx, cy + s * 0.14 + Math.sin(0.5 * Math.PI * 2) * s * 0.06],
+    [cx + s * 0.14, cy + s * 0.14 + Math.sin(0.85 * Math.PI * 2) * s * 0.06],
+  ];
+
+  for (const [nx, ny] of nodes) {
+    canvas.fillStyle = shadowColor;
+    canvas.fillEllipse(nx + 1, ny + 1, nodeR + 1, nodeR + 1);
+    canvas.fillStyle = [255, 255, 255, 255];
+    canvas.fillEllipse(nx, ny, nodeR, nodeR);
   }
-  canvas.closePath();
-  canvas.fill();
 
-  // 圆角遮罩：把外部像素变透明
+  // 5. 羽毛小装饰
+  const featherW = Math.max(1, Math.round(s * 0.012));
+  for (const side of [-1, 1]) {
+    const fPts = curvePoints((t) => {
+      const x = cx - s * 0.08 + side * t * s * 0.05;
+      const y = cy - s * 0.24 - t * s * 0.08 + Math.sin(t * Math.PI) * s * 0.015;
+      return [x, y];
+    }, 20);
+
+    canvas.fillStyle = [255, 255, 255, 200];
+    canvas.fillPolygon(thickPolygon(fPts, featherW));
+  }
+
+  // 圆角遮罩
   applyRoundedMask(canvas, pad, pad, size - pad * 2, size - pad * 2, r);
 
   return canvas.data;
@@ -389,16 +514,16 @@ function pngEncode(rgba, width, height) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  ihdr[10] = 0; // compression
-  ihdr[11] = 0; // filter
-  ihdr[12] = 0; // interlace
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
   chunks.push(makeChunk('IHDR', ihdr));
 
   const raw = Buffer.alloc(height * (width * 4 + 1));
   for (let y = 0; y < height; y++) {
-    raw[y * (width * 4 + 1)] = 0; // filter None
+    raw[y * (width * 4 + 1)] = 0;
     for (let x = 0; x < width; x++) {
       const src = (y * width + x) * 4;
       const dst = y * (width * 4 + 1) + 1 + x * 4;
@@ -448,11 +573,10 @@ function makeCrc32Table() {
 
 // ===== ICO 编码 =====
 function icoEncode(images) {
-  // images: [{ size, png: Buffer }]
   const count = images.length;
   const header = Buffer.alloc(6);
-  header.writeUInt16LE(0, 0); // reserved
-  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
   header.writeUInt16LE(count, 4);
 
   const dirSize = 16 * count;
@@ -461,14 +585,14 @@ function icoEncode(images) {
   const data = [];
   for (const img of images) {
     const dir = Buffer.alloc(16);
-    dir[0] = img.size; // width
-    dir[1] = img.size; // height
-    dir[2] = 0; // colors
-    dir[3] = 0; // reserved
-    dir.writeUInt16LE(1, 4); // planes
-    dir.writeUInt16LE(32, 6); // bpp
-    dir.writeUInt32LE(img.png.length, 8); // size
-    dir.writeUInt32LE(offset, 12); // offset
+    dir[0] = img.size;
+    dir[1] = img.size;
+    dir[2] = 0;
+    dir[3] = 0;
+    dir.writeUInt16LE(1, 4);
+    dir.writeUInt16LE(32, 6);
+    dir.writeUInt32LE(img.png.length, 8);
+    dir.writeUInt32LE(offset, 12);
     dirs.push(dir);
     data.push(img.png);
     offset += img.png.length;
@@ -479,21 +603,22 @@ function icoEncode(images) {
 // ===== 主流程 =====
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
-  // 调试：检查 64x64 像素非零数量
-  const debug = drawIcon(64);
-  console.log('debug non-zero pixels:', debug.filter((x) => x !== 0).length);
 
   const pngBuffers = {};
   for (const size of SIZES) {
     const rgba = drawIcon(size);
     const png = pngEncode(rgba, size, size);
-    const name = size === 1024 ? 'icon.png' : `${size}x${size}.png`;
+    const name = size === 1024 ? '1024x1024.png' : `${size}x${size}.png`;
     await writeFile(resolve(OUT_DIR, name), png);
     pngBuffers[size] = png;
     console.log(`generated ${name}`);
   }
 
-  // 128@2x.png 复用 256x256
+  // icon.png = 512x512
+  await writeFile(resolve(OUT_DIR, 'icon.png'), pngBuffers[512]);
+  console.log('generated icon.png');
+
+  // 128@2x.png = 256x256
   await writeFile(resolve(OUT_DIR, '128x128@2x.png'), pngBuffers[256]);
   console.log('generated 128x128@2x.png');
 
@@ -522,4 +647,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { MiniCanvas, parseColor, createGradient, interpolateStops, drawIcon, pngEncode };
+export { MiniCanvas, parseColor, createGradient, createRadialGradient, interpolateStops, drawIcon, pngEncode };
