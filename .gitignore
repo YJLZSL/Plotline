@@ -56,5 +56,9 @@ blob-report/
 # 本地规格与任务跟踪
 .trae/
 
+# Tauri 更新签名密钥（私钥绝不可提交）
+keys/
+
+
 # TypeScript 增量
 *.tsbuildinfo

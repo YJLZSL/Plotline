@@ -104,7 +104,19 @@ cmd //c "vcvarsall.bat x64 && cd /d D:\\AIKFCC\\Plotline && D:\\AIKFCC\\Plotline
 
 ---
 
-## 4. 已知问题与注意事项
+## 4. 自动更新（v1.3.0 已配置）
+
+- **机制**：`tauri-plugin-updater` v2 + GitHub Releases + `latest.json`。
+- **启动行为**：`src-tauri/src/lib.rs` 在应用启动后自动调用 `updater.check()`，检测到新版本时弹出对话框，用户确认后自动下载并安装。
+- **手动触发**：保留 *设置 → 关于 → 检查更新* 入口。
+- **密钥**：
+  - 私钥：`keys/plotline.key`（**已加入 `.gitignore`，绝不可提交**）
+  - 公钥：已写入 `src-tauri/tauri.conf.json`
+- **CI Secret**：正式发布前必须把私钥内容设置到 GitHub 仓库 Secrets：
+  - `TAURI_SIGNING_PRIVATE_KEY` = `keys/plotline.key` 的完整内容
+- **latest.json**：本地草稿位于 `releases/v1.3.0/latest.json`，正式发布时应作为 release asset 上传，并确保 URL 与 `tauri.conf.json` 的 endpoint 一致。
+
+## 5. 已知问题与注意事项
 
 1. **cargo 路径**：当前 Git Bash 默认 PATH 不含 `~/.cargo/bin`，运行 `cargo` 或 `tauri` 前需手动追加。
 2. **pnpm 缺失**：CI/本地若无 pnpm，需使用上述替代命令或安装 pnpm/corepack。
@@ -112,10 +124,26 @@ cmd //c "vcvarsall.bat x64 && cd /d D:\\AIKFCC\\Plotline && D:\\AIKFCC\\Plotline
 4. **Tauri 警告**：`identifier` 以 `.app` 结尾，macOS 上可能冲突；本项目当前只发布 Windows，可忽略或在 v1.4 调整。
 5. **测试范围**：MapView / VnView 的 UI 交互测试尚未补齐，主要以端到端测试覆盖。
 6. **发布流程**：当前仅在本地构建；正式发布需推送 tag `v1.3.0` 触发 `.github/workflows/release.yml`。
+7. **GitHub 上传**：当前环境缺少 `GITHUB_TOKEN` 与可用 `gh` CLI，无法自动创建 Release。手动上传步骤见第 6 节。
 
----
+## 6. 手动创建 GitHub Release（当前环境无法自动上传时）
 
-## 5. 推荐下一步（v1.4）
+若无法通过 `git push origin v1.3.0` 触发 CI，请按以下步骤手动发布：
+
+1. 在 GitHub 仓库 Settings → Secrets and variables → Actions 中设置：
+   - `TAURI_SIGNING_PRIVATE_KEY` = `keys/plotline.key` 完整内容
+2. 打开 <https://github.com/YJLZSL/Plotline/releases/new>，选择 `v1.3.0` tag（或新建）。
+3. Release 标题：`Plotline v1.3.0`
+4. 上传以下文件（来自 `src-tauri/target/release/bundle/`）：
+   - `nsis/Plotline_1.3.0_x64-setup.exe`
+   - `nsis/Plotline_1.3.0_x64-setup.exe.sig`
+   - `msi/Plotline_1.3.0_x64_en-US.msi`
+   - `msi/Plotline_1.3.0_x64_en-US.msi.sig`
+   - `releases/v1.3.0/latest.json`
+5. 发布后确认 `https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问。
+6. 在旧版本客户端启动或点击"检查更新"，验证自动更新流程。
+
+## 7. 推荐下一步（v1.4）
 
 按优先级：
 1. **空状态与插画**：为 Map、VN、Timeline 空状态补齐统一插画与 i18n 文案。

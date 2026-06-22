@@ -31,6 +31,7 @@
 | 改翻译 | `src/i18n/locales/<lang>.json` |
 | 改番茄钟 | `src/components/ui/PomodoroTimer.tsx` + `src/stores/pomodoro.ts` |
 | 改全局字体主题 | `src/styles/themes.css` + `src/styles/tailwind.css` + `src/stores/ui.ts` |
+| 改自动更新 | `src-tauri/src/lib.rs` + `src-tauri/tauri.conf.json` + `releases/vX.Y.Z/latest.json` |
 
 必读文档：
 - `AGENTS.md` — 本文件（AI 协作规范）

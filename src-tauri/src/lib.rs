@@ -6,6 +6,7 @@ mod services;
 
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
 
 use db::Database;
 
@@ -22,6 +23,19 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            // 启动后异步检查更新（应用内自动更新）
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match app_handle.updater() {
+                    Ok(updater) => {
+                        if let Err(err) = updater.check().await {
+                            log::warn!("[updater] 检查更新失败: {err}");
+                        }
+                    }
+                    Err(err) => log::warn!("[updater] 初始化失败: {err}"),
+                }
+            });
+
             let app_data_dir = app
                 .path()
                 .app_data_dir()

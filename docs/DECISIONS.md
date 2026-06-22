@@ -201,26 +201,35 @@ PRD 第三阶段需要"数据安全"保障。
 
 ## ADR-010：自动更新方案
 
-**状态**：已采纳（待发布密钥）  
+**状态**：已采纳（v1.3.0 已配置密钥并启用启动自动检查）  
 **日期**：2026-06-22
 
 ### 背景
-v1.0 发布后用户分散在各自机器，需要无侵入的更新机制。
+v1.0 发布后用户分散在各自机器，需要无侵入的更新机制。v1.3.0 要求"应用内自己就能更新"，
+不能仅提醒用户去下载。
 
 ### 决策
 集成 `tauri-plugin-updater` v2：
 - **manifest endpoint**：`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json`
-- **签名**：Ed25519，私钥由维护者本地保管，公钥写在 `tauri.conf.json`
-- **触发**：用户进入 *Settings → 关于 → 检查更新* 手动触发；不做静默升级
+- **签名**：Ed25519，私钥由维护者本地保管（`keys/plotline.key`，已加入 `.gitignore`），
+  公钥写在 `src-tauri/tauri.conf.json`
+- **触发**：
+  - 应用启动时自动在后台检查更新；
+  - 保留 *设置 → 关于 → 检查更新* 手动触发入口；
+  - 检测到更新后弹出 Tauri 原生对话框，用户确认后自动下载并安装。
 - **回滚**：通过发布"修复版本号"覆盖（GitHub Releases 支持替换 asset）
 
+### 实现位置
+- Rust 启动流程：`src-tauri/src/lib.rs` 中 `setup()` 调用 `app_handle.updater().check()`。
+- 配置：`src-tauri/tauri.conf.json` → `plugins.updater`。
+- 权限：`src-tauri/capabilities/default.json` 已包含 `updater:default`。
+
 ### 部署步骤
-见 `CHANGELOG.md` 顶部 "How to release v1.0" runbook。
+见 `CHANGELOG.md` 顶部 "v1.3.0 发布操作手册"。
 
 ### 风险
-- pubkey 在首次发布前为占位 `REPLACE_WITH_PUBLIC_KEY_AFTER_RELEASE_SETUP`，
-  此时调用 `check()` 会返回签名错误 — Toast 提示会暴露给用户。运营者应在第一次
-  build 前完成密钥替换。
+- 私钥一旦泄露，攻击者可伪造更新包。务必只把私钥写入 GitHub Secrets，不要提交到仓库。
+- 若 `latest.json` 签名与安装包不匹配，旧客户端会拒绝更新，需重新签名并重新上传。
 
 ---
 

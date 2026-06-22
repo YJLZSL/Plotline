@@ -4,25 +4,40 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## v1.0 发布操作手册（运营者步骤）
+## v1.3.0 发布操作手册（运营者步骤）
 
-1. **生成签名密钥对**（一次性，安全保管私钥）：
-   `pnpm tauri signer generate -w ~/.tauri/plotline.key`
-2. 把 **公钥** 填入 `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`，
-   替换占位符 `REPLACE_WITH_PUBLIC_KEY_AFTER_RELEASE_SETUP`。
-3. 把 **私钥** 与密码导入 CI 机密：`TAURI_SIGNING_PRIVATE_KEY` 与
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
-4. 在仓库根目录执行 `pwsh scripts/release-v1.ps1`（或手动依次执行
-   `pnpm lint && pnpm typecheck && pnpm test && cargo test --manifest-path src-tauri/Cargo.toml && pnpm tauri build`）。
-5. 升级版本号时务必保持以下多处同步：`package.json`、`src-tauri/Cargo.toml`、
-   `src-tauri/tauri.conf.json`、`src/components/layout/WorkspaceLayout.tsx`、
-   `src/components/views/SettingsView.tsx`、`tests/e2e/*.spec.ts`、
-   `scripts/release-v1.ps1`（v1.2.0 已同步完毕）。
-6. 推送标签触发 CI 发布：`git tag v1.2.0 && git push --tags`。
-   `.github/workflows/release.yml` 会构建三平台安装包并连同 `latest.json`
-   一起上传到对应的 GitHub Release（更新客户端轮询的就是 `latest.json`）。
-7. Release 发布后，在已安装的旧版本里打开 *设置 → 关于 → 检查更新*
-   验证：应当检测到新版本并提示升级。
+1. **签名密钥对**（已在 v1.3.0 生成，私钥务必安全保管，不可提交）：
+   - 私钥：`keys/plotline.key`（已加入 `.gitignore`）
+   - 公钥：`keys/plotline.key.pub`（已填入 `src-tauri/tauri.conf.json`）
+   - 若重新生成：`pnpm tauri signer generate -w keys/plotline.key --force`
+2. **CI 机密**：把私钥内容设置到 GitHub 仓库 Settings → Secrets and variables → Actions：
+   - `TAURI_SIGNING_PRIVATE_KEY` = `keys/plotline.key` 的完整内容
+   - 无密码时无需设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+3. **本地发布构建**（无 `pnpm` 时使用替代命令）：
+   ```bash
+   ./node_modules/.bin/tsc --noEmit
+   ./node_modules/.bin/eslint . --max-warnings=0
+   ./node_modules/.bin/vitest run
+   export PATH="$PATH:/c/Users/23501/.cargo/bin"
+   cargo test --manifest-path src-tauri/Cargo.toml --lib
+   # 临时将 tauri.conf.json 的 beforeBuildCommand 改为 Node 直接调用后：
+   ./node_modules/.bin/tauri build
+   ```
+4. **签名安装包并生成 latest.json**：
+   ```bash
+   ./node_modules/.bin/tauri signer sign --private-key-path keys/plotline.key \
+     src-tauri/target/release/bundle/nsis/Plotline_1.3.0_x64-setup.exe
+   # 将生成的 .sig 内容填入 releases/v1.3.0/latest.json 的 signature 字段
+   ```
+5. **推送标签触发 CI 发布**：
+   ```bash
+   git tag v1.3.0
+   git push origin v1.3.0
+   ```
+   `.github/workflows/release.yml` 会构建 Windows 安装包并连同 `latest.json`
+   一起上传到对应的 GitHub Release（应用内更新客户端轮询的就是 `latest.json`）。
+6. **验证自动更新**：启动已安装的旧版本，应用在启动时会自动检查更新；
+   也可在 *设置 → 关于 → 检查更新* 手动触发。检测到新版本后会自动下载并安装。
 
 ### Windows 本地构建前置条件
 
@@ -48,10 +63,13 @@
 - **全局字体主题** (`src/styles/themes.css` + `src/stores/ui.ts` + `SettingsView`)：
   设置页支持无衬线 / 等宽 / 像素三种界面字体主题，切换后即时生效。
 - **高清应用图标** (`scripts/generate-icons.mjs`)：用 Node.js + Canvas 8x 超采样生成所有尺寸，替代 Python 脚本。
-- **前端单元测试**：新增 `features/map/api.test.ts`、`features/vn/api.test.ts`、
-  `components/views/MapView.test.tsx`、`components/views/VnView.test.tsx`、
-  `components/ui/PomodoroTimer.test.tsx`。
-- **Rust 单元测试**：扩展 `services::location::tests` 与 `services::vn::tests`。
+- **应用内自动更新** (`tauri-plugin-updater` + GitHub Releases)：
+  - 启动时自动检查更新，检测到新版本后自动下载并安装；
+  - 保留 *设置 → 关于 → 检查更新* 手动触发入口；
+  - Ed25519 签名，公钥已写入 `src-tauri/tauri.conf.json`。
+- **前端单元测试**：新增 `src/stores/pomodoro.test.ts`、`src/stores/ui.test.ts`、
+  `scripts/generate-icons.test.ts`。
+- **Rust 单元测试**：扩展 `commands::settings::tests` 验证 `font_theme` 读写与合并。
 - **ADR-017 至 ADR-022**：记录地图/VN、图标生成、滚轮交互、视图切换动画、番茄钟、全局字体主题等决策。
 
 ### 变更

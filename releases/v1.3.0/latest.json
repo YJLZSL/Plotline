@@ -1,0 +1,11 @@
+{
+  "version": "v1.3.0",
+  "notes": "Plotline v1.3.0：性能优化、地图/VN 视图打磨、番茄钟多主题、全局字体主题、应用图标重绘与自动更新支持。详见 CHANGELOG.md。",
+  "pub_date": "2026-06-22T12:30:09Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSEFhNThtQVJDRlRxbmFHcEk3NVU1TlV6SzNGdzRQcmdlYUgyS25jandybWdBa0VwMkVIL3huK3plZFI3SUMxTUdKaCtQUVNKdUozcnBydlF3SWkzYk11N2RuYjhTOGcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTMxODA2CWZpbGU6UGxvdGxpbmVfMS4zLjBfeDY0LXNldHVwLmV4ZQpJdFZmK0hCMDVmYUthd1NOZ3dsU1lJZXFkeWx3YXdLamdjaGxYYkZjK2plUTN6aW5HY1hGbnBuck1ma21DalZzcXFVdWVCUXpacW1QVnFYZ0tvRVlEZz09Cg==",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v1.3.0/Plotline_1.3.0_x64-setup.exe"
+    }
+  }
+}
