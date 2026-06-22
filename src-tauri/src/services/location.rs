@@ -169,7 +169,8 @@ pub fn list_links(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Locati
 
 pub fn link(conn: &Connection, input: LinkLocationsInput) -> AppResult<()> {
     conn.execute(
-        "INSERT OR IGNORE INTO location_links (source_id, target_id, label) VALUES (?1, ?2, ?3)",
+        "INSERT INTO location_links (source_id, target_id, label) VALUES (?1, ?2, ?3)
+         ON CONFLICT(source_id, target_id) DO UPDATE SET label = excluded.label",
         params![input.source_id, input.target_id, input.label.unwrap_or_default()],
     )?;
     Ok(())
@@ -318,6 +319,64 @@ mod tests {
         assert_eq!(links[0].source_name, "A");
         assert_eq!(links[0].target_name, "B");
         assert_eq!(links[0].label, "道路");
+    }
+
+    #[test]
+    fn should_update_link_label() {
+        let conn = test_conn();
+        let a = create(
+            &conn,
+            CreateLocationInput {
+                workspace_id: "w1".into(),
+                name: "A".into(),
+                description: None,
+                pos_x: None,
+                pos_y: None,
+                color: None,
+                icon: None,
+                linked_event_id: None,
+                character_ids: None,
+            },
+        )
+        .unwrap();
+        let b = create(
+            &conn,
+            CreateLocationInput {
+                workspace_id: "w1".into(),
+                name: "B".into(),
+                description: None,
+                pos_x: None,
+                pos_y: None,
+                color: None,
+                icon: None,
+                linked_event_id: None,
+                character_ids: None,
+            },
+        )
+        .unwrap();
+        link(
+            &conn,
+            LinkLocationsInput {
+                workspace_id: "w1".into(),
+                source_id: a.id.clone(),
+                target_id: b.id.clone(),
+                label: Some("old".into()),
+            },
+        )
+        .unwrap();
+        link(
+            &conn,
+            LinkLocationsInput {
+                workspace_id: "w1".into(),
+                source_id: a.id.clone(),
+                target_id: b.id.clone(),
+                label: Some("new".into()),
+            },
+        )
+        .unwrap();
+        let links = list_links(&conn, "w1").unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].label, "new");
     }
 
     #[test]

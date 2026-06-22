@@ -12,26 +12,28 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE } from '@/lib/motion';
+import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
-import type { AppSettings, FontTheme, Language, Theme } from '@/types';
+import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/types';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { useThemeStore } from '@/stores/ui';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.4.0';
 
 interface SettingsViewProps {
   workspaceId: string;
   workspaceName?: string;
 }
 
-type Tab = 'appearance' | 'editor' | 'data' | 'shortcuts' | 'about';
+type Tab = 'appearance' | 'editor' | 'data' | 'ai' | 'startup' | 'shortcuts' | 'about';
 
 const TABS: Array<{ id: Tab; labelKey: string }> = [
   { id: 'appearance', labelKey: 'settings.appearance' },
   { id: 'editor', labelKey: 'settings.editor' },
   { id: 'data', labelKey: 'settings.data' },
+  { id: 'ai', labelKey: 'settings.ai' },
+  { id: 'startup', labelKey: 'settings.startup' },
   { id: 'shortcuts', labelKey: 'settings.shortcuts' },
   { id: 'about', labelKey: 'settings.about' },
 ];
@@ -58,15 +60,20 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [installUpdate, setInstallUpdate] = useState<(() => Promise<void>) | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
 
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
+    setInstallUpdate(null);
+    setUpdateVersion(null);
     try {
-      const result = await checkForUpdates(APP_VERSION);
-      if (result.available) {
-        toastSuccess(
-          `${t('settings.updateAvailable', { version: result.latestVersion ?? '?' })}`,
-        );
+      const { info, install } = await checkForUpdates(APP_VERSION);
+      if (info.available && install) {
+        setUpdateVersion(info.latestVersion ?? null);
+        setInstallUpdate(() => install);
+        toastSuccess(t('settings.updateAvailable', { version: info.latestVersion ?? '?' }));
       } else {
         toastInfo(t('settings.updateUpToDate'));
       }
@@ -74,6 +81,18 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
       toastError(err);
     } finally {
       setCheckingUpdate(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!installUpdate) return;
+    setInstallingUpdate(true);
+    try {
+      toastInfo(t('settings.updateInstalling'));
+      await installUpdate();
+    } catch (err) {
+      toastError(err);
+      setInstallingUpdate(false);
     }
   };
 
@@ -295,10 +314,17 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     }
                     className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
                   >
-                    <option value="timeline">{t('nav.timeline')}</option>
-                    <option value="characters">{t('nav.characters')}</option>
-                    <option value="outline">{t('nav.outline')}</option>
-                    <option value="statistics">{t('nav.statistics')}</option>
+                    {([
+                      'timeline',
+                      'characters',
+                      'outline',
+                      'map',
+                      'vn',
+                      'statistics',
+                      'notebook',
+                    ] as DefaultView[]).map((v) => (
+                      <option key={v} value={v}>{t(`nav.${v}`)}</option>
+                    ))}
                   </select>
                 </Section>
                 <Section title={t('settings.timelineZoom')}>
@@ -336,9 +362,10 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     )}
                   >
                     <motion.span
-                      layout
-                      className="absolute top-1 h-5 w-5 bg-white rounded-full shadow-sm"
-                      style={{ left: draft.autoBackup ? 24 : 4 }}
+                      className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
+                      initial={false}
+                      animate={{ x: draft.autoBackup ? 20 : 0 }}
+                      transition={MOTION_FAST}
                     />
                   </button>
                 </Section>
@@ -355,6 +382,109 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                   <span className="text-xs text-text-secondary ml-2">
                     {t('settings.backupInterval')}
                   </span>
+                </Section>
+              </div>
+            )}
+
+            {tab === 'ai' && (
+              <div className="flex flex-col gap-6">
+                <Section title={t('settings.aiEnabled')}>
+                  <button
+                    onClick={() => set({ aiEnabled: !draft.aiEnabled })}
+                    className={cn(
+                      'w-12 h-7 rounded-full transition-colors relative',
+                      draft.aiEnabled ? 'bg-accent' : 'bg-border',
+                    )}
+                  >
+                    <motion.span
+                      className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
+                      initial={false}
+                      animate={{ x: draft.aiEnabled ? 20 : 0 }}
+                      transition={MOTION_FAST}
+                    />
+                  </button>
+                </Section>
+                <Section title={t('settings.aiProvider')}>
+                  <Input
+                    value={draft.aiProvider}
+                    onChange={(e) => set({ aiProvider: e.target.value })}
+                    placeholder="openai"
+                  />
+                </Section>
+                <Section title={t('settings.aiBaseUrl')}>
+                  <Input
+                    value={draft.aiBaseUrl}
+                    onChange={(e) => set({ aiBaseUrl: e.target.value })}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </Section>
+                <Section title={t('settings.aiModel')}>
+                  <Input
+                    value={draft.aiModel}
+                    onChange={(e) => set({ aiModel: e.target.value })}
+                    placeholder="gpt-4o-mini"
+                  />
+                </Section>
+                <Section title={t('settings.aiApiKey')}>
+                  <Input
+                    type="password"
+                    value={draft.aiApiKey}
+                    onChange={(e) => set({ aiApiKey: e.target.value })}
+                    placeholder="sk-..."
+                  />
+                </Section>
+                <Section title={t('settings.aiRagEnabled')}>
+                  <button
+                    onClick={() => set({ aiRagEnabled: !draft.aiRagEnabled })}
+                    className={cn(
+                      'w-12 h-7 rounded-full transition-colors relative',
+                      draft.aiRagEnabled ? 'bg-accent' : 'bg-border',
+                    )}
+                  >
+                    <motion.span
+                      className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
+                      initial={false}
+                      animate={{ x: draft.aiRagEnabled ? 20 : 0 }}
+                      transition={MOTION_FAST}
+                    />
+                  </button>
+                </Section>
+              </div>
+            )}
+
+            {tab === 'startup' && (
+              <div className="flex flex-col gap-6">
+                <Section title={t('settings.splashEnabled')}>
+                  <button
+                    onClick={() => set({ splashEnabled: !draft.splashEnabled })}
+                    className={cn(
+                      'w-12 h-7 rounded-full transition-colors relative',
+                      draft.splashEnabled ? 'bg-accent' : 'bg-border',
+                    )}
+                  >
+                    <motion.span
+                      className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
+                      initial={false}
+                      animate={{ x: draft.splashEnabled ? 20 : 0 }}
+                      transition={MOTION_FAST}
+                    />
+                  </button>
+                </Section>
+                <Section title={t('settings.splashDuration')}>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={800}
+                      max={4000}
+                      step={100}
+                      value={draft.splashDurationMs}
+                      onChange={(e) => set({ splashDurationMs: Number(e.target.value) })}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="text-sm w-16 text-right text-text-primary">
+                      {(draft.splashDurationMs / 1000).toFixed(1)}s
+                    </span>
+                  </div>
                 </Section>
               </div>
             )}
@@ -396,18 +526,32 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                       {t('settings.checkUpdateTitle')}
                     </h3>
                     <p className="text-xs text-text-secondary mt-1">
-                      {t('settings.checkUpdateDesc')}
+                      {installUpdate
+                        ? t('settings.updateInstallPrompt', { version: updateVersion ?? '?' })
+                        : t('settings.checkUpdateDesc')}
                     </p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="mt-3 gap-2"
-                      loading={checkingUpdate}
-                      onClick={handleCheckUpdate}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      {t('settings.checkUpdateCta')}
-                    </Button>
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="gap-2"
+                        loading={checkingUpdate}
+                        onClick={handleCheckUpdate}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        {t('settings.checkUpdateCta')}
+                      </Button>
+                      {installUpdate && (
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          loading={installingUpdate}
+                          onClick={handleInstallUpdate}
+                        >
+                          {t('settings.updateInstallCta')}
+                        </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>

@@ -53,7 +53,6 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Workspace> {
         },
     )
     .map_err(|_| AppError::NotFound(format!("工作区 {} 不存在", id)))
-    .map_err(Into::into)
 }
 
 pub fn create(conn: &Connection, input: CreateWorkspaceInput) -> AppResult<Workspace> {

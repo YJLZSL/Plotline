@@ -197,6 +197,11 @@
     "startLink": "连接到其他地点",
     "linkHint": "点击目标地点以建立路径连接，或",
     "noCharacters": "暂无角色，请先到角色视图创建",
+    "footprints": "角色足迹",
+    "iconLucide": "Lucide 图标",
+    "linkLabel": "连线标签",
+    "exportPng": "导出 PNG",
+    "panHint": "中键/右键拖动平移，滚轮缩放",
     "empty": {
       "title": "地图是空的",
       "description": "添加第一个地点，构建你的故事世界地理。",
@@ -231,9 +236,15 @@
     "textPlaceholder": "输入台词内容…",
     "previewMode": "预览",
     "editMode": "编辑",
+    "graphView": "关系图",
     "choose": "请选择",
     "continue": "继续",
     "sceneEnd": "场景结束",
+    "reorderUp": "上移",
+    "reorderDown": "下移",
+    "exportRenpy": "导出 Ren'Py",
+    "background": "背景",
+    "typewriter": "打字机",
     "empty": {
       "title": "还没有场景",
       "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。"
@@ -258,11 +269,29 @@
     "reset": "重置",
     "skip": "跳过"
   },
+  "ai": {
+    "title": "AI 助手",
+    "newSession": "新会话",
+    "sessions": "会话",
+    "placeholder": "输入消息，按 Enter 发送…",
+    "empty": "暂无会话",
+    "emptyEnabled": "选择一个会话或输入消息开始对话",
+    "disabledTitle": "AI 助手未启用",
+    "disabledDescription": "前往设置开启 AI 助手并配置 API 后使用。",
+    "index": "索引工作区",
+    "indexing": "索引中…",
+    "thinking": "AI 思考中…",
+    "send": "发送",
+    "context": "工作区摘要",
+    "ragHint": "RAG 已启用，AI 会引用工作区资料"
+  },
   "settings": {
     "title": "设置",
     "appearance": "外观",
     "editor": "编辑器",
     "data": "数据",
+    "ai": "AI 助手",
+    "startup": "启动",
     "shortcuts": "快捷键",
     "about": "关于",
     "theme": "主题",
@@ -288,8 +317,23 @@
     "checkUpdateTitle": "检查更新",
     "checkUpdateDesc": "联网检查是否有新版本发布。仅在桌面应用中可用。",
     "checkUpdateCta": "立即检查",
-    "updateAvailable": "发现新版本 v{{version}}，请前往 GitHub Releases 下载安装",
-    "updateUpToDate": "当前已是最新版本"
+    "updateAvailable": "发现新版本 v{{version}}，可在应用内一键安装",
+    "updateUpToDate": "当前已是最新版本",
+    "updateInstallPrompt": "发现新版本 v{{version}}，点击按钮即可在应用内下载并安装",
+    "updateInstallCta": "下载并安装",
+    "updateInstalling": "正在下载并安装更新，安装完成后应用将自动关闭并替换为新版本",
+    "updatePromptTitle": "发现新版本",
+    "updatePromptDesc": "Plotline v{{version}} 已发布，可在应用内一键安装更新。安装过程中应用会自动关闭并替换旧版本。",
+    "updatePromptInstall": "立即安装",
+    "updatePromptLater": "稍后处理",
+    "aiEnabled": "启用 AI 助手",
+    "aiProvider": "服务提供商",
+    "aiBaseUrl": "API 基础地址",
+    "aiModel": "模型",
+    "aiApiKey": "API Key",
+    "aiRagEnabled": "启用 RAG 检索增强",
+    "splashEnabled": "显示开场动画",
+    "splashDuration": "开场动画时长"
   },
   "common": {
     "save": "保存",
@@ -332,6 +376,7 @@
     "locationUpdated": "地点已更新",
     "locationDeleted": "地点已删除",
     "vnSceneCreated": "场景已创建",
-    "vnSceneDeleted": "场景已删除"
+    "vnSceneDeleted": "场景已删除",
+    "vnExported": "VN 脚本已导出"
   }
 }

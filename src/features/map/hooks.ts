@@ -65,7 +65,10 @@ export function useUpdateLocation(workspaceId: string) {
   });
 }
 
-export function useDeleteLocation(workspaceId: string) {
+export function useDeleteLocation(
+  workspaceId: string,
+  options?: { onSuccess?: () => void },
+) {
   const qc = useQueryClient();
   const { t } = useI18n();
   return useMutation({
@@ -75,6 +78,7 @@ export function useDeleteLocation(workspaceId: string) {
         (old ?? []).filter((l) => l.id !== id),
       );
       toastSuccess(t('toast.locationDeleted'));
+      options?.onSuccess?.();
     },
     onError: toastError,
   });

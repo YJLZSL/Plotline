@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod character;
 pub mod event;
 pub mod export;

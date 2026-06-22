@@ -54,7 +54,6 @@ fn get(conn: &Connection, id: &str) -> AppResult<OutlineNode> {
         },
     )
     .map_err(|_| AppError::NotFound(format!("大纲节点 {} 不存在", id)))
-    .map_err(Into::into)
 }
 
 pub fn create(conn: &Connection, input: CreateOutlineNodeInput) -> AppResult<OutlineNode> {

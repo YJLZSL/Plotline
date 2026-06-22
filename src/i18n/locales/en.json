@@ -197,6 +197,11 @@
     "startLink": "Link to another location",
     "linkHint": "Click a target location to create a path, or",
     "noCharacters": "No characters yet — create some in the Characters view",
+    "footprints": "Character Footprints",
+    "iconLucide": "Lucide Icon",
+    "linkLabel": "Link Label",
+    "exportPng": "Export PNG",
+    "panHint": "Middle/right drag to pan, wheel to zoom",
     "empty": {
       "title": "The map is empty",
       "description": "Add your first location to build the geography of your story world.",
@@ -231,9 +236,15 @@
     "textPlaceholder": "Enter line text…",
     "previewMode": "Preview",
     "editMode": "Edit",
+    "graphView": "Graph",
     "choose": "Choose",
     "continue": "Continue",
     "sceneEnd": "End of scene",
+    "reorderUp": "Move up",
+    "reorderDown": "Move down",
+    "exportRenpy": "Export Ren'Py",
+    "background": "Background",
+    "typewriter": "Typewriter",
     "empty": {
       "title": "No scenes yet",
       "description": "Create your first VN scene with dialog, narration, and branching choices."
@@ -263,6 +274,8 @@
     "appearance": "Appearance",
     "editor": "Editor",
     "data": "Data",
+    "ai": "AI Assistant",
+    "startup": "Startup",
     "shortcuts": "Shortcuts",
     "about": "About",
     "theme": "Theme",
@@ -288,8 +301,23 @@
     "checkUpdateTitle": "Check for Updates",
     "checkUpdateDesc": "Check online for a newer release. Only available in the desktop app.",
     "checkUpdateCta": "Check now",
-    "updateAvailable": "New version v{{version}} available. Visit GitHub Releases to download.",
-    "updateUpToDate": "You're up to date"
+    "updateAvailable": "New version v{{version}} available. Install it in-app with one click.",
+    "updateUpToDate": "You're up to date",
+    "updateInstallPrompt": "New version v{{version}} is available. Click below to download and install in-app.",
+    "updateInstallCta": "Download & Install",
+    "updateInstalling": "Downloading and installing the update. The app will close and be replaced automatically.",
+    "updatePromptTitle": "New Version Available",
+    "updatePromptDesc": "Plotline v{{version}} is available. Install it in-app now. The app will close and replace the old version automatically.",
+    "updatePromptInstall": "Install Now",
+    "updatePromptLater": "Later",
+    "aiEnabled": "Enable AI Assistant",
+    "aiProvider": "Provider",
+    "aiBaseUrl": "API Base URL",
+    "aiModel": "Model",
+    "aiApiKey": "API Key",
+    "aiRagEnabled": "Enable RAG retrieval",
+    "splashEnabled": "Show splash animation",
+    "splashDuration": "Splash duration"
   },
   "common": {
     "save": "Save",
@@ -332,6 +360,7 @@
     "locationUpdated": "Location updated",
     "locationDeleted": "Location deleted",
     "vnSceneCreated": "Scene created",
-    "vnSceneDeleted": "Scene deleted"
+    "vnSceneDeleted": "Scene deleted",
+    "vnExported": "VN script exported"
   }
 }

@@ -17,6 +17,14 @@ export interface AppSettings {
   defaultView: DefaultView;
   timelineZoom: TimelineZoom;
   fontTheme: FontTheme;
+  aiProvider: string;
+  aiModel: string;
+  aiApiKey: string;
+  aiBaseUrl: string;
+  aiEnabled: boolean;
+  aiRagEnabled: boolean;
+  splashEnabled: boolean;
+  splashDurationMs: number;
 }
 
 export interface UpdateSettingsInput {
@@ -32,6 +40,14 @@ export interface UpdateSettingsInput {
   defaultView?: DefaultView;
   timelineZoom?: TimelineZoom;
   fontTheme?: FontTheme;
+  aiProvider?: string;
+  aiModel?: string;
+  aiApiKey?: string;
+  aiBaseUrl?: string;
+  aiEnabled?: boolean;
+  aiRagEnabled?: boolean;
+  splashEnabled?: boolean;
+  splashDurationMs?: number;
 }
 
 export interface Statistics {

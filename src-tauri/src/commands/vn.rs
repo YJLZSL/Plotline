@@ -61,3 +61,20 @@ pub fn update_vn_line(state: State<'_, AppState>, input: UpdateVnLineInput) -> A
 pub fn delete_vn_line(state: State<'_, AppState>, id: String) -> AppResult<()> {
     with_db!(state, |conn| crate::services::vn::delete_line(conn, &id))
 }
+
+#[tauri::command]
+pub fn list_all_vn_lines(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> AppResult<Vec<VnLine>> {
+    with_db!(state, |conn| {
+        crate::services::vn::list_all_lines(conn, &workspace_id)
+    })
+}
+
+#[tauri::command]
+pub fn export_vn_renpy(state: State<'_, AppState>, workspace_id: String) -> AppResult<String> {
+    with_db!(state, |conn| {
+        crate::services::vn::export_renpy(conn, &workspace_id)
+    })
+}

@@ -8,7 +8,7 @@ use crate::AppState;
 
 #[tauri::command]
 pub fn list_workspaces(state: State<'_, AppState>) -> AppResult<Vec<Workspace>> {
-    with_db!(state, |conn| crate::services::workspace::list(conn))
+    with_db!(state, crate::services::workspace::list)
 }
 
 #[tauri::command]

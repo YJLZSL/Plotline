@@ -5,14 +5,17 @@ import { Timer } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { HistoryControls } from './HistoryControls';
+import { AiAssistantPanel } from './AiAssistantPanel';
 import { PomodoroTimer } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/ui';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.4.0';
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [pomoOpen, setPomoOpen] = useState(false);
+  const { aiPanelOpen, setAiPanelOpen } = useUIStore();
   if (!workspaceId) return null;
 
   return (
@@ -40,6 +43,11 @@ export function WorkspaceLayout() {
           }
         />
         <PomodoroTimer open={pomoOpen} onClose={() => setPomoOpen(false)} />
+        <AiAssistantPanel
+          open={aiPanelOpen}
+          onClose={() => setAiPanelOpen(false)}
+          workspaceId={workspaceId}
+        />
       </div>
     </div>
   );

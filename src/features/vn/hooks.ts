@@ -9,6 +9,8 @@ import {
   createVnScene as apiCreateScene,
   deleteVnLine as apiDeleteLine,
   deleteVnScene as apiDeleteScene,
+  exportVnRenpy as apiExportVnRenpy,
+  listAllVnLines as apiListAllVnLines,
   listVnLines as apiListLines,
   listVnScenes as apiListScenes,
   updateVnLine as apiUpdateLine,
@@ -74,6 +76,16 @@ export function useVnLinesQuery(sceneId: string | null) {
   });
 }
 
+export const vnAllLinesKey = (wsId: string) => ['vnAllLines', wsId] as const;
+
+export function useVnAllLinesQuery(workspaceId: string, enabled = true) {
+  return useQuery({
+    queryKey: vnAllLinesKey(workspaceId),
+    queryFn: () => apiListAllVnLines(workspaceId),
+    enabled,
+  });
+}
+
 export function useCreateVnLine(sceneId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -106,6 +118,17 @@ export function useDeleteVnLine(sceneId: string) {
       qc.setQueryData<VnLine[]>(vnLinesKey(sceneId), (old) =>
         (old ?? []).filter((l) => l.id !== id),
       );
+    },
+    onError: toastError,
+  });
+}
+
+export function useExportVnRenpy(workspaceId: string) {
+  const { t } = useI18n();
+  return useMutation({
+    mutationFn: () => apiExportVnRenpy(workspaceId),
+    onSuccess: () => {
+      toastSuccess(t('toast.vnExported'));
     },
     onError: toastError,
   });

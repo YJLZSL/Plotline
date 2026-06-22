@@ -122,14 +122,27 @@ pub fn run() {
             commands::vn::update_vn_scene,
             commands::vn::delete_vn_scene,
             commands::vn::list_vn_lines,
+            commands::vn::list_all_vn_lines,
             commands::vn::create_vn_line,
             commands::vn::update_vn_line,
             commands::vn::delete_vn_line,
+            commands::vn::export_vn_renpy,
             // statistics
             commands::statistics::get_statistics,
             // settings
             commands::settings::get_settings,
             commands::settings::update_settings,
+            // ai
+            commands::ai::create_ai_session,
+            commands::ai::list_ai_sessions,
+            commands::ai::get_ai_session,
+            commands::ai::delete_ai_session,
+            commands::ai::add_ai_message,
+            commands::ai::list_ai_messages,
+            commands::ai::ai_chat,
+            commands::ai::ai_index_workspace,
+            commands::ai::ai_kv_get,
+            commands::ai::ai_kv_set,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

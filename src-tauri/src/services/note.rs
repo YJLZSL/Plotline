@@ -57,7 +57,6 @@ fn get(conn: &Connection, id: &str) -> AppResult<Note> {
         },
     )
     .map_err(|_| AppError::NotFound(format!("笔记 {} 不存在", id)))
-    .map_err(Into::into)
 }
 
 pub fn create(conn: &Connection, input: CreateNoteInput) -> AppResult<Note> {

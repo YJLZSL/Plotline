@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod backup;
 pub mod character;
 pub mod consistency;
@@ -6,6 +7,7 @@ pub mod export;
 pub mod location;
 pub mod note;
 pub mod outline;
+pub mod settings;
 pub mod statistics;
 pub mod track;
 pub mod vn;

@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod character;
 pub mod event;
 pub mod location;
@@ -8,6 +9,7 @@ pub mod track;
 pub mod vn;
 pub mod workspace;
 
+pub use ai::*;
 pub use character::*;
 pub use event::*;
 pub use location::*;

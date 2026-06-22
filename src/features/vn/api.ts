@@ -28,6 +28,10 @@ export function listVnLines(sceneId: string): Promise<VnLine[]> {
   return invoke<VnLine[]>('list_vn_lines', { sceneId });
 }
 
+export function listAllVnLines(workspaceId: string): Promise<VnLine[]> {
+  return invoke<VnLine[]>('list_all_vn_lines', { workspaceId });
+}
+
 export function createVnLine(input: CreateVnLineInput): Promise<VnLine> {
   return invoke<VnLine>('create_vn_line', { input });
 }
@@ -38,4 +42,8 @@ export function updateVnLine(input: UpdateVnLineInput): Promise<VnLine> {
 
 export function deleteVnLine(id: string): Promise<void> {
   return invoke<void>('delete_vn_line', { id });
+}
+
+export function exportVnRenpy(workspaceId: string): Promise<string> {
+  return invoke<string>('export_vn_renpy', { workspaceId });
 }

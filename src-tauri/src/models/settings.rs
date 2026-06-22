@@ -15,6 +15,14 @@ pub struct AppSettings {
     pub default_view: String,
     pub timeline_zoom: String,
     pub font_theme: String,
+    pub ai_provider: String,
+    pub ai_model: String,
+    pub ai_api_key: String,
+    pub ai_base_url: String,
+    pub ai_enabled: bool,
+    pub ai_rag_enabled: bool,
+    pub splash_enabled: bool,
+    pub splash_duration_ms: i64,
 }
 
 impl Default for AppSettings {
@@ -32,6 +40,14 @@ impl Default for AppSettings {
             default_view: "timeline".into(),
             timeline_zoom: "month".into(),
             font_theme: "sans".into(),
+            ai_provider: "openai".into(),
+            ai_model: String::new(),
+            ai_api_key: String::new(),
+            ai_base_url: String::new(),
+            ai_enabled: false,
+            ai_rag_enabled: true,
+            splash_enabled: true,
+            splash_duration_ms: 2500,
         }
     }
 }
@@ -51,4 +67,12 @@ pub struct UpdateSettingsInput {
     pub default_view: Option<String>,
     pub timeline_zoom: Option<String>,
     pub font_theme: Option<String>,
+    pub ai_provider: Option<String>,
+    pub ai_model: Option<String>,
+    pub ai_api_key: Option<String>,
+    pub ai_base_url: Option<String>,
+    pub ai_enabled: Option<bool>,
+    pub ai_rag_enabled: Option<bool>,
+    pub splash_enabled: Option<bool>,
+    pub splash_duration_ms: Option<i64>,
 }

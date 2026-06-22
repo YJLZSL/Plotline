@@ -59,6 +59,7 @@ pub struct UpdateLocationInput {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkLocationsInput {
+    #[allow(dead_code)]
     pub workspace_id: String,
     pub source_id: String,
     pub target_id: String,

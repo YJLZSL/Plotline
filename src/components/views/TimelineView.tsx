@@ -29,7 +29,7 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
-import { EASE_STANDARD } from '@/lib/motion';
+import { MOTION_BASE } from '@/lib/motion';
 import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
 import {
   useCreateEvent,
@@ -880,11 +880,10 @@ function EventCard({
 
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, scale: 0.9, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.22, ease: EASE_STANDARD, delay: Math.min(index * 0.015, 0.1) }}
+      transition={{ ...MOTION_BASE, delay: Math.min(index * 0.015, 0.1) }}
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.15}

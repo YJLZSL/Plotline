@@ -1,6 +1,26 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, MapPin, Trash2, X, Link2 } from 'lucide-react';
+import {
+  Plus,
+  MapPin,
+  Trash2,
+  X,
+  Link2,
+  Download,
+  Castle,
+  TreePine,
+  Mountain,
+  Waves,
+  Home,
+  Flame,
+  Snowflake,
+  Moon,
+  Star,
+  Anchor,
+  Tent,
+  Church,
+  Maximize,
+} from 'lucide-react';
 
 import {
   AppIcon,
@@ -13,6 +33,7 @@ import {
   ConfirmDialog,
   Dialog,
   DialogContent,
+  Switch,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
@@ -29,9 +50,68 @@ import {
 } from '@/features/map/hooks';
 import { useEventsQuery } from '@/features/timeline/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
+import {
+  buildCharacterFootprints,
+  bezierPath,
+} from '@/features/map/footprints';
+import { exportMapAsPng } from '@/features/map/export';
 
-const PALETTE = ['#C68A3E', '#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
-const ICONS = ['📍', '🏰', '🌲', '⛰️', '🌊', '🏠', '🔥', '❄️', '🌙', '⭐'];
+const PALETTE = [
+  'var(--accent)',
+  'var(--color-track-1)',
+  'var(--color-track-2)',
+  'var(--color-track-3)',
+  'var(--color-track-4)',
+  'var(--color-track-5)',
+  'var(--color-track-6)',
+];
+const EMOJI_ICONS = ['📍', '🏰', '🌲', '⛰️', '🌊', '🏠', '🔥', '❄️', '🌙', '⭐'];
+const LUCIDE_ICON_NAMES = [
+  'Castle',
+  'TreePine',
+  'Mountain',
+  'Waves',
+  'Home',
+  'Flame',
+  'Snowflake',
+  'Moon',
+  'Star',
+  'Anchor',
+  'Tent',
+  'Church',
+] as const;
+
+type LucideIconName = (typeof LUCIDE_ICON_NAMES)[number];
+
+interface LucideIconProps {
+  className?: string;
+  color?: string;
+  size?: number | string;
+}
+
+const LUCIDE_ICON_MAP: Record<LucideIconName, React.ComponentType<LucideIconProps>> = {
+  Castle,
+  TreePine,
+  Mountain,
+  Waves,
+  Home,
+  Flame,
+  Snowflake,
+  Moon,
+  Star,
+  Anchor,
+  Tent,
+  Church,
+};
+
+function isLucideIconName(value: string): value is LucideIconName {
+  return LUCIDE_ICON_NAMES.includes(value as LucideIconName);
+}
+
+function isEmoji(value: string): boolean {
+  // Lucide 图标名为纯 ASCII 字母；其余视为 emoji/文本直接渲染
+  return !/^[A-Z][a-zA-Z0-9]+$/.test(value);
+}
 
 interface MapViewProps {
   workspaceId: string;
@@ -57,6 +137,12 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [linkMode, setLinkMode] = useState<string | null>(null);
+  const [editingLink, setEditingLink] = useState<{ sourceId: string; targetId: string; label: string } | null>(null);
+  const [showFootprints, setShowFootprints] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const panRef = useRef<{ x: number; y: number; active: boolean; button: number } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -87,28 +173,92 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
     setEditOpen(true);
   };
 
-  const handleDrag = (loc: Location, dx: number, dy: number) => {
-    void updateLoc.mutateAsync({
-      id: loc.id,
-      posX: loc.posX + dx,
-      posY: loc.posY + dy,
-    });
-  };
+  const handleDrag = useCallback(
+    (loc: Location, dx: number, dy: number) => {
+      void updateLoc.mutateAsync({
+        id: loc.id,
+        posX: loc.posX + dx / view.scale,
+        posY: loc.posY + dy / view.scale,
+      });
+    },
+    [updateLoc, view.scale],
+  );
 
   const handleClickLocation = (loc: Location) => {
     if (linkMode && linkMode !== loc.id) {
-      void linkLoc.mutateAsync({
-        workspaceId,
-        sourceId: linkMode,
-        targetId: loc.id,
-      });
-      setLinkMode(null);
+      void linkLoc.mutateAsync(
+        { workspaceId, sourceId: linkMode, targetId: loc.id },
+        {
+          onSuccess: () => {
+            setEditingLink({ sourceId: linkMode, targetId: loc.id, label: '' });
+            setLinkMode(null);
+          },
+        },
+      );
     } else {
       setSelectedId(loc.id);
     }
   };
 
+  const handleStartPan = (e: React.MouseEvent) => {
+    // 中键(1) 或 右键(2) 拖动平移
+    if (e.button !== 1 && e.button !== 2) return;
+    e.preventDefault();
+    e.stopPropagation();
+    panRef.current = { x: e.clientX, y: e.clientY, active: true, button: e.button };
+  };
+
+  const handlePanMove = (e: React.MouseEvent) => {
+    if (!panRef.current?.active) return;
+    const dx = e.clientX - panRef.current.x;
+    const dy = e.clientY - panRef.current.y;
+    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+    panRef.current = { ...panRef.current, x: e.clientX, y: e.clientY };
+  };
+
+  const handleEndPan = () => {
+    panRef.current = null;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey || !e.shiftKey) {
+      e.preventDefault();
+      const delta = -e.deltaY * 0.001;
+      setView((v) => {
+        const nextScale = Math.min(Math.max(v.scale + delta, 0.25), 4);
+        return { ...v, scale: nextScale };
+      });
+    }
+  };
+
+  const handleExport = async () => {
+    if (!svgRef.current) return;
+    setIsExporting(true);
+    try {
+      await exportMapAsPng(svgRef.current, { filename: `plotline-map-${workspaceId}.png` });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const resetView = () => setView({ x: 0, y: 0, scale: 1 });
+
+  const handleSaveLinkLabel = async () => {
+    if (!editingLink) return;
+    await linkLoc.mutateAsync({
+      workspaceId,
+      sourceId: editingLink.sourceId,
+      targetId: editingLink.targetId,
+      label: editingLink.label,
+    });
+    setEditingLink(null);
+  };
+
   const eventById = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
+  const footprints = useMemo(
+    () => buildCharacterFootprints(locations, events, characters),
+    [locations, events, characters],
+  );
 
   return (
     <>
@@ -117,14 +267,38 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         right={
-          <Button size="sm" onClick={handleAdd} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{t('map.addLocation')}</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Switch
+              label={t('map.footprints')}
+              checked={showFootprints}
+              onCheckedChange={setShowFootprints}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExport}
+              disabled={isExporting || locations.length === 0}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('map.exportPng')}</span>
+            </Button>
+            <Button size="sm" variant="outline" onClick={resetView} className="gap-2" title={t('map.panHint')}>
+              <Maximize className="h-4 w-4" />
+            </Button>
+            <Button size="sm" onClick={handleAdd} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('map.addLocation')}</span>
+            </Button>
+          </div>
         }
       />
       <div className="flex flex-1 min-h-0">
-        <div ref={containerRef} className="flex-1 relative overflow-hidden bg-bg-base">
+        <div
+          ref={containerRef}
+          className="flex-1 relative overflow-hidden bg-bg-base select-none"
+          onContextMenu={(e) => e.preventDefault()}
+        >
           {isLoading ? (
             <div className="absolute inset-0 grid place-items-center">
               <div className="skeleton h-64 w-96 rounded-[12px]" />
@@ -151,7 +325,12 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
                 ref={svgRef}
                 width={size.width}
                 height={size.height}
-                className="absolute inset-0"
+                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                onMouseDown={handleStartPan}
+                onMouseMove={handlePanMove}
+                onMouseUp={handleEndPan}
+                onMouseLeave={handleEndPan}
+                onWheel={handleWheel}
               >
                 <defs>
                   <pattern id="map-grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -164,58 +343,103 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
                 </defs>
                 <rect width={size.width} height={size.height} fill="url(#map-grid)" />
 
-                {links.map((lk, i) => {
-                  const src = locations.find((l) => l.id === lk.sourceId);
-                  const tgt = locations.find((l) => l.id === lk.targetId);
-                  if (!src || !tgt) return null;
-                  const isActive =
-                    linkMode === src.id ||
-                    linkMode === tgt.id ||
-                    selectedId === src.id ||
-                    selectedId === tgt.id;
-                  return (
-                    <g key={i}>
-                      <line
-                        x1={src.posX}
-                        y1={src.posY}
-                        x2={tgt.posX}
-                        y2={tgt.posY}
-                        stroke={isActive ? 'var(--accent)' : 'var(--text-secondary)'}
-                        strokeWidth={isActive ? 2.5 : 1.5}
-                        strokeDasharray="6 4"
-                        opacity={isActive ? 0.8 : 0.4}
-                      />
-                      {lk.label && (
-                        <text
-                          x={(src.posX + tgt.posX) / 2}
-                          y={(src.posY + tgt.posY) / 2 - 6}
-                          textAnchor="middle"
-                          fontSize={10}
-                          fill="var(--text-secondary)"
-                          style={{ pointerEvents: 'none', userSelect: 'none' }}
-                        >
-                          {lk.label}
-                        </text>
-                      )}
-                    </g>
-                  );
-                })}
+                <g transform={`translate(${view.x}, ${view.y}) scale(${view.scale})`}>
+                  {showFootprints &&
+                    footprints.map((fp) => (
+                      <g key={fp.characterId}>
+                        <path
+                          d={bezierPath(fp.points)}
+                          fill="none"
+                          stroke={fp.color}
+                          strokeWidth={3}
+                          strokeDasharray="4 4"
+                          opacity={0.5}
+                          strokeLinecap="round"
+                        />
+                        {fp.points.map((p, idx) => (
+                          <circle
+                            key={`${fp.characterId}-${p.locationId}-${idx}`}
+                            cx={p.posX}
+                            cy={p.posY}
+                            r={4}
+                            fill={fp.color}
+                            opacity={0.7}
+                          />
+                        ))}
+                      </g>
+                    ))}
 
-                {locations.map((loc, i) => (
-                  <LocationNode
-                    key={loc.id}
-                    location={loc}
-                    index={i}
-                    selected={loc.id === selectedId}
-                    linkMode={linkMode === loc.id}
-                    onClick={() => handleClickLocation(loc)}
-                    onDrag={(dx, dy) => handleDrag(loc, dx, dy)}
-                    onEdit={() => {
-                      setEditing(loc);
-                      setEditOpen(true);
-                    }}
-                  />
-                ))}
+                  {links.map((lk, i) => {
+                    const src = locations.find((l) => l.id === lk.sourceId);
+                    const tgt = locations.find((l) => l.id === lk.targetId);
+                    if (!src || !tgt) return null;
+                    const isActive =
+                      linkMode === src.id ||
+                      linkMode === tgt.id ||
+                      selectedId === src.id ||
+                      selectedId === tgt.id;
+                    return (
+                      <g key={i}>
+                        <line
+                          x1={src.posX}
+                          y1={src.posY}
+                          x2={tgt.posX}
+                          y2={tgt.posY}
+                          stroke={isActive ? 'var(--accent)' : 'var(--text-secondary)'}
+                          strokeWidth={isActive ? 2.5 : 1.5}
+                          strokeDasharray="6 4"
+                          opacity={isActive ? 0.8 : 0.4}
+                          className="cursor-pointer"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingLink({ sourceId: lk.sourceId, targetId: lk.targetId, label: lk.label });
+                          }}
+                        />
+                        <line
+                          x1={src.posX}
+                          y1={src.posY}
+                          x2={tgt.posX}
+                          y2={tgt.posY}
+                          stroke="transparent"
+                          strokeWidth={12}
+                          className="cursor-pointer"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingLink({ sourceId: lk.sourceId, targetId: lk.targetId, label: lk.label });
+                          }}
+                        />
+                        {lk.label && (
+                          <text
+                            x={(src.posX + tgt.posX) / 2}
+                            y={(src.posY + tgt.posY) / 2 - 6}
+                            textAnchor="middle"
+                            fontSize={10}
+                            fill="var(--text-secondary)"
+                            style={{ pointerEvents: 'none', userSelect: 'none' }}
+                          >
+                            {lk.label}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {locations.map((loc, i) => (
+                    <LocationNode
+                      key={loc.id}
+                      location={loc}
+                      index={i}
+                      selected={loc.id === selectedId}
+                      linkMode={linkMode === loc.id}
+                      onClick={() => handleClickLocation(loc)}
+                      onDrag={(dx, dy) => handleDrag(loc, dx, dy)}
+                      onEdit={() => {
+                        setEditing(loc);
+                        setEditOpen(true);
+                      }}
+                    />
+                  ))}
+                </g>
 
                 <rect width={size.width} height={size.height} fill="url(#map-vignette)" pointerEvents="none" />
               </svg>
@@ -229,6 +453,10 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
                   </button>
                 </div>
               )}
+
+              <div className="absolute bottom-4 left-4 z-40 text-xs text-text-secondary/70 pointer-events-none">
+                {t('map.panHint')}
+              </div>
             </>
           )}
         </div>
@@ -280,6 +508,15 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
         }}
       />
 
+      <LinkLabelDialog
+        open={editingLink !== null}
+        onOpenChange={(v) => !v && setEditingLink(null)}
+        value={editingLink?.label ?? ''}
+        onChange={(v) => setEditingLink((prev) => (prev ? { ...prev, label: v } : null))}
+        onConfirm={handleSaveLinkLabel}
+        t={t}
+      />
+
       <ConfirmDialog
         open={confirmDelete !== null}
         onOpenChange={(v) => !v && setConfirmDelete(null)}
@@ -296,15 +533,7 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
   );
 }
 
-function LocationNode({
-  location,
-  index,
-  selected,
-  linkMode,
-  onClick,
-  onDrag,
-  onEdit,
-}: {
+interface LocationNodeProps {
   location: Location;
   index: number;
   selected: boolean;
@@ -312,7 +541,17 @@ function LocationNode({
   onClick: () => void;
   onDrag: (dx: number, dy: number) => void;
   onEdit: () => void;
-}) {
+}
+
+export function LocationNode({
+  location,
+  index,
+  selected,
+  linkMode,
+  onClick,
+  onDrag,
+  onEdit,
+}: LocationNodeProps) {
   const [dragging, setDragging] = useState(false);
   const startRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -342,6 +581,8 @@ function LocationNode({
     setDragging(true);
     startRef.current = { x: e.clientX, y: e.clientY };
   };
+
+  const iconColor = selected ? 'var(--text-primary)' : 'var(--bg-surface)';
 
   return (
     <motion.g
@@ -377,14 +618,20 @@ function LocationNode({
         stroke="var(--bg-surface)"
         strokeWidth={2.5}
       />
-      <text
-        y={6}
-        textAnchor="middle"
-        fontSize={18}
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
-      >
-        {location.icon}
-      </text>
+      {isEmoji(location.icon) ? (
+        <text
+          y={6}
+          textAnchor="middle"
+          fontSize={18}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          {location.icon}
+        </text>
+      ) : (
+        <foreignObject x={-12} y={-12} width={24} height={24} style={{ pointerEvents: 'none' }}>
+          <LocationLucideIcon name={location.icon} color={iconColor} />
+        </foreignObject>
+      )}
       <text
         y={38}
         textAnchor="middle"
@@ -399,6 +646,17 @@ function LocationNode({
         <circle r={24} fill="none" stroke="var(--accent)" strokeWidth={2} className="animate-pulse" />
       )}
     </motion.g>
+  );
+}
+
+function LocationLucideIcon({ name, color }: { name: string; color: string }) {
+  if (!isLucideIconName(name)) return null;
+  const Icon = LUCIDE_ICON_MAP[name];
+  if (!Icon) return null;
+  return (
+    <div className="grid h-full w-full place-items-center">
+      <Icon size={18} color={color} className="shrink-0" />
+    </div>
   );
 }
 
@@ -439,7 +697,14 @@ function LocationDetailPanel({
         </div>
       </div>
       <div className="p-4 flex flex-col gap-4">
-        <div className="h-20 rounded-[8px]" style={{ background: `linear-gradient(135deg, ${location.color} 0%, ${location.color}30 100%)` }} />
+        <div
+          className="h-20 rounded-[8px]"
+          style={{
+            '--loc-color': location.color,
+            background:
+              'linear-gradient(135deg, var(--loc-color) 0%, color-mix(in srgb, var(--loc-color) 30%, transparent) 100%)',
+          } as React.CSSProperties}
+        />
         {location.description && (
           <p className="text-sm text-text-primary whitespace-pre-wrap">{location.description}</p>
         )}
@@ -468,6 +733,22 @@ function LocationDetailPanel({
   );
 }
 
+interface LocationEditDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  location: Location | null;
+  events: Event[];
+  characters: Character[];
+  onSave: (data: {
+    name: string;
+    description: string;
+    color: string;
+    icon: string;
+    linkedEventId: string | null;
+    characterIds: string[];
+  }) => void;
+}
+
 function LocationEditDialog({
   open,
   onOpenChange,
@@ -475,14 +756,7 @@ function LocationEditDialog({
   events,
   characters,
   onSave,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  location: Location | null;
-  events: Event[];
-  characters: Character[];
-  onSave: (data: { name: string; description: string; color: string; icon: string; linkedEventId: string | null; characterIds: string[] }) => void;
-}) {
+}: LocationEditDialogProps) {
   const { t } = useI18n();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -520,7 +794,7 @@ function LocationEditDialog({
             <div>
               <Label>{t('map.form.icon')}</Label>
               <div className="flex gap-1 mt-1.5 flex-wrap">
-                {ICONS.map((ic) => (
+                {EMOJI_ICONS.map((ic) => (
                   <button
                     key={ic}
                     onClick={() => setIcon(ic)}
@@ -533,6 +807,28 @@ function LocationEditDialog({
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div>
+            <Label>{t('map.iconLucide')}</Label>
+            <div className="flex gap-1 mt-1.5 flex-wrap">
+              {LUCIDE_ICON_NAMES.map((ic) => {
+                const Icon = LUCIDE_ICON_MAP[ic];
+                return (
+                  <button
+                    key={ic}
+                    onClick={() => setIcon(ic)}
+                    className={cn(
+                      'h-8 w-8 rounded-[6px] grid place-items-center transition-transform',
+                      icon === ic ? 'ring-2 ring-accent scale-110 bg-bg-elevated' : 'hover:bg-bg-elevated text-text-secondary',
+                    )}
+                    title={ic}
+                  >
+                    <Icon size={16} />
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -605,6 +901,48 @@ function LocationEditDialog({
             <Button onClick={() => onSave({ name, description, color, icon, linkedEventId, characterIds })} disabled={!name.trim()}>
               {t('common.save')}
             </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LinkLabelDialog({
+  open,
+  onOpenChange,
+  value,
+  onChange,
+  onConfirm,
+  t,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onConfirm: () => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent title={t('map.linkLabel')} className="max-w-sm">
+        <div className="flex flex-col gap-4">
+          <div>
+            <Label>{t('map.linkLabel')}</Label>
+            <Input
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className="mt-1.5"
+              autoFocus
+              placeholder={t('common.optional')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onConfirm();
+              }}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+            <Button onClick={onConfirm}>{t('common.save')}</Button>
           </div>
         </div>
       </DialogContent>

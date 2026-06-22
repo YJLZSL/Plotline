@@ -1,45 +1,47 @@
 /**
- * 自动更新检查封装。
- * - 在 Tauri 桌面环境下调用 `@tauri-apps/plugin-updater` 真实检查更新。
- * - 在纯 Web 模式下走轻量 stub：直接返回 `{ available: false, currentVersion }`，
- *   便于 Playwright / E2E 在没有打包签名时仍能渲染 UI。
+ * 应用内自动更新封装。
+ * - 在 Tauri 桌面环境下调用 `@tauri-apps/plugin-updater` 真实检查/下载/安装更新。
+ * - 在纯 Web 模式下走轻量 stub，便于 Playwright / E2E 在没有打包签名时仍能渲染 UI。
  */
 
+import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import { isTauri } from '@/lib/ipc';
 
-export interface UpdateCheckResult {
+export interface UpdateInfo {
   available: boolean;
   currentVersion: string;
   latestVersion?: string;
   notes?: string;
 }
 
-export async function checkForUpdates(currentVersion: string): Promise<UpdateCheckResult> {
-  if (!isTauri()) {
-    return { available: false, currentVersion };
-  }
+export interface UpdateCheckResult {
+  info: UpdateInfo;
+  install?: (onEvent?: (progress: DownloadEvent) => void) => Promise<void>;
+}
 
-  const mod = await import('@tauri-apps/plugin-updater');
-  const update = await mod.check();
-  if (!update) {
-    return { available: false, currentVersion };
-  }
-  return {
-    available: true,
-    currentVersion,
-    latestVersion: update.version,
-    notes: update.body,
+function buildInstall(update: Update): UpdateCheckResult['install'] {
+  return async (onEvent) => {
+    await update.downloadAndInstall(onEvent);
   };
 }
 
-export async function installLatestUpdate(): Promise<void> {
+export async function checkForUpdates(currentVersion: string): Promise<UpdateCheckResult> {
   if (!isTauri()) {
-    throw new Error('Updater is only available in the desktop app.');
+    return { info: { available: false, currentVersion } };
   }
-  const mod = await import('@tauri-apps/plugin-updater');
-  const update = await mod.check();
+
+  const update = await check();
   if (!update) {
-    throw new Error('No update available');
+    return { info: { available: false, currentVersion } };
   }
-  await update.downloadAndInstall();
+
+  return {
+    info: {
+      available: true,
+      currentVersion,
+      latestVersion: update.version,
+      notes: update.body,
+    },
+    install: buildInstall(update),
+  };
 }

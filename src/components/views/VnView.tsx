@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -10,6 +10,10 @@ import {
   MessageSquare,
   BookOpen,
   GitBranch,
+  Pencil,
+  Download,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 import {
@@ -32,9 +36,11 @@ import {
   useDeleteVnScene,
   useUpdateVnScene,
   useVnLinesQuery,
+  useVnAllLinesQuery,
   useCreateVnLine,
   useUpdateVnLine,
   useDeleteVnLine,
+  useExportVnRenpy,
 } from '@/features/vn/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
 
@@ -52,6 +58,34 @@ const LINE_TYPE_ICONS: Record<VnLineType, React.ComponentType<{ className?: stri
   choice: GitBranch,
 };
 
+type VnViewMode = 'edit' | 'preview' | 'graph';
+
+type BackgroundMode = 'color' | 'emoji' | 'text';
+
+interface ParsedBackground {
+  mode: BackgroundMode;
+  value: string;
+}
+
+function parseBackground(value: string): ParsedBackground {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { mode: 'color', value: '' };
+  }
+  if (/^\p{Extended_Pictographic}/u.test(trimmed)) {
+    return { mode: 'emoji', value: trimmed };
+  }
+  if (
+    trimmed.startsWith('#') ||
+    trimmed.includes('gradient') ||
+    trimmed.includes('linear') ||
+    trimmed.includes('radial')
+  ) {
+    return { mode: 'color', value: trimmed };
+  }
+  return { mode: 'text', value: trimmed };
+}
+
 interface VnViewProps {
   workspaceId: string;
   workspaceName?: string;
@@ -64,9 +98,10 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
   const createScene = useCreateVnScene(workspaceId);
   const deleteScene = useDeleteVnScene(workspaceId);
   const updateScene = useUpdateVnScene(workspaceId);
+  const exportRenpy = useExportVnRenpy(workspaceId);
 
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [viewMode, setViewMode] = useState<VnViewMode>('edit');
   const [confirmDeleteScene, setConfirmDeleteScene] = useState<string | null>(null);
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null;
@@ -77,6 +112,20 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
       title: t('vn.newScene'),
     });
     setSelectedSceneId(s.id);
+    setViewMode('edit');
+  };
+
+  const handleExportRenpy = async () => {
+    const content = await exportRenpy.mutateAsync();
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${workspaceName || workspaceId}_vn_script.rpy`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -88,16 +137,46 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
         right={
           <div className="flex items-center gap-2">
             {selectedScene && (
-              <Button
-                variant={previewMode ? 'secondary' : 'outline'}
-                size="sm"
-                onClick={() => setPreviewMode((v) => !v)}
-                className="gap-2"
-              >
-                <Play className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{previewMode ? t('vn.editMode') : t('vn.previewMode')}</span>
-              </Button>
+              <div className="flex items-center gap-0.5 rounded-[6px] border border-border bg-bg-elevated p-0.5">
+                <Button
+                  variant={viewMode === 'edit' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('edit')}
+                  className="gap-1.5"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t('vn.editMode')}</span>
+                </Button>
+                <Button
+                  variant={viewMode === 'preview' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('preview')}
+                  className="gap-1.5"
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t('vn.previewMode')}</span>
+                </Button>
+                <Button
+                  variant={viewMode === 'graph' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('graph')}
+                  className="gap-1.5"
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t('vn.graphView')}</span>
+                </Button>
+              </div>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportRenpy}
+              loading={exportRenpy.isPending}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('vn.exportRenpy')}</span>
+            </Button>
             <Button size="sm" onClick={handleAddScene} className="gap-2">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('vn.addScene')}</span>
@@ -157,15 +236,24 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
           )}
         </aside>
 
-        {/* 编辑器或预览 */}
+        {/* 编辑器、预览或关系图 */}
         {selectedScene ? (
-          previewMode ? (
+          viewMode === 'preview' ? (
             <VnPreview
               key={selectedScene.id}
               scene={selectedScene}
               characters={characters}
-              onExit={() => setPreviewMode(false)}
-              onJumpScene={(id) => setSelectedSceneId(id)}
+              onExit={() => setViewMode('edit')}
+              onJumpScene={(id) => {
+                setSelectedSceneId(id);
+              }}
+              t={t}
+            />
+          ) : viewMode === 'graph' ? (
+            <VnGraphPanel
+              workspaceId={workspaceId}
+              scenes={scenes}
+              onSelectScene={(id) => setSelectedSceneId(id)}
               t={t}
             />
           ) : (
@@ -174,6 +262,9 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
               characters={characters}
               scenes={scenes}
               onRename={(title) => updateScene.mutateAsync({ id: selectedScene.id, title })}
+              onUpdateBackground={(background) =>
+                updateScene.mutateAsync({ id: selectedScene.id, background })
+              }
               t={t}
             />
           )
@@ -222,12 +313,14 @@ function VnScriptEditor({
   characters,
   scenes,
   onRename,
+  onUpdateBackground,
   t,
 }: {
   scene: VnScene;
   characters: Character[];
   scenes: VnScene[];
   onRename: (title: string) => void;
+  onUpdateBackground: (background: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const { data: lines = [], isLoading } = useVnLinesQuery(scene.id);
@@ -236,10 +329,12 @@ function VnScriptEditor({
   const deleteLine = useDeleteVnLine(scene.id);
 
   const [title, setTitle] = useState(scene.title);
+  const [background, setBackground] = useState(scene.background);
 
   useEffect(() => {
     setTitle(scene.title);
-  }, [scene.id, scene.title]);
+    setBackground(scene.background);
+  }, [scene.id, scene.title, scene.background]);
 
   const handleAddLine = async (type: VnLineType) => {
     await createLine.mutateAsync({
@@ -248,6 +343,18 @@ function VnScriptEditor({
       text: type === 'choice' ? t('vn.newChoice') : '',
       speakerName: type === 'narration' ? '' : '',
     });
+  };
+
+  const handleReorder = (lineId: string, direction: 'up' | 'down') => {
+    const idx = lines.findIndex((l) => l.id === lineId);
+    if (idx < 0) return;
+    const neighborIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (neighborIdx < 0 || neighborIdx >= lines.length) return;
+    const line = lines[idx];
+    const neighbor = lines[neighborIdx];
+    if (!line || !neighbor) return;
+    void updateLine.mutateAsync({ id: line.id, sortOrder: neighbor.sortOrder });
+    void updateLine.mutateAsync({ id: neighbor.id, sortOrder: line.sortOrder });
   };
 
   return (
@@ -261,6 +368,18 @@ function VnScriptEditor({
             if (title.trim() && title !== scene.title) void onRename(title.trim());
           }}
           className="flex-1 max-w-md text-sm font-semibold"
+        />
+        <Input
+          value={background}
+          onChange={(e) => setBackground(e.target.value)}
+          onBlur={() => {
+            if (background !== scene.background) {
+              void onUpdateBackground(background);
+            }
+          }}
+          placeholder={t('vn.background')}
+          className="w-40 text-xs"
+          title={t('vn.background')}
         />
         <div className="flex gap-1.5">
           <Button variant="outline" size="sm" onClick={() => handleAddLine('dialog')} className="gap-1.5">
@@ -301,8 +420,11 @@ function VnScriptEditor({
                   characters={characters}
                   scenes={scenes}
                   currentSceneId={scene.id}
+                  canMoveUp={i > 0}
+                  canMoveDown={i < lines.length - 1}
                   onChange={(patch) => updateLine.mutateAsync({ id: line.id, ...patch })}
                   onDelete={() => deleteLine.mutateAsync(line.id)}
+                  onReorder={(direction) => handleReorder(line.id, direction)}
                   t={t}
                 />
               ))}
@@ -314,14 +436,18 @@ function VnScriptEditor({
   );
 }
 
-function VnLineRow({
+// ===== 台词行 =====
+export function VnLineRow({
   line,
   index,
   characters,
   scenes,
   currentSceneId,
+  canMoveUp,
+  canMoveDown,
   onChange,
   onDelete,
+  onReorder,
   t,
 }: {
   line: VnLine;
@@ -329,8 +455,11 @@ function VnLineRow({
   characters: Character[];
   scenes: VnScene[];
   currentSceneId: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onChange: (patch: Partial<VnLine>) => void;
   onDelete: () => void;
+  onReorder: (direction: 'up' | 'down') => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const Icon = LINE_TYPE_ICONS[line.lineType];
@@ -364,12 +493,19 @@ function VnLineRow({
                 <>
                   <select
                     value={line.characterId ?? ''}
-                    onChange={(e) => onChange({ characterId: e.target.value || null, speakerName: e.target.value ? '' : line.speakerName })}
+                    onChange={(e) =>
+                      onChange({
+                        characterId: e.target.value || null,
+                        speakerName: e.target.value ? '' : line.speakerName,
+                      })
+                    }
                     className="h-7 rounded-[4px] border border-border bg-bg-elevated px-2 text-xs"
                   >
                     <option value="">{t('vn.customSpeaker')}</option>
                     {characters.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                   {!line.characterId && (
@@ -386,7 +522,9 @@ function VnLineRow({
                     className="h-7 rounded-[4px] border border-border bg-bg-elevated px-2 text-xs"
                   >
                     {EMOTIONS.map((em) => (
-                      <option key={em.value} value={em.value}>{em.emoji} {em.label}</option>
+                      <option key={em.value} value={em.value}>
+                        {em.emoji} {em.label}
+                      </option>
                     ))}
                   </select>
                 </>
@@ -410,9 +548,13 @@ function VnLineRow({
                 className="h-8 rounded-[4px] border border-border bg-bg-elevated px-2 text-xs flex-1"
               >
                 <option value="">{t('vn.noTarget')}</option>
-                {scenes.filter((s) => s.id !== currentSceneId).map((s) => (
-                  <option key={s.id} value={s.id}>{s.title}</option>
-                ))}
+                {scenes
+                  .filter((s) => s.id !== currentSceneId)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
               </select>
             </div>
           ) : null}
@@ -425,20 +567,219 @@ function VnLineRow({
           />
         </div>
 
-        <button
-          onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-500 p-1 rounded transition-all flex-shrink-0"
-          title={t('common.delete')}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          <button
+            onClick={() => onReorder('up')}
+            disabled={!canMoveUp}
+            className="text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:hover:text-text-secondary p-1 rounded transition-all"
+            title={t('vn.reorderUp')}
+          >
+            <ArrowUp className="h-3 w-3" />
+          </button>
+          <button
+            onClick={() => onReorder('down')}
+            disabled={!canMoveDown}
+            className="text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:hover:text-text-secondary p-1 rounded transition-all"
+            title={t('vn.reorderDown')}
+          >
+            <ArrowDown className="h-3 w-3" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-500 p-1 rounded transition-all"
+            title={t('common.delete')}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <span className="absolute top-1 left-1 text-[9px] text-text-secondary/40">{index + 1}</span>
     </motion.div>
   );
 }
 
+// ===== 关系图 =====
+function VnGraphPanel({
+  workspaceId,
+  scenes,
+  onSelectScene,
+  t,
+}: {
+  workspaceId: string;
+  scenes: VnScene[];
+  onSelectScene: (id: string) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const { data: allLines = [], isLoading } = useVnAllLinesQuery(workspaceId, scenes.length > 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 grid place-items-center">
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-32 rounded-[6px]" />
+          <div className="skeleton h-32 w-64 rounded-[8px]" />
+        </div>
+      </div>
+    );
+  }
+
+  if (scenes.length === 0) {
+    return (
+      <div className="flex-1 grid place-items-center">
+        <p className="text-sm text-text-secondary/60">{t('vn.emptyScenes')}</p>
+      </div>
+    );
+  }
+
+  return <VnGraph scenes={scenes} lines={allLines} onSelectScene={onSelectScene} />;
+}
+
+function VnGraph({
+  scenes,
+  lines,
+  onSelectScene,
+}: {
+  scenes: VnScene[];
+  lines: VnLine[];
+  onSelectScene: (id: string) => void;
+}) {
+  const nodes = useMemo(() => {
+    const nodeWidth = 136;
+    const gapX = 176;
+    const gapY = 120;
+    const cols = Math.max(1, Math.floor(720 / gapX));
+    return scenes.map((s, i) => ({
+      ...s,
+      x: (i % cols) * gapX + nodeWidth / 2 + 24,
+      y: Math.floor(i / cols) * gapY + 56,
+    }));
+  }, [scenes]);
+
+  const edges = useMemo(() => {
+    return lines
+      .filter((l) => l.lineType === 'choice' && l.choiceTargetSceneId)
+      .map((l) => ({
+        from: l.sceneId,
+        to: l.choiceTargetSceneId as string,
+        label: l.choiceLabel || l.text,
+      }));
+  }, [lines]);
+
+  const width = (() => {
+    const gapX = 176;
+    const cols = Math.max(1, Math.floor(720 / gapX));
+    return cols * gapX + 48;
+  })();
+
+  const height = (() => {
+    const gapY = 120;
+    const cols = Math.max(1, Math.floor(720 / 176));
+    return Math.ceil(scenes.length / cols) * gapY + 80;
+  })();
+
+  const nodeWidth = 136;
+  const nodeHeight = 48;
+
+  return (
+    <div className="flex-1 overflow-auto bg-bg-base p-6">
+      <svg
+        width={width}
+        height={height}
+        className="mx-auto"
+        role="img"
+        aria-label="VN scene graph"
+      >
+        <defs>
+          <marker
+            id="vn-graph-arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" className="fill-text-secondary/60" />
+          </marker>
+        </defs>
+        {edges.map((edge, idx) => {
+          const from = nodes.find((n) => n.id === edge.from);
+          const to = nodes.find((n) => n.id === edge.to);
+          if (!from || !to) return null;
+          const sx = from.x + nodeWidth / 2;
+          const sy = from.y + nodeHeight / 2;
+          const tx = to.x - nodeWidth / 2 - 6;
+          const ty = to.y + nodeHeight / 2;
+          const d = `M ${sx} ${sy} C ${sx + 48} ${sy}, ${tx - 48} ${ty}, ${tx} ${ty}`;
+          return (
+            <g key={idx}>
+              <path
+                d={d}
+                fill="none"
+                className="stroke-text-secondary/40"
+                strokeWidth={1.5}
+                markerEnd="url(#vn-graph-arrow)"
+              />
+            </g>
+          );
+        })}
+        {nodes.map((n) => (
+          <g
+            key={n.id}
+            onClick={() => onSelectScene(n.id)}
+            className="cursor-pointer"
+            transform={`translate(${n.x - nodeWidth / 2}, ${n.y - nodeHeight / 2})`}
+          >
+            <rect
+              width={nodeWidth}
+              height={nodeHeight}
+              rx={8}
+              className="fill-bg-surface stroke-accent"
+              strokeWidth={1.5}
+            />
+            <text
+              x={nodeWidth / 2}
+              y={nodeHeight / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="fill-text-primary text-xs font-medium"
+            >
+              {n.title}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 // ===== VN 预览模式 =====
+function useTypewriter(text: string, speed = 24) {
+  const [display, setDisplay] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    setDisplay('');
+    setDone(false);
+    if (!text) {
+      setDone(true);
+      return;
+    }
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      setDisplay(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(timer);
+        setDone(true);
+      }
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  return { display, done };
+}
+
 function VnPreview({
   scene,
   characters,
@@ -453,7 +794,7 @@ function VnPreview({
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const { data: lines = [] } = useVnLinesQuery(scene.id);
-  const charById = new Map(characters.map((c) => [c.id, c]));
+  const charById = useMemo(() => new Map(characters.map((c) => [c.id, c])), [characters]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showChoices, setShowChoices] = useState(false);
 
@@ -491,19 +832,49 @@ function VnPreview({
   const speakerName = speaker?.name ?? currentLine?.speakerName ?? '';
   const emotionEmoji = EMOTIONS.find((e) => e.value === currentLine?.emotion)?.emoji ?? '';
 
+  const bg = useMemo(() => parseBackground(scene.background), [scene.background]);
+  const backgroundStyle = useMemo<React.CSSProperties>(() => {
+    if (bg.value?.startsWith('#')) {
+      return { '--scene-bg': `${bg.value}20` } as React.CSSProperties;
+    }
+    if (bg.value) return { background: bg.value };
+    return {};
+  }, [bg]);
+
+  const typewriterText = currentLine?.lineType === 'narration' || currentLine?.lineType === 'dialog'
+    ? currentLine.text
+    : '';
+  const { display: typedText, done: typewriterDone } = useTypewriter(typewriterText, 24);
+
   return (
     <div
-      className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden"
-      style={{
-        background: scene.background
-          ? `linear-gradient(180deg, ${scene.background}20 0%, var(--bg-base) 70%)`
-          : 'linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-base) 70%)',
-      }}
+      className={cn(
+        'flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden',
+        (!bg.value || bg.mode === 'emoji' || bg.mode === 'text') &&
+          'bg-gradient-to-b from-bg-elevated to-bg-base',
+        bg.value?.startsWith('#') &&
+          'bg-[linear-gradient(180deg,var(--scene-bg)_0%,var(--bg-base)_70%)]',
+      )}
+      style={backgroundStyle}
       onClick={advance}
     >
+      {/* 背景层 */}
+      {bg.mode === 'emoji' && (
+        <div className="absolute inset-0 grid place-items-center opacity-10 select-none pointer-events-none">
+          <span className="text-[12rem] leading-none">{bg.value}</span>
+        </div>
+      )}
+      {bg.mode === 'text' && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center max-w-xl opacity-20 pointer-events-none select-none">
+          <p className="text-2xl text-text-primary font-semibold">{bg.value}</p>
+        </div>
+      )}
+
       {/* 顶部场景标题 */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 text-center">
-        <Badge variant="outline" className="text-xs">{scene.title}</Badge>
+        <Badge variant="outline" className="text-xs">
+          {scene.title}
+        </Badge>
       </div>
 
       {/* 退出按钮 */}
@@ -532,21 +903,21 @@ function VnPreview({
             {currentLine.lineType === 'narration' ? (
               <div className="text-center py-8">
                 <p className="text-base text-text-secondary italic leading-relaxed whitespace-pre-wrap">
-                  {currentLine.text}
+                  {typedText}
                 </p>
               </div>
             ) : currentLine.lineType === 'choice' && showChoices ? (
               <div className="flex flex-col gap-2 py-4" onClick={(e) => e.stopPropagation()}>
-                <p className="text-sm text-text-secondary text-center mb-2">{currentLine.choiceLabel || t('vn.choose')}</p>
+                <p className="text-sm text-text-secondary text-center mb-2">
+                  {currentLine.choiceLabel || t('vn.choose')}
+                </p>
                 <Button
                   variant="outline"
                   onClick={() => handleChoice(currentLine.choiceTargetSceneId)}
                   className="gap-2"
                 >
                   {currentLine.text || t('vn.continue')}
-                  {currentLine.choiceTargetSceneId && (
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  )}
+                  {currentLine.choiceTargetSceneId && <ChevronRight className="h-3.5 w-3.5" />}
                 </Button>
               </div>
             ) : (
@@ -555,22 +926,28 @@ function VnPreview({
                   <div className="flex items-center gap-2 mb-3">
                     {speaker && (
                       <span
-                        className="h-8 w-8 rounded-full grid place-items-center text-white text-xs font-bold"
+                        className="h-8 w-8 rounded-full grid place-items-center overflow-hidden text-white text-xs font-bold flex-shrink-0"
                         style={{ backgroundColor: speaker.color }}
                       >
-                        {speaker.name.slice(0, 1)}
+                        {speaker.avatar ? (
+                          <img
+                            src={speaker.avatar}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          speaker.name.slice(0, 1)
+                        )}
                       </span>
                     )}
-                    <span className="text-sm font-semibold text-text-primary">
-                      {speakerName}
-                    </span>
+                    <span className="text-sm font-semibold text-text-primary">{speakerName}</span>
                     {emotionEmoji && <span className="text-base">{emotionEmoji}</span>}
                   </div>
                 )}
                 <p className="text-base text-text-primary leading-relaxed whitespace-pre-wrap min-h-[2em]">
-                  {currentLine.text || '…'}
+                  {currentLine.lineType === 'choice' ? currentLine.text || '…' : typedText}
                 </p>
-                {!isLast && (
+                {!isLast && typewriterDone && (
                   <div className="flex justify-end mt-3">
                     <ChevronRight className="h-4 w-4 text-text-secondary animate-pulse" />
                   </div>
@@ -583,9 +960,13 @@ function VnPreview({
 
       {/* 底部进度 */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs text-text-secondary">
-        <span>{currentIdx + 1} / {lines.length}</span>
+        <span>
+          {currentIdx + 1} / {lines.length}
+        </span>
         {isLast && currentLine && (
-          <Badge variant="outline" className="text-[10px]">{t('vn.sceneEnd')}</Badge>
+          <Badge variant="outline" className="text-[10px]">
+            {t('vn.sceneEnd')}
+          </Badge>
         )}
       </div>
     </div>

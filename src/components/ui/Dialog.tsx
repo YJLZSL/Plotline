@@ -70,7 +70,7 @@ export const DialogContent = React.forwardRef<
         className={cn(
           'absolute right-4 top-4 rounded-[6px] p-1',
           'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
-          'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+          'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
         )}
       >
         <X className="h-4 w-4" />

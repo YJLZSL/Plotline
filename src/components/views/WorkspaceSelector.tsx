@@ -194,15 +194,11 @@ export function WorkspaceSelector() {
               }
             />
           ) : (
-            <motion.div
-              layout
-              className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
-            >
+            <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <AnimatePresence>
                 {filtered.map((w) => (
                   <motion.div
                     key={w.id}
-                    layout
                     initial={{ opacity: 0, scale: 0.96 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.96 }}
