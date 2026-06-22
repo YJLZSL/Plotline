@@ -1,5 +1,11 @@
 # Plotline
 
+<div align="center">
+  <img src="src-tauri/icons/icon.png" alt="Plotline Logo" width="128" height="128" />
+  <br />
+  <br />
+</div>
+
 > 面向小说作者、编剧与游戏叙事设计师的**本地优先**创作工作台。
 > 通过可视化方式构建故事的时间线、角色关系与情节结构。
 
