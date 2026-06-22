@@ -9,6 +9,8 @@ import {
   Book,
   FileText,
   Circle,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 import {
@@ -33,6 +35,7 @@ import {
   useOutlineQuery,
   useUpdateOutlineNode,
 } from '@/features/outline/hooks';
+import { useMoveOutlineNode } from '@/features/outline/moveHooks';
 
 interface OutlineViewProps {
   workspaceId: string;
@@ -52,6 +55,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const createMutation = useCreateOutlineNode(workspaceId);
   const updateMutation = useUpdateOutlineNode(workspaceId);
   const deleteMutation = useDeleteOutlineNode(workspaceId);
+  const moveMutation = useMoveOutlineNode(workspaceId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -133,7 +137,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
             />
           ) : (
             <div className="py-2">
-              {tree.map((node) => (
+              {tree.map((node, i) => (
                 <TreeView
                   key={node.id}
                   node={node}
@@ -144,6 +148,8 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
                   onSelect={setSelectedId}
                   onAdd={handleAdd}
                   onDelete={(id) => setConfirmDelete(id)}
+                  onMoveUp={i > 0 ? () => void moveMutation.mutateAsync({ id: node.id, parentId: node.parentId, sortOrder: tree[i - 1]!.sortOrder }) : undefined}
+                  onMoveDown={i < tree.length - 1 ? () => void moveMutation.mutateAsync({ id: node.id, parentId: node.parentId, sortOrder: tree[i + 1]!.sortOrder }) : undefined}
                 />
               ))}
             </div>
@@ -265,6 +271,8 @@ function TreeView({
   onSelect,
   onAdd,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   node: TreeNode;
   level: number;
@@ -274,6 +282,8 @@ function TreeView({
   onSelect: (id: string) => void;
   onAdd: (type: OutlineNodeType, parentId: string | null) => void;
   onDelete: (id: string) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const { t } = useI18n();
   const Icon = TYPE_ICONS[node.type] ?? Circle;
@@ -316,6 +326,30 @@ function TreeView({
         <span className="text-sm truncate flex-1">{node.title}</span>
         <StatusDot status={node.status} />
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+          {onMoveUp && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveUp();
+              }}
+              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
+              title="上移"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+          )}
+          {onMoveDown && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveDown();
+              }}
+              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
+              title="下移"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+          )}
           {childType && (
             <button
               onClick={(e) => {

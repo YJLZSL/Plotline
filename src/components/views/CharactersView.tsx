@@ -6,6 +6,8 @@ import {
   Users,
   Trash2,
   X,
+  Network,
+  LayoutGrid,
 } from 'lucide-react';
 
 import {
@@ -23,8 +25,7 @@ import {
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
-import { cn } from '@/lib/utils';
-import { truncate } from '@/lib/utils';
+import { cn, truncate } from '@/lib/utils';
 import type { Character } from '@/types';
 import {
   useCreateCharacter,
@@ -32,8 +33,11 @@ import {
   useCharactersQuery,
   useUpdateCharacter,
 } from '@/features/characters/hooks';
+import { RelationshipGraph } from '@/features/characters/RelationshipGraph';
 
 const PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
+
+type Tab = 'list' | 'graph';
 
 interface CharactersViewProps {
   workspaceId: string;
@@ -47,6 +51,7 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
   const updateMutation = useUpdateCharacter(workspaceId);
   const deleteMutation = useDeleteCharacter(workspaceId);
 
+  const [tab, setTab] = useState<Tab>('list');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -87,13 +92,72 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         right={
-          <Button size="sm" onClick={handleAdd} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{t('characters.add')}</span>
-          </Button>
+          <div className="flex items-center gap-1">
+            <div className="flex bg-bg-elevated rounded-[6px] p-0.5 mr-2">
+              <button
+                onClick={() => setTab('list')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  tab === 'list'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title="卡片列表"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setTab('graph')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  tab === 'graph'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title="关系网络"
+              >
+                <Network className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <Button size="sm" onClick={handleAdd} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('characters.add')}</span>
+            </Button>
+          </div>
         }
       />
 
+      {tab === 'graph' ? (
+        <div className="flex flex-1 min-h-0 flex-col">
+          <RelationshipGraph
+            workspaceId={workspaceId}
+            characters={characters}
+            onCharacterClick={(id) => setSelectedId(id)}
+          />
+          <AnimatePresence>
+            {selected && (
+              <motion.aside
+                initial={{ x: 320, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 320, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
+              >
+                <CharacterDetailPanel
+                  character={selected}
+                  onClose={() => setSelectedId(null)}
+                  onEdit={() => {
+                    setEditing(selected);
+                    setEditOpen(true);
+                  }}
+                  onDelete={() => setConfirmDelete(selected.id)}
+                  t={t}
+                />
+              </motion.aside>
+            )}
+          </AnimatePresence>
+        </div>
+      ) : (
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="px-4 py-3 flex items-center gap-3 border-b border-border">
@@ -221,97 +285,21 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
               className="w-80 flex-shrink-0 border-l border-border bg-bg-surface overflow-y-auto"
             >
-              <div className="h-12 px-4 flex items-center justify-between border-b border-border">
-                <h3 className="text-sm font-semibold text-text-primary">{selected.name}</h3>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => {
-                      setEditing(selected);
-                      setEditOpen(true);
-                    }}
-                    className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
-                    title={t('common.edit')}
-                  >
-                    <Plus className="h-3.5 w-3.5 rotate-45" />
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete(selected.id)}
-                    className="text-text-secondary hover:text-red-500 p-1 rounded transition-colors"
-                    title={t('common.delete')}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
-                    title={t('common.close')}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 flex flex-col gap-4">
-                <div
-                  className="h-24 rounded-[8px]"
-                  style={{
-                    background: `linear-gradient(135deg, ${selected.color} 0%, ${selected.color}30 100%)`,
-                  }}
-                />
-                <div>
-                  <h2 className="text-lg font-bold text-text-primary">{selected.name}</h2>
-                  {selected.aliases.length > 0 && (
-                    <p className="text-xs text-text-secondary mt-0.5">
-                      {t('characters.form.aliases')}: {selected.aliases.join('、')}
-                    </p>
-                  )}
-                </div>
-
-                {selected.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selected.tags.map((tag) => (
-                      <Badge key={tag} variant="outline" color={selected.color}>
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <DetailField label={t('characters.form.description')} value={selected.description} />
-                <DetailField
-                  label={t('characters.form.appearance')}
-                  value={selected.appearance}
-                />
-                <DetailField
-                  label={t('characters.form.backstory')}
-                  value={selected.backstory}
-                />
-                <DetailField label={t('characters.form.goals')} value={selected.goals} />
-                <DetailField
-                  label={t('characters.form.conflicts')}
-                  value={selected.conflicts}
-                />
-                <DetailField label={t('characters.form.arc')} value={selected.arc} />
-
-                <div>
-                  <Label className="text-xs text-text-secondary">
-                    {t('characters.appearances', { count: selected.eventIds.length })}
-                  </Label>
-                  {selected.eventIds.length === 0 ? (
-                    <p className="text-xs text-text-secondary/60 mt-1">
-                      {t('characters.noEvents')}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-text-secondary mt-1">
-                      关联 {selected.eventIds.length} 个事件
-                    </p>
-                  )}
-                </div>
-              </div>
+              <CharacterDetailPanel
+                character={selected}
+                onClose={() => setSelectedId(null)}
+                onEdit={() => {
+                  setEditing(selected);
+                  setEditOpen(true);
+                }}
+                onDelete={() => setConfirmDelete(selected.id)}
+                t={t}
+              />
             </motion.aside>
           )}
         </AnimatePresence>
       </div>
+      )}
 
       <CharacterEditDialog
         open={editOpen}
@@ -351,6 +339,92 @@ function DetailField({ label, value }: { label: string; value: string }) {
       <Label className="text-xs text-text-secondary">{label}</Label>
       <p className="text-sm text-text-primary mt-1 whitespace-pre-wrap">{value}</p>
     </div>
+  );
+}
+
+interface CharacterDetailPanelProps {
+  character: Character;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}
+
+function CharacterDetailPanel({ character: selected, onClose, onEdit, onDelete, t }: CharacterDetailPanelProps) {
+  return (
+    <>
+      <div className="h-12 px-4 flex items-center justify-between border-b border-border">
+        <h3 className="text-sm font-semibold text-text-primary">{selected.name}</h3>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onEdit}
+            className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
+            title={t('common.edit')}
+          >
+            <Plus className="h-3.5 w-3.5 rotate-45" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="text-text-secondary hover:text-red-500 p-1 rounded transition-colors"
+            title={t('common.delete')}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
+            title={t('common.close')}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 flex flex-col gap-4">
+        <div
+          className="h-24 rounded-[8px]"
+          style={{
+            background: `linear-gradient(135deg, ${selected.color} 0%, ${selected.color}30 100%)`,
+          }}
+        />
+        <div>
+          <h2 className="text-lg font-bold text-text-primary">{selected.name}</h2>
+          {selected.aliases.length > 0 && (
+            <p className="text-xs text-text-secondary mt-0.5">
+              {t('characters.form.aliases')}: {selected.aliases.join('、')}
+            </p>
+          )}
+        </div>
+
+        {selected.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selected.tags.map((tag) => (
+              <Badge key={tag} variant="outline" color={selected.color}>
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <DetailField label={t('characters.form.description')} value={selected.description} />
+        <DetailField label={t('characters.form.appearance')} value={selected.appearance} />
+        <DetailField label={t('characters.form.backstory')} value={selected.backstory} />
+        <DetailField label={t('characters.form.goals')} value={selected.goals} />
+        <DetailField label={t('characters.form.conflicts')} value={selected.conflicts} />
+        <DetailField label={t('characters.form.arc')} value={selected.arc} />
+
+        <div>
+          <Label className="text-xs text-text-secondary">
+            {t('characters.appearances', { count: selected.eventIds.length })}
+          </Label>
+          {selected.eventIds.length === 0 ? (
+            <p className="text-xs text-text-secondary/60 mt-1">{t('characters.noEvents')}</p>
+          ) : (
+            <p className="text-xs text-text-secondary mt-1">关联 {selected.eventIds.length} 个事件</p>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 

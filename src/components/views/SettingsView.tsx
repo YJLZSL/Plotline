@@ -331,7 +331,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                 <Card>
                   <CardContent>
                     <h2 className="text-base font-bold text-text-primary">Plotline</h2>
-                    <p className="text-xs text-text-secondary mt-1">v0.1.0</p>
+                    <p className="text-xs text-text-secondary mt-1">v0.2.0</p>
                     <p className="text-sm text-text-secondary mt-3">
                       面向小说作者、编剧与游戏叙事设计师的本地优先创作工作台。
                     </p>

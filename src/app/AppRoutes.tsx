@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Routes, Route, useParams } from 'react-router-dom';
+import { Routes, Route, useParams, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import { WorkspaceSelector } from '@/components/views/WorkspaceSelector';
@@ -12,6 +13,7 @@ import { NotebookView } from '@/components/views/NotebookView';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
 import { useI18n } from '@/hooks/useI18n';
+import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
 
 function WorkspaceRoutes() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -35,21 +37,40 @@ function ThemeSync() {
 }
 
 export function AppRoutes() {
+  useGlobalShortcuts();
   return (
     <>
       <ThemeSync />
-      <Routes>
-        <Route path="/" element={<WorkspaceSelector />} />
-        <Route path="/workspaces/:workspaceId" element={<WorkspaceRoutes />}>
-          <Route path="timeline" element={<WorkspaceViewWrapper view="timeline" />} />
-          <Route path="characters" element={<WorkspaceViewWrapper view="characters" />} />
-          <Route path="outline" element={<WorkspaceViewWrapper view="outline" />} />
-          <Route path="statistics" element={<WorkspaceViewWrapper view="statistics" />} />
-          <Route path="notebook" element={<WorkspaceViewWrapper view="notebook" />} />
-          <Route path="settings" element={<WorkspaceViewWrapper view="settings" />} />
-        </Route>
-      </Routes>
+      <AnimatedRoutes />
     </>
+  );
+}
+
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="h-screen w-screen"
+      >
+        <Routes location={location}>
+          <Route path="/" element={<WorkspaceSelector />} />
+          <Route path="/workspaces/:workspaceId" element={<WorkspaceRoutes />}>
+            <Route path="timeline" element={<WorkspaceViewWrapper view="timeline" />} />
+            <Route path="characters" element={<WorkspaceViewWrapper view="characters" />} />
+            <Route path="outline" element={<WorkspaceViewWrapper view="outline" />} />
+            <Route path="statistics" element={<WorkspaceViewWrapper view="statistics" />} />
+            <Route path="notebook" element={<WorkspaceViewWrapper view="notebook" />} />
+            <Route path="settings" element={<WorkspaceViewWrapper view="settings" />} />
+          </Route>
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

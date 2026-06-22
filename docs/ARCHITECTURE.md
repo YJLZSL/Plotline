@@ -17,7 +17,7 @@
 | 服务端状态 | **TanStack Query 5** | 缓存 Tauri IPC 调用结果 |
 | 路由 | **React Router 6** | 工作区 ↔ 视图嵌套路由 |
 | 富文本 | **TipTap 2** | 事件描述 / 笔记编辑器 |
-| 画布 | **Konva + react-konva** | 时间轴、角色关系图 |
+| 画布 | **原生 SVG + Framer Motion** | 时间轴事件、角色关系图、连线 |
 | 图表 | **Recharts** | 统计视图 |
 | 动画 | **Framer Motion 11** | 200-300ms ease-out 过渡 |
 | 图标 | **Lucide React** | 2px 线性图标 |
@@ -197,11 +197,11 @@ Tailwind 通过 `@theme inline` 引用这些变量，保证 **一套类名跨主
 1. **ADR-001**：选择 Tauri 而非 Electron —— 包体积、内存占用、原生体验更优。
 2. **ADR-002**：选择 SQLite 而非 JSON 文件 —— 关系数据查询效率、事务保证。
 3. **ADR-003**：状态管理用 Zustand 而非 Redux —— 减少样板，AI 易上手。
-4. **ADR-004**：时间轴用 Konva Canvas 而非 DOM —— 大量节点性能保障。
+4. **ADR-004**：时间轴用 SVG + Framer Motion —— 矢量、可访问、动画自然。
 5. **ADR-005**：前后端类型同步采用手工维护 + Zod 运行时校验 —— 避免 codegen 复杂度。
 6. **ADR-006**：自动保存采用"每次变更立即落库"而非定时保存 —— 数据零丢失。
 
 ---
 
-> 文档版本：v1.0.0  
+> 文档版本：v0.2.0  
 > 最后更新：2026-06-22

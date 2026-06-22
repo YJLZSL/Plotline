@@ -1,6 +1,6 @@
 [package]
 name = "plotline"
-version = "0.1.0"
+version = "0.2.0"
 description = "本地优先的叙事创作工作台"
 authors = ["Plotline Contributors"]
 license = "MIT"
@@ -13,10 +13,10 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6.1" }
+tauri-build = { version = "2.6.1", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.1" }
+tauri = { version = "2.11.1", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
