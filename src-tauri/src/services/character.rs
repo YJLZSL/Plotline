@@ -85,7 +85,7 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Character> {
                 updated_at: row.get(14)?,
             })
         })
-        .map_err(|_| AppError::NotFound(format!("角色 {} 不存在", id)))?;
+        .map_err(|e| crate::error::map_not_found(e, format!("角色 {} 不存在", id)))?;
     character.event_ids = list_event_ids(conn, id)?;
     Ok(character)
 }

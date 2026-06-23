@@ -4,6 +4,7 @@ import type {
   CreateVnSceneInput,
   UpdateVnLineInput,
   UpdateVnSceneInput,
+  VnGraphIssue,
   VnLine,
   VnScene,
 } from '@/types';
@@ -46,6 +47,10 @@ export function deleteVnLine(id: string): Promise<void> {
 
 export function exportVnRenpy(workspaceId: string): Promise<string> {
   return invoke<string>('export_vn_renpy', { workspaceId });
+}
+
+export function checkVnConsistency(workspaceId: string): Promise<VnGraphIssue[]> {
+  return invoke<VnGraphIssue[]>('check_vn_consistency', { workspaceId });
 }
 
 export function uploadVnAsset(workspaceId: string, sourcePath: string): Promise<string> {

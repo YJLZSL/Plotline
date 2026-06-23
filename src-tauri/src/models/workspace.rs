@@ -46,4 +46,8 @@ pub struct WorkspaceBundle {
     pub event_connections: Vec<crate::models::EventConnection>,
     pub outline_nodes: Vec<crate::models::OutlineNode>,
     pub notes: Vec<crate::models::Note>,
+    pub locations: Vec<crate::models::Location>,
+    pub location_links: Vec<crate::models::LocationLink>,
+    pub vn_scenes: Vec<crate::models::VnScene>,
+    pub vn_lines: Vec<crate::models::VnLine>,
 }

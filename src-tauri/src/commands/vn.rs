@@ -6,7 +6,8 @@ use uuid::Uuid;
 use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnLine, VnScene,
+    CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnGraphIssue,
+    VnLine, VnScene,
 };
 use crate::AppState;
 
@@ -86,6 +87,14 @@ pub fn export_vn_renpy(state: State<'_, AppState>, workspace_id: String) -> AppR
     with_db!(state, |conn| {
         crate::services::vn::export_renpy(conn, &workspace_id)
     })
+}
+
+#[tauri::command]
+pub fn check_vn_consistency(
+    state: State<'_, AppState>,
+    workspace_id: String,
+) -> AppResult<Vec<VnGraphIssue>> {
+    with_db!(state, |conn| crate::services::vn::check_graph(conn, &workspace_id))
 }
 
 #[tauri::command]

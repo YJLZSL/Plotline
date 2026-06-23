@@ -46,6 +46,7 @@ import type {
   UpdateVnLineInput,
   UpdateVnSceneInput,
   UpdateWorkspaceInput,
+  VnGraphIssue,
   VnLine,
   VnScene,
   Workspace,
@@ -92,6 +93,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   aiBaseUrl: '',
   aiEnabled: false,
   aiRagEnabled: true,
+  aiSystemPrompt: '',
   splashEnabled: true,
   splashDurationMs: 2500,
 };
@@ -262,7 +264,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       const ws = db.workspaces.find((w) => w.id === id);
       if (!ws) notFound(`工作区 ${id} 不存在`);
       const bundle: WorkspaceBundle = {
-        version: 1,
+        version: 2,
         workspace: deepClone(ws),
         tracks: db.tracks.filter((t) => t.workspaceId === id).map(deepClone),
         events: db.events.filter((e) => e.workspaceId === id).map(deepClone),
@@ -277,6 +279,18 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
           .map(deepClone),
         outlineNodes: db.outlineNodes.filter((o) => o.workspaceId === id).map(deepClone),
         notes: db.notes.filter((n) => n.workspaceId === id).map(deepClone),
+        locations: db.locations.filter((l) => l.workspaceId === id).map(deepClone),
+        locationLinks: db.locationLinks
+          .filter(
+            (lk) =>
+              db.locations.find((l) => l.id === lk.sourceId)?.workspaceId === id &&
+              db.locations.find((l) => l.id === lk.targetId)?.workspaceId === id,
+          )
+          .map(deepClone),
+        vnScenes: db.vnScenes.filter((s) => s.workspaceId === id).map(deepClone),
+        vnLines: db.vnLines
+          .filter((l) => db.vnScenes.find((s) => s.id === l.sceneId)?.workspaceId === id)
+          .map(deepClone),
       };
       return bundle;
     }
@@ -340,6 +354,15 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       };
       appendOutline(null, 0);
       return md;
+    }
+    case 'export_workspace_pdf':
+    case 'export_workspace_word':
+    case 'export_workspace_epub': {
+      const id = args.id as string;
+      const ws = db.workspaces.find((w) => w.id === id);
+      if (!ws) notFound(`工作区 ${id} 不存在`);
+      // Web 模式下返回一个最小占位二进制文件内容
+      return Array.from(new TextEncoder().encode(`mock ${args.command} for ${ws.name}`));
     }
     case 'import_workspace': {
       const bundle = args.bundle as WorkspaceBundle;
@@ -413,6 +436,47 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
           id: uuid(),
           workspaceId: newWsId,
           folderId: null,
+        });
+      }
+      const locationMap = new Map<string, string>();
+      for (const loc of bundle.locations) {
+        const newId = uuid();
+        locationMap.set(loc.id, newId);
+        db.locations.push({
+          ...deepClone(loc),
+          id: newId,
+          workspaceId: newWsId,
+          linkedEventId: loc.linkedEventId ? eventMap.get(loc.linkedEventId) ?? null : null,
+          characterIds: loc.characterIds.map((cid) => charMap.get(cid) ?? cid),
+        });
+      }
+      for (const lk of bundle.locationLinks) {
+        db.locationLinks.push({
+          ...deepClone(lk),
+          sourceId: locationMap.get(lk.sourceId) ?? lk.sourceId,
+          targetId: locationMap.get(lk.targetId) ?? lk.targetId,
+        });
+      }
+      const sceneMap = new Map<string, string>();
+      for (const s of bundle.vnScenes) {
+        const newId = uuid();
+        sceneMap.set(s.id, newId);
+        db.vnScenes.push({
+          ...deepClone(s),
+          id: newId,
+          workspaceId: newWsId,
+          outlineNodeId: s.outlineNodeId ? null : null,
+        });
+      }
+      for (const l of bundle.vnLines) {
+        db.vnLines.push({
+          ...deepClone(l),
+          id: uuid(),
+          sceneId: sceneMap.get(l.sceneId) ?? l.sceneId,
+          characterId: l.characterId ? charMap.get(l.characterId) ?? null : null,
+          choiceTargetSceneId: l.choiceTargetSceneId
+            ? sceneMap.get(l.choiceTargetSceneId) ?? null
+            : null,
         });
       }
       return newWs;
@@ -1057,6 +1121,54 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       }
       return rpy;
     }
+    case 'check_vn_consistency': {
+      const wsId = args.workspaceId as string;
+      const scenes = db.vnScenes.filter((s) => s.workspaceId === wsId);
+      const lines = db.vnLines.filter((l) => scenes.some((s) => s.id === l.sceneId));
+      const sceneIds = new Set(scenes.map((s) => s.id));
+      const issues: VnGraphIssue[] = [];
+      for (const line of lines) {
+        if (line.lineType === 'choice' && line.choiceTargetSceneId && !sceneIds.has(line.choiceTargetSceneId)) {
+          const scene = scenes.find((s) => s.id === line.sceneId);
+          issues.push({
+            kind: 'missing_choice_target',
+            sceneId: line.sceneId,
+            sceneTitle: scene?.title ?? null,
+            lineId: line.id,
+            message: `选项「${line.choiceLabel || line.text}」跳转到了不存在的场景`,
+          });
+        }
+      }
+      const incoming = new Set<string>();
+      for (const line of lines) {
+        if (line.lineType === 'choice' && line.choiceTargetSceneId) {
+          incoming.add(line.choiceTargetSceneId);
+        }
+      }
+      for (const scene of scenes) {
+        if (scene.sortOrder !== 0 && !incoming.has(scene.id)) {
+          issues.push({
+            kind: 'unreachable_scene',
+            sceneId: scene.id,
+            sceneTitle: scene.title,
+            lineId: null,
+            message: `场景「${scene.title}」没有来自其他场景的入口`,
+          });
+        }
+      }
+      for (const scene of scenes) {
+        if (!lines.some((l) => l.sceneId === scene.id)) {
+          issues.push({
+            kind: 'empty_scene',
+            sceneId: scene.id,
+            sceneTitle: scene.title,
+            lineId: null,
+            message: `场景「${scene.title}」还没有任何台词`,
+          });
+        }
+      }
+      return issues;
+    }
 
     // ===== ai =====
     case 'create_ai_session': {
@@ -1266,6 +1378,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         ...(input.aiBaseUrl !== undefined ? { aiBaseUrl: input.aiBaseUrl } : {}),
         ...(input.aiEnabled !== undefined ? { aiEnabled: input.aiEnabled } : {}),
         ...(input.aiRagEnabled !== undefined ? { aiRagEnabled: input.aiRagEnabled } : {}),
+        ...(input.aiSystemPrompt !== undefined ? { aiSystemPrompt: input.aiSystemPrompt } : {}),
         ...(input.splashEnabled !== undefined ? { splashEnabled: input.splashEnabled } : {}),
         ...(input.splashDurationMs !== undefined ? { splashDurationMs: input.splashDurationMs } : {}),
       };

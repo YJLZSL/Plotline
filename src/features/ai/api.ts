@@ -1,4 +1,6 @@
-import { invoke } from '@/lib/ipc';
+import { Channel } from '@tauri-apps/api/core';
+
+import { invoke, isWebMode } from '@/lib/ipc';
 import type {
   AiChatInput,
   AiChatResult,
@@ -9,6 +11,7 @@ import type {
   AiMessage,
   AiModelInfo,
   AiSession,
+  AiStreamEvent,
   CreateAiMessageInput,
   CreateAiSessionInput,
   ListAiModelsInput,
@@ -40,6 +43,18 @@ export function listAiMessages(sessionId: string): Promise<AiMessage[]> {
 
 export function aiChat(input: AiChatInput): Promise<AiChatResult> {
   return invoke<AiChatResult>('ai_chat', { input });
+}
+
+export function aiChatStream(
+  input: AiChatInput,
+  onEvent: (event: AiStreamEvent) => void,
+): Promise<AiChatResult> {
+  if (isWebMode()) {
+    return aiChat(input);
+  }
+  const channel = new Channel<AiStreamEvent>();
+  channel.onmessage = onEvent;
+  return invoke<AiChatResult>('ai_chat_stream', { input, onEvent: channel });
 }
 
 export function aiIndexWorkspace(workspaceId: string): Promise<void> {

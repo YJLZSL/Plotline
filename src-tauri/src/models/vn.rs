@@ -87,3 +87,13 @@ pub struct UpdateVnLineInput {
     pub voice_path: Option<Option<String>>,
     pub sort_order: Option<i64>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VnGraphIssue {
+    pub kind: String,
+    pub scene_id: Option<String>,
+    pub scene_title: Option<String>,
+    pub line_id: Option<String>,
+    pub message: String,
+}

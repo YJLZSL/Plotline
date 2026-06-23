@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 
 use chrono::Utc;
+use futures_util::StreamExt;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use tauri::ipc::Channel;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
     AiChunk, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRole,
-    AiSearchResult, AiSession, CreateAiMessageInput, CreateAiSessionInput,
+    AiSearchResult, AiSession, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput,
 };
 
 const DEFAULT_SYSTEM_PROMPT: &str =
@@ -63,7 +65,7 @@ pub fn get_session(conn: &Connection, id: &str) -> AppResult<AiSession> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("AI 会话 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("AI 会话 {} 不存在", id)))
 }
 
 pub fn delete_session(conn: &Connection, id: &str) -> AppResult<()> {
@@ -118,7 +120,7 @@ fn get_message(conn: &Connection, id: &str) -> AppResult<AiMessage> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("AI 消息 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("AI 消息 {} 不存在", id)))
 }
 
 fn parse_role(s: &str) -> AiRole {
@@ -485,6 +487,8 @@ struct OpenAiMessage<'a> {
 struct OpenAiChatRequest<'a> {
     model: &'a str,
     messages: Vec<OpenAiMessage<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -500,6 +504,22 @@ struct OpenAiResponseMessage {
 #[derive(Debug, Deserialize)]
 struct OpenAiChatResponse {
     choices: Vec<OpenAiChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiStreamResponse {
+    choices: Vec<OpenAiStreamChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiStreamChoice {
+    delta: OpenAiStreamDelta,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct OpenAiStreamDelta {
+    #[serde(default)]
+    content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -533,9 +553,14 @@ pub async fn call_chat_api(
     let url = format!("{}/chat/completions", base_url);
 
     let mut messages: Vec<OpenAiMessage> = Vec::new();
+    let system_prompt = if settings.ai_system_prompt.trim().is_empty() {
+        DEFAULT_SYSTEM_PROMPT
+    } else {
+        settings.ai_system_prompt.trim()
+    };
     messages.push(OpenAiMessage {
         role: "system",
-        content: DEFAULT_SYSTEM_PROMPT.to_string(),
+        content: system_prompt.to_string(),
     });
 
     if !chunks.is_empty() {
@@ -576,6 +601,7 @@ pub async fn call_chat_api(
         .json(&OpenAiChatRequest {
             model: &settings.ai_model,
             messages,
+            stream: None,
         })
         .send()
         .await
@@ -597,6 +623,129 @@ pub async fn call_chat_api(
         .next()
         .map(|c| c.message.content)
         .ok_or_else(|| AppError::Internal("AI 响应为空".into()))
+}
+
+pub async fn call_chat_api_stream(
+    settings: &crate::models::AppSettings,
+    history: &[AiMessage],
+    user_message: &str,
+    chunks: &[AiSearchResult],
+    on_event: &Channel<AiStreamEvent>,
+) -> AppResult<String> {
+    if settings.ai_base_url.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API 基础地址".into()));
+    }
+    if settings.ai_model.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置模型名称".into()));
+    }
+    if settings.ai_api_key.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API Key".into()));
+    }
+
+    let base_url = settings.ai_base_url.trim().trim_end_matches('/');
+    let url = format!("{}/chat/completions", base_url);
+
+    let mut messages: Vec<OpenAiMessage> = Vec::new();
+    let system_prompt = if settings.ai_system_prompt.trim().is_empty() {
+        DEFAULT_SYSTEM_PROMPT
+    } else {
+        settings.ai_system_prompt.trim()
+    };
+    messages.push(OpenAiMessage {
+        role: "system",
+        content: system_prompt.to_string(),
+    });
+
+    if !chunks.is_empty() {
+        let context = chunks
+            .iter()
+            .map(|c| format!("[{}] {}", c.chunk.source_type, c.chunk.content))
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        messages.push(OpenAiMessage {
+            role: "system",
+            content: format!("以下是与用户问题相关的工作区资料：\n{}", context),
+        });
+    }
+
+    for msg in history {
+        if msg.role == AiRole::System {
+            continue;
+        }
+        messages.push(OpenAiMessage {
+            role: match msg.role {
+                AiRole::User => "user",
+                AiRole::Assistant => "assistant",
+                AiRole::System => "system",
+            },
+            content: msg.content.clone(),
+        });
+    }
+
+    messages.push(OpenAiMessage {
+        role: "user",
+        content: user_message.to_string(),
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", settings.ai_api_key))
+        .json(&OpenAiChatRequest {
+            model: &settings.ai_model,
+            messages,
+            stream: Some(true),
+        })
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("AI 请求失败: {}", e)))?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_else(|_| "未知错误".into());
+        let _ = on_event.send(AiStreamEvent::Error(format!("AI API 错误: {}", body)));
+        return Err(AppError::Internal(format!("AI API 错误: {}", body)));
+    }
+
+    let mut full = String::new();
+    let mut buffer = String::new();
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| AppError::Internal(format!("读取流失败: {}", e)))?;
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+        while let Some(pos) = buffer.find('\n') {
+            let line: String = buffer.drain(..=pos).collect();
+            let line = line.trim();
+            if line.is_empty() || !line.starts_with("data: ") {
+                continue;
+            }
+            let data = &line["data: ".len()..];
+            if data == "[DONE]" {
+                let _ = on_event.send(AiStreamEvent::Done);
+                return Ok(full);
+            }
+            match serde_json::from_str::<OpenAiStreamResponse>(data) {
+                Ok(resp) => {
+                    if let Some(content) = resp
+                        .choices
+                        .into_iter()
+                        .next()
+                        .and_then(|c| c.delta.content)
+                    {
+                        full.push_str(&content);
+                        let _ = on_event.send(AiStreamEvent::Delta(content));
+                    }
+                }
+                Err(e) => {
+                    let _ = on_event.send(AiStreamEvent::Error(format!("解析流失败: {}", e)));
+                }
+            }
+        }
+    }
+
+    let _ = on_event.send(AiStreamEvent::Done);
+    Ok(full)
 }
 
 pub async fn list_models(base_url: &str, api_key: &str) -> AppResult<Vec<AiModelInfo>> {

@@ -18,12 +18,15 @@ import {
   useDeleteWorkspace,
   useExportWorkspace,
   useExportWorkspaceMarkdown,
+  useExportWorkspacePdf,
+  useExportWorkspaceWord,
+  useExportWorkspaceEpub,
   useImportWorkspace,
   useWorkspacesQuery,
 } from '@/features/workspace/hooks';
 import { ConfirmDialog, Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { useI18n } from '@/hooks/useI18n';
-import { relativeTime, truncate, downloadJSON, downloadText } from '@/lib/utils';
+import { relativeTime, truncate, downloadJSON, downloadText, downloadBlob } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import type { WorkspaceTemplate, WorkspaceBundle } from '@/types';
 
@@ -45,6 +48,9 @@ export function WorkspaceSelector() {
   const deleteMutation = useDeleteWorkspace();
   const exportMutation = useExportWorkspace();
   const exportMdMutation = useExportWorkspaceMarkdown();
+  const exportPdfMutation = useExportWorkspacePdf();
+  const exportWordMutation = useExportWorkspaceWord();
+  const exportEpubMutation = useExportWorkspaceEpub();
   const importMutation = useImportWorkspace();
 
   const [search, setSearch] = useState('');
@@ -80,6 +86,21 @@ export function WorkspaceSelector() {
   const handleExportMarkdown = async (id: string, name: string) => {
     const md = await exportMdMutation.mutateAsync(id);
     downloadText(`${name}.md`, md);
+  };
+
+  const handleExportPdf = async (id: string, name: string) => {
+    const bytes = await exportPdfMutation.mutateAsync(id);
+    downloadBlob(`${name}.pdf`, bytes, 'application/pdf');
+  };
+
+  const handleExportWord = async (id: string, name: string) => {
+    const bytes = await exportWordMutation.mutateAsync(id);
+    downloadBlob(`${name}.docx`, bytes, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  };
+
+  const handleExportEpub = async (id: string, name: string) => {
+    const bytes = await exportEpubMutation.mutateAsync(id);
+    downloadBlob(`${name}.epub`, bytes, 'application/epub+zip');
   };
 
   const handleImport = async (file: File) => {
@@ -313,6 +334,42 @@ export function WorkspaceSelector() {
                   >
                     <FileText className="h-4 w-4" />
                     {t('workspace.exportMarkdown')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="justify-start"
+                    onClick={() => {
+                      const ws = (workspaces ?? [])[0];
+                      if (ws) void handleExportPdf(ws.id, ws.name);
+                    }}
+                    disabled={(workspaces ?? []).length === 0}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {t('workspace.exportPdf')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="justify-start"
+                    onClick={() => {
+                      const ws = (workspaces ?? [])[0];
+                      if (ws) void handleExportWord(ws.id, ws.name);
+                    }}
+                    disabled={(workspaces ?? []).length === 0}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {t('workspace.exportWord')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="justify-start"
+                    onClick={() => {
+                      const ws = (workspaces ?? [])[0];
+                      if (ws) void handleExportEpub(ws.id, ws.name);
+                    }}
+                    disabled={(workspaces ?? []).length === 0}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {t('workspace.exportEpub')}
                   </Button>
                 </div>
             </CardContent>

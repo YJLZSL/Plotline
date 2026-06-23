@@ -84,3 +84,8 @@ export interface AiModelInfo {
   id: string;
   ownedBy?: string;
 }
+
+export type AiStreamEvent =
+  | { type: 'delta'; data: string }
+  | { type: 'error'; data: string }
+  | { type: 'done' };

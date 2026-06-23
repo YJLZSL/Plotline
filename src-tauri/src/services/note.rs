@@ -59,7 +59,7 @@ fn get(conn: &Connection, id: &str) -> AppResult<Note> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("笔记 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("笔记 {} 不存在", id)))
 }
 
 pub fn create(conn: &Connection, input: CreateNoteInput) -> AppResult<Note> {

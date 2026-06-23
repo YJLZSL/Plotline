@@ -287,7 +287,7 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
             <Button size="sm" variant="outline" onClick={resetView} className="gap-2" title={t('map.panHint')}>
               <Maximize className="h-4 w-4" />
             </Button>
-            <Button size="sm" onClick={handleAdd} className="gap-2">
+            <Button size="sm" onClick={handleAdd} className="gap-2" data-testid="add-location-btn">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('map.addLocation')}</span>
             </Button>
@@ -802,7 +802,7 @@ function LocationEditDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>{t('map.form.name')}</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" autoFocus />
+              <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" autoFocus data-testid="location-name-input" />
             </div>
             <div>
               <Label>{t('map.form.icon')}</Label>
@@ -911,7 +911,7 @@ function LocationEditDialog({
 
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => onSave({ name, description, color, icon, linkedEventId, characterIds })} disabled={!name.trim()}>
+            <Button onClick={() => onSave({ name, description, color, icon, linkedEventId, characterIds })} disabled={!name.trim()} data-testid="location-save-btn">
               {t('common.save')}
             </Button>
           </div>

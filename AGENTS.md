@@ -41,26 +41,24 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v1.6.0 已完成）
-- **MC 风格彩蛋**：新增 `useKonamiCode` hook，输入 Konami 码后全局切换像素字体并弹出彩蛋提示。
-- **番茄钟 MC 主题**：MC 主题已存在，本次补充主题持久化，重启后保留。
-- **字体自定义与像素字体**：设置页已支持 UI/编辑器字体预设 + 自定义输入，内置 Fusion Pixel 10px 像素字体；本次让富文本编辑器真正应用 `font-mono`。
-- **AI 助手融入工作流**：AI 回复支持插入为笔记/大纲/事件/VN 场景；设置页模型下拉会根据 baseUrl + API Key 拉取 `/models`；本次将厂商图标替换为更接近官方风格的 SVG。
-- **VN 素材导入**：VN 场景/台词支持上传背景图、BGM、立绘、配音；预览器可真实渲染图片与播放音频；Ren'Py 导入/导出支持素材语句。
-- **功能间配合与动画过渡**：地图关联事件可跳转时间轴；大纲节点可一键生成时间轴事件；VN 三种模式切换与地图详情面板补全 `AnimatePresence` 过渡。
-- **测试**：本地 `vitest run`（131 passed）、`cargo test`（41 passed）、`cargo clippy -- -D warnings`、`eslint` 全绿。
-- **构建与发布**：版本号统一升级到 `v1.6.0`，`CHANGELOG.md` 与 `AGENTS.md` 已更新。
+### 当前迭代状态（v2.0.0 最终版本已完成）
+- **导出格式扩展**：工作区新增 PDF（系统 TrueType 中文字体 fallback）、Word、EPUB 导出。
+- **WorkspaceBundle 补全**：导入/导出现在包含地点、地点连线、VN 场景与台词，并正确重映射 ID。
+- **AI 流式输出 + 系统提示词**：新增 `ai_chat_stream` 通道命令实现 SSE 解析与逐字显示；设置页支持自定义 `aiSystemPrompt`。
+- **VN 编辑器增强**：台词支持 `**粗体**` / `*斜体*` 富文本与工具栏；新增分支图一致性检查。
+- **地图 Polish**：地点图标、角色足迹连线、PNG 导出已就位；地图-时间轴联动可跳转。
+- **世界观模块**：新增 `WorldbuildingView`，按历史/魔法/势力/地理/文化/其他维度管理笔记。
+- **CSP 白名单**：`tauri.conf.json` 已配置内容安全策略。
+- **UI/UX 打磨**：世界观工具栏改为下拉选择；修复自动保存定时器重置与硬编码文案。
+- **测试**：`pnpm lint`、`pnpm typecheck`、`pnpm test:run`（138 passed）、`cargo test`（45 passed）、`cargo clippy -- -D warnings`、`pnpm test:e2e`（11 passed）全部通过。
+- **构建与发布**：版本号统一升级到 `v2.0.0`，`CHANGELOG.md` 与 `AGENTS.md` 已更新；本地已构建 NSIS + MSI 安装包并生成 `latest.json`，可推送 GitHub Release v2.0.0。
 
-### 下一迭代方向（v1.7 候选）
-- **导出格式扩展**：增加 ePub、PDF、Word 导出，对标 Scrivener 编译系统。
-- **导出包补全**：`WorkspaceBundle` 加入 VN 场景/台词、地点、地点连线，消除静默数据丢失。
-- **AI 流式输出**：支持 SSE 流式响应，AI 回复逐字显示；AI 系统提示词可配置。
-- **VN 编辑器增强**：台词富文本编辑、分支调试器、角色立绘插槽拖拽。
-- **地图 polish**：地点分组/图层、更丰富的图标库、地图打印/PDF 导出。
-- **世界观模块**：参考 Campfire 增加种族/物种/宗教等实体管理。
-- **UI 美术**：统一空状态插画、卡片质感升级、更多主题预设、日文翻译补全。
-- **E2E 测试**：补充 Playwright spec 覆盖关键用户流程。
-- **CSP 配置**：`tauri.conf.json` 配置 CSP 白名单替代 `null`。
+### 下一迭代方向（后续维护/扩展候选）
+- 地图：地点分组/图层、打印/PDF 导出。
+- VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
+- 世界观：种族/物种/宗教等实体管理。
+- UI 美术：统一空状态插画、卡片质感升级、日文翻译补全。
+- 番茄钟：与写作目标绑定、每日统计、通知提醒。
 
 ---
 

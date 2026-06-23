@@ -10,6 +10,7 @@
     "outline": "大纲",
     "map": "地图",
     "vn": "视觉小说",
+    "worldbuilding": "世界观",
     "statistics": "统计",
     "notebook": "资料库",
     "settings": "设置"
@@ -52,7 +53,10 @@
     },
     "createdAt": "创建于 {{date}}",
     "updatedAt": "更新于 {{date}}",
-    "exportMarkdown": "导出 Markdown"
+    "exportMarkdown": "导出 Markdown",
+    "exportPdf": "导出 PDF",
+    "exportWord": "导出 Word",
+    "exportEpub": "导出 ePub"
   },
   "timeline": {
     "title": "时间轴",
@@ -253,11 +257,35 @@
     "uploadVoice": "上传配音",
     "spriteUploaded": "已上传立绘",
     "voiceUploaded": "已上传配音",
+    "checkBranches": "检查分支",
+    "issuesFound": "发现 {{count}} 个问题",
+    "noIssues": "分支图暂无问题",
     "imported": "Ren'Py 脚本导入成功",
+    "issue": {
+      "missing_choice_target": "缺失跳转目标",
+      "unreachable_scene": "不可达场景",
+      "empty_scene": "空场景"
+    },
     "typewriter": "打字机",
     "empty": {
       "title": "还没有场景",
       "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。"
+    }
+  },
+  "worldbuilding": {
+    "title": "世界观",
+    "history": "历史",
+    "magic": "魔法/规则",
+    "factions": "势力/组织",
+    "geography": "地理",
+    "culture": "文化",
+    "other": "其他",
+    "add": "添加条目",
+    "newEntry": "新{{category}}条目",
+    "placeholder": "记录世界观细节…",
+    "empty": {
+      "title": "还没有世界观条目",
+      "description": "从历史、魔法、势力、地理、文化等维度构建你的故事世界。"
     }
   },
   "pomodoro": {
@@ -356,6 +384,9 @@
     "aiModel": "模型",
     "aiApiKey": "API Key",
     "aiRagEnabled": "启用 RAG 检索增强",
+    "aiSystemPrompt": "系统提示词",
+    "aiSystemPromptPlaceholder": "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答。",
+    "aiSystemPromptHint": "留空则使用默认提示词。系统提示词会附加到每次 AI 对话的开头。",
     "aiGetKey": "获取 API Key",
     "splashEnabled": "显示开场动画",
     "splashDuration": "开场动画时长"
@@ -377,7 +408,9 @@
     "loading": "加载中…",
     "noResults": "没有匹配的结果",
     "actions": "操作",
-    "optional": "可选"
+    "optional": "可选",
+    "bold": "粗体",
+    "italic": "斜体"
   },
   "toast": {
     "workspaceCreated": "工作区已创建",

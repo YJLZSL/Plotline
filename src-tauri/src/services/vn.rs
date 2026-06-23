@@ -4,7 +4,8 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnLine, VnScene,
+    CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnGraphIssue,
+    VnLine, VnScene,
 };
 use crate::services::character;
 
@@ -52,7 +53,7 @@ fn get_scene(conn: &Connection, id: &str) -> AppResult<VnScene> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("场景 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("场景 {} 不存在", id)))
 }
 
 pub fn create_scene(conn: &Connection, input: CreateVnSceneInput) -> AppResult<VnScene> {
@@ -196,7 +197,7 @@ fn get_line(conn: &Connection, id: &str) -> AppResult<VnLine> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("台词 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("台词 {} 不存在", id)))
 }
 
 pub fn create_line(conn: &Connection, input: CreateVnLineInput) -> AppResult<VnLine> {
@@ -435,6 +436,83 @@ pub fn export_renpy(conn: &Connection, workspace_id: &str) -> AppResult<String> 
     }
 
     Ok(out)
+}
+
+/// 检查 VN 分支图一致性，返回发现的问题列表。
+pub fn check_graph(conn: &Connection, workspace_id: &str) -> AppResult<Vec<VnGraphIssue>> {
+    let scenes = list_scenes(conn, workspace_id)?;
+    let lines = list_all_lines(conn, workspace_id)?;
+    let scene_ids: std::collections::HashSet<String> =
+        scenes.iter().map(|s| s.id.clone()).collect();
+    let scene_titles: std::collections::HashMap<String, String> =
+        scenes.iter().map(|s| (s.id.clone(), s.title.clone())).collect();
+    let mut issues = Vec::new();
+
+    // 选项指向不存在的场景
+    for line in &lines {
+        if line.line_type == "choice" {
+            if let Some(target) = &line.choice_target_scene_id {
+                if !scene_ids.contains(target) {
+                    issues.push(VnGraphIssue {
+                        kind: "missing_choice_target".into(),
+                        scene_id: Some(line.scene_id.clone()),
+                        scene_title: scene_titles.get(&line.scene_id).cloned(),
+                        line_id: Some(line.id.clone()),
+                        message: {
+                            let label = line.choice_label.as_str().trim();
+                            let display = if label.is_empty() {
+                                line.text.as_str()
+                            } else {
+                                label
+                            };
+                            format!("选项「{}」跳转到了不存在的场景", display)
+                        },
+                    });
+                }
+            }
+        }
+    }
+
+    // 没有任何入边的场景（除第一个外）
+    let mut incoming: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for line in &lines {
+        if line.line_type == "choice" {
+            if let Some(target) = &line.choice_target_scene_id {
+                incoming.insert(target.clone());
+            }
+        }
+    }
+    for scene in &scenes {
+        if scene.sort_order != 0 && !incoming.contains(&scene.id) {
+            issues.push(VnGraphIssue {
+                kind: "unreachable_scene".into(),
+                scene_id: Some(scene.id.clone()),
+                scene_title: Some(scene.title.clone()),
+                line_id: None,
+                message: format!("场景「{}」没有来自其他场景的入口", scene.title),
+            });
+        }
+    }
+
+    // 空场景（没有任何台词）
+    let lines_by_scene: std::collections::HashMap<String, Vec<&VnLine>> =
+        lines.iter().fold(std::collections::HashMap::new(), |mut acc, l| {
+            acc.entry(l.scene_id.clone()).or_default().push(l);
+            acc
+        });
+    for scene in &scenes {
+        if !lines_by_scene.contains_key(&scene.id) {
+            issues.push(VnGraphIssue {
+                kind: "empty_scene".into(),
+                scene_id: Some(scene.id.clone()),
+                scene_title: Some(scene.title.clone()),
+                line_id: None,
+                message: format!("场景「{}」还没有任何台词", scene.title),
+            });
+        }
+    }
+
+    Ok(issues)
 }
 
 #[cfg(test)]

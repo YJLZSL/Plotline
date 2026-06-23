@@ -4,6 +4,52 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [2.0.0] - 2026-06-22
+
+**目标**：完成 Plotline 最终版本，补齐世界观模块、多格式导出、AI 流式输出、
+VN 编辑器增强与 CSP 安全策略，进行全量前后端测试与 UI/UX 打磨后发布 v2.0.0。
+
+### 新增
+- **世界观模块** (`src/components/views/WorldbuildingView.tsx`)：
+  新增世界观视图，按历史、魔法/规则、势力/组织、地理、文化、其他六个维度
+  管理笔记条目，支持分类下拉添加、卡片内即时编辑与自动保存。
+- **工作区导出格式扩展** (`src-tauri/src/services/export.rs` +
+  `src/features/workspace/exportApi.ts`)：
+  除 Markdown 外，新增 PDF（系统 TrueType 中文字体 fallback）、Word（docx）
+  与 EPUB 导出，覆盖完整创作交付场景。
+- **AI 流式输出** (`src-tauri/src/services/ai.rs` +
+  `src/components/layout/AiAssistantPanel.tsx`)：
+  新增 `ai_chat_stream` Tauri Channel 命令，支持 SSE 解析与逐字显示；
+  Web 模式自动 fallback 到非流式接口。
+- **可配置系统提示词** (`src-tauri/src/services/settings.rs` +
+  `src/components/views/SettingsView.tsx`)：
+  设置页新增 `aiSystemPrompt`，用户可自定义 AI 行为，留空使用默认提示词。
+- **VN 编辑器增强** (`src/components/views/VnView.tsx`)：
+  台词支持 `**粗体**` / `*斜体*` 富文本解析与工具栏快捷插入；
+  新增分支图一致性检查，提示缺失跳转目标、不可达场景与空场景。
+- **CSP 白名单** (`src-tauri/tauri.conf.json`)：
+  配置内容安全策略，限制资源仅加载自本地与必要 blob/data，禁用 frame/object。
+
+### 变更
+- **WorkspaceBundle 补全** (`src-tauri/src/services/workspace.rs`)：
+  导入/导出现在包含地点、地点连线、VN 场景与台词，并正确重映射 ID。
+- **错误处理细化** (`src-tauri/src/error.rs`)：
+  `map_not_found` 区分 `QueryReturnedNoRows` 与真实数据库错误。
+- **世界观工具栏** (`src/components/views/WorldbuildingView.tsx`)：
+  将六个分类按钮收拢为下拉选择，避免工具栏拥挤。
+- **AGENTS.md 迭代状态**：更新至 v2.0.0，记录最终版本功能矩阵。
+
+### 修复
+- 修复 `WorldbuildingView` 自动保存因父组件重渲染导致定时器被反复重置的问题，
+  改用 ref 保存最新回调与待保存状态，并在组件卸载时 flush。
+- 修复 `WorldbuildingView` 中删除按钮与占位符文案的硬编码中文，改为 i18n 键。
+
+### 测试
+- 新增 `WorldbuildingView.test.tsx`（4 项）验证空状态、分类渲染、新建条目与自动保存。
+- 新增 E2E `核心用户流程 › 世界观：添加历史条目`，覆盖新增视图主流程。
+- 全量回归：`pnpm lint`、`pnpm typecheck`、`pnpm test:run`、
+  `cargo test`、`cargo clippy -- -D warnings`、`pnpm test:e2e` 全部通过。
+
 ## [1.6.0] - 2026-06-22
 
 **目标**：补齐用户反馈的兜底需求——MC 彩蛋、AI 厂商真实图标、VN 素材导入与预览、

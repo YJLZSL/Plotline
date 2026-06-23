@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bot,
@@ -18,9 +19,12 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { useSettingsQuery } from '@/features/settings/hooks';
+import { toastError } from '@/stores/toast';
 import { getProviderPreset } from '@/features/ai/providers';
+import { aiChatStream } from '@/features/ai/api';
 import {
-  useAiChat,
+  aiMessagesKey,
+  aiSessionsKey,
   useAiIndexWorkspace,
   useAiKvGet,
   useAiMessagesQuery,
@@ -29,7 +33,7 @@ import {
   useCreateAiSession,
   useDeleteAiSession,
 } from '@/features/ai/hooks';
-import type { AiSession } from '@/types';
+import type { AiMessage, AiSession } from '@/types';
 
 interface AiAssistantPanelProps {
   open: boolean;
@@ -44,15 +48,17 @@ export function AiAssistantPanel({
 }: AiAssistantPanelProps) {
   const { t } = useI18n();
   const { data: settings } = useSettingsQuery();
+  const qc = useQueryClient();
   const { data: sessions = [] } = useAiSessionsQuery(workspaceId);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: messages = [] } = useAiMessagesQuery(currentSessionId);
   const createSession = useCreateAiSession(workspaceId);
   const deleteSession = useDeleteAiSession(workspaceId);
-  const chat = useAiChat(workspaceId);
   const indexWorkspace = useAiIndexWorkspace(workspaceId);
   const { data: summary } = useAiKvGet(workspaceId, 'workspace_summary');
 
@@ -64,7 +70,7 @@ export function AiAssistantPanel({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, chat.isPending]);
+  }, [messages, isStreaming, streamingContent]);
 
   const handleNewSession = async () => {
     const session = await createSession.mutateAsync({
@@ -76,14 +82,35 @@ export function AiAssistantPanel({
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || chat.isPending) return;
+    if (!text || isStreaming) return;
     setInput('');
-    await chat.mutateAsync({
-      workspaceId,
-      sessionId: currentSessionId,
-      message: text,
-      useRag: true,
-    });
+    setIsStreaming(true);
+    setStreamingContent('');
+    try {
+      const result = await aiChatStream(
+        {
+          workspaceId,
+          sessionId: currentSessionId,
+          message: text,
+          useRag: true,
+        },
+        (event) => {
+          if (event.type === 'delta') {
+            setStreamingContent((prev) => prev + event.data);
+          } else if (event.type === 'error') {
+            toastError(event.data);
+          }
+        },
+      );
+      setCurrentSessionId(result.sessionId);
+      qc.setQueryData<AiMessage[]>(aiMessagesKey(result.sessionId), result.messages);
+      qc.invalidateQueries({ queryKey: aiSessionsKey(workspaceId) });
+    } catch {
+      // 错误由 onError / channel error 处理
+    } finally {
+      setIsStreaming(false);
+      setStreamingContent('');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -183,7 +210,7 @@ export function AiAssistantPanel({
                 )}
 
                 <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-                  {messages.length === 0 && !chat.isPending && (
+                  {messages.length === 0 && !isStreaming && (
                     <EmptyState
                       icon={<Bot className="h-8 w-8" />}
                       title={t('ai.empty')}
@@ -193,7 +220,13 @@ export function AiAssistantPanel({
                   {messages.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} workspaceId={workspaceId} />
                   ))}
-                  {chat.isPending && (
+                  {isStreaming && streamingContent && (
+                    <MessageBubble
+                      message={{ id: 'streaming', role: 'assistant', content: streamingContent }}
+                      workspaceId={workspaceId}
+                    />
+                  )}
+                  {isStreaming && !streamingContent && (
                     <div className="flex items-center gap-2 text-xs text-text-secondary">
                       <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                       {t('ai.thinking')}
@@ -214,7 +247,7 @@ export function AiAssistantPanel({
                     />
                     <Button
                       onClick={() => void handleSend()}
-                      loading={chat.isPending}
+                      loading={isStreaming}
                       disabled={!input.trim()}
                       className="h-10 w-10 p-0 flex-shrink-0"
                     >

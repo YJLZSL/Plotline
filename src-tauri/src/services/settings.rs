@@ -8,7 +8,7 @@ pub fn read_settings(conn: &Connection) -> AppResult<AppSettings> {
         "SELECT theme, accent_color, language, editor_font, ui_font, font_size,
                 backup_path, auto_backup, backup_interval_hours, default_view, timeline_zoom,
                 font_theme, ai_provider, ai_model, ai_api_key, ai_base_url,
-                ai_enabled, ai_rag_enabled, splash_enabled, splash_duration_ms
+                ai_enabled, ai_rag_enabled, ai_system_prompt, splash_enabled, splash_duration_ms
          FROM app_settings WHERE id=1",
         [],
         |row| {
@@ -31,8 +31,9 @@ pub fn read_settings(conn: &Connection) -> AppResult<AppSettings> {
                 ai_base_url: row.get(15)?,
                 ai_enabled: row.get::<_, i64>(16)? != 0,
                 ai_rag_enabled: row.get::<_, i64>(17)? != 0,
-                splash_enabled: row.get::<_, i64>(18)? != 0,
-                splash_duration_ms: row.get(19)?,
+                ai_system_prompt: row.get(18)?,
+                splash_enabled: row.get::<_, i64>(19)? != 0,
+                splash_duration_ms: row.get(20)?,
             })
         },
     )
@@ -45,7 +46,7 @@ pub fn write_settings(conn: &Connection, s: &AppSettings) -> AppResult<()> {
              ui_font=?5, font_size=?6, backup_path=?7, auto_backup=?8,
              backup_interval_hours=?9, default_view=?10, timeline_zoom=?11, font_theme=?12,
              ai_provider=?13, ai_model=?14, ai_api_key=?15, ai_base_url=?16,
-             ai_enabled=?17, ai_rag_enabled=?18, splash_enabled=?19, splash_duration_ms=?20
+             ai_enabled=?17, ai_rag_enabled=?18, ai_system_prompt=?19, splash_enabled=?20, splash_duration_ms=?21
          WHERE id=1",
         rusqlite::params![
             s.theme,
@@ -66,6 +67,7 @@ pub fn write_settings(conn: &Connection, s: &AppSettings) -> AppResult<()> {
             s.ai_base_url,
             s.ai_enabled as i64,
             s.ai_rag_enabled as i64,
+            s.ai_system_prompt,
             s.splash_enabled as i64,
             s.splash_duration_ms,
         ],
@@ -96,6 +98,9 @@ pub fn merge_settings(conn: &Connection, input: UpdateSettingsInput) -> AppResul
         ai_base_url: input.ai_base_url.unwrap_or(existing.ai_base_url),
         ai_enabled: input.ai_enabled.unwrap_or(existing.ai_enabled),
         ai_rag_enabled: input.ai_rag_enabled.unwrap_or(existing.ai_rag_enabled),
+        ai_system_prompt: input
+            .ai_system_prompt
+            .unwrap_or(existing.ai_system_prompt),
         splash_enabled: input.splash_enabled.unwrap_or(existing.splash_enabled),
         splash_duration_ms: input
             .splash_duration_ms

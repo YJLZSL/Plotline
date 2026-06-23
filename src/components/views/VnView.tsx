@@ -19,6 +19,11 @@ import {
   Image as ImageIcon,
   Music,
   FileAudio,
+  AlertTriangle,
+  CheckCircle,
+  ScanLine,
+  Bold,
+  Italic,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/plugin-fs';
@@ -53,6 +58,8 @@ import {
   useDeleteVnLine,
   useExportVnRenpy,
   useUploadVnAsset,
+  useVnConsistencyQuery,
+  useCheckVnConsistency,
 } from '@/features/vn/hooks';
 import {
   createVnLine as apiCreateVnLine,
@@ -101,6 +108,39 @@ function parseBackground(value: string): ParsedBackground {
     return { mode: 'color', value: trimmed };
   }
   return { mode: 'text', value: trimmed };
+}
+
+/** 将 **粗体** / *斜体* / __粗体__ / _斜体_ 解析为 React 节点。 */
+function formatRichText(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|_[^_]+_)/g;
+  let lastIndex = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(<span key={key++}>{text.slice(lastIndex, match.index)}</span>);
+    }
+    const raw = match[0];
+    if ((raw.startsWith('**') && raw.endsWith('**')) || (raw.startsWith('__') && raw.endsWith('__'))) {
+      nodes.push(
+        <strong key={key++} className="font-semibold">
+          {raw.slice(2, -2)}
+        </strong>,
+      );
+    } else {
+      nodes.push(
+        <em key={key++} className="italic">
+          {raw.slice(1, -1)}
+        </em>,
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(<span key={key++}>{text.slice(lastIndex)}</span>);
+  }
+  return nodes;
 }
 
 interface VnViewProps {
@@ -370,7 +410,7 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">{t('vn.exportRenpy')}</span>
             </Button>
-            <Button size="sm" onClick={handleAddScene} className="gap-2">
+            <Button size="sm" onClick={handleAddScene} className="gap-2" data-testid="add-scene-btn">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('vn.addScene')}</span>
             </Button>
@@ -605,6 +645,7 @@ function VnScriptEditor({
             if (title.trim() && title !== scene.title) void onRename(title.trim());
           }}
           className="flex-1 max-w-md text-sm font-semibold"
+          data-testid="scene-title-input"
         />
         <Input
           value={background}
@@ -637,7 +678,7 @@ function VnScriptEditor({
           <Music className="h-4 w-4" />
         </Button>
         <div className="flex gap-1.5">
-          <Button variant="outline" size="sm" onClick={() => handleAddLine('dialog')} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => handleAddLine('dialog')} className="gap-1.5" data-testid="add-line-dialog-btn">
             <MessageSquare className="h-3.5 w-3.5" />
             {t('vn.lineDialog')}
           </Button>
@@ -724,6 +765,22 @@ export function VnLineRow({
   const isChoice = line.lineType === 'choice';
   const isNarration = line.lineType === 'narration';
   const uploadAsset = useUploadVnAsset(workspaceId);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const wrapSelection = (prefix: string, suffix = prefix) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = line.text.slice(start, end);
+    const newText = line.text.slice(0, start) + prefix + selected + suffix + line.text.slice(end);
+    onChange({ text: newText });
+    window.requestAnimationFrame(() => {
+      el.focus();
+      const caret = start + prefix.length + selected.length;
+      el.setSelectionRange(caret, caret);
+    });
+  };
 
   const pickAndUpload = async (titleKey: string, extensions: string[]) => {
     if (!isTauri()) return null;
@@ -839,11 +896,31 @@ export function VnLineRow({
             </div>
           ) : null}
 
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => wrapSelection('**')}
+              className="p-1 rounded-[4px] text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
+              title={t('common.bold')}
+              type="button"
+            >
+              <Bold className="h-3 w-3" />
+            </button>
+            <button
+              onClick={() => wrapSelection('*')}
+              className="p-1 rounded-[4px] text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
+              title={t('common.italic')}
+              type="button"
+            >
+              <Italic className="h-3 w-3" />
+            </button>
+          </div>
           <Textarea
+            ref={textareaRef}
             value={line.text}
             onChange={(e) => onChange({ text: e.target.value })}
             placeholder={isChoice ? t('vn.choiceTextPlaceholder') : t('vn.textPlaceholder')}
             className="text-sm min-h-[44px] resize-y"
+            data-testid="line-text-input"
           />
           {!isNarration && (
             <div className="flex flex-wrap gap-2">
@@ -922,9 +999,11 @@ function VnGraphPanel({
   onSelectScene: (id: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
-  const { data: allLines = [], isLoading } = useVnAllLinesQuery(workspaceId, scenes.length > 0);
+  const { data: allLines = [], isLoading: linesLoading } = useVnAllLinesQuery(workspaceId, scenes.length > 0);
+  const { data: issues = [], isLoading: issuesLoading, refetch } = useVnConsistencyQuery(workspaceId, scenes.length > 0);
+  const check = useCheckVnConsistency(workspaceId);
 
-  if (isLoading) {
+  if (linesLoading || issuesLoading) {
     return (
       <div className="flex-1 grid place-items-center">
         <div className="space-y-2">
@@ -943,7 +1022,54 @@ function VnGraphPanel({
     );
   }
 
-  return <VnGraph scenes={scenes} lines={allLines} onSelectScene={onSelectScene} />;
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="h-12 px-4 flex items-center justify-between border-b border-border bg-bg-surface flex-shrink-0">
+        <div className="flex items-center gap-2">
+          {issues.length === 0 ? (
+            <>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <span className="text-xs text-text-secondary">{t('vn.noIssues')}</span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <span className="text-xs text-text-secondary">
+                {t('vn.issuesFound', { count: issues.length })}
+              </span>
+            </>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void (check.mutateAsync().then(() => refetch()))}
+          loading={check.isPending}
+          className="gap-1.5"
+        >
+          <ScanLine className="h-3.5 w-3.5" />
+          {t('vn.checkBranches')}
+        </Button>
+      </div>
+      <div className="flex-1 overflow-auto">
+        {issues.length > 0 && (
+          <div className="p-4 space-y-2">
+            {issues.map((issue) => (
+              <button
+                key={`${issue.kind}-${issue.sceneId ?? ''}-${issue.lineId ?? ''}`}
+                onClick={() => issue.sceneId && onSelectScene(issue.sceneId)}
+                className="w-full text-left rounded-[6px] border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-text-secondary hover:bg-amber-500/10 transition-colors"
+              >
+                <span className="font-medium text-amber-600">{t(`vn.issue.${issue.kind}`)}</span>
+                <span className="ml-2">{issue.message}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <VnGraph scenes={scenes} lines={allLines} onSelectScene={onSelectScene} />
+      </div>
+    </div>
+  );
 }
 
 function VnGraph({
@@ -1272,7 +1398,7 @@ function VnPreview({
             {currentLine.lineType === 'narration' ? (
               <div className="text-center py-8">
                 <p className="text-base text-text-secondary italic leading-relaxed whitespace-pre-wrap">
-                  {typedText}
+                  {formatRichText(typedText)}
                 </p>
               </div>
             ) : currentLine.lineType === 'choice' && showChoices ? (
@@ -1314,7 +1440,7 @@ function VnPreview({
                   </div>
                 )}
                 <p className="text-base text-text-primary leading-relaxed whitespace-pre-wrap min-h-[2em]">
-                  {currentLine.lineType === 'choice' ? currentLine.text || '…' : typedText}
+                  {currentLine.lineType === 'choice' ? currentLine.text || '…' : formatRichText(typedText)}
                 </p>
                 {!isLast && typewriterDone && (
                   <div className="flex justify-end mt-3">

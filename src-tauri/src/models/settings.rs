@@ -21,6 +21,7 @@ pub struct AppSettings {
     pub ai_base_url: String,
     pub ai_enabled: bool,
     pub ai_rag_enabled: bool,
+    pub ai_system_prompt: String,
     pub splash_enabled: bool,
     pub splash_duration_ms: i64,
 }
@@ -46,6 +47,7 @@ impl Default for AppSettings {
             ai_base_url: String::new(),
             ai_enabled: false,
             ai_rag_enabled: true,
+            ai_system_prompt: String::new(),
             splash_enabled: true,
             splash_duration_ms: 2500,
         }
@@ -73,6 +75,7 @@ pub struct UpdateSettingsInput {
     pub ai_base_url: Option<String>,
     pub ai_enabled: Option<bool>,
     pub ai_rag_enabled: Option<bool>,
+    pub ai_system_prompt: Option<String>,
     pub splash_enabled: Option<bool>,
     pub splash_duration_ms: Option<i64>,
 }

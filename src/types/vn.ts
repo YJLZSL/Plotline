@@ -75,3 +75,11 @@ export interface UpdateVnLineInput {
   voicePath?: string | null;
   sortOrder?: number;
 }
+
+export interface VnGraphIssue {
+  kind: string;
+  sceneId: string | null;
+  sceneTitle: string | null;
+  lineId: string | null;
+  message: string;
+}

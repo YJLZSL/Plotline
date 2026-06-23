@@ -93,6 +93,9 @@ pub fn run() {
             // export
             commands::export::export_workspace_markdown,
             commands::export::export_outline_markdown,
+            commands::export::export_workspace_pdf,
+            commands::export::export_workspace_word,
+            commands::export::export_workspace_epub,
             // character
             commands::character::list_characters,
             commands::character::get_character,
@@ -133,6 +136,7 @@ pub fn run() {
             commands::vn::update_vn_line,
             commands::vn::delete_vn_line,
             commands::vn::export_vn_renpy,
+            commands::vn::check_vn_consistency,
             commands::vn::upload_vn_asset,
             // statistics
             commands::statistics::get_statistics,
@@ -147,6 +151,7 @@ pub fn run() {
             commands::ai::add_ai_message,
             commands::ai::list_ai_messages,
             commands::ai::ai_chat,
+            commands::ai::ai_chat_stream,
             commands::ai::ai_index_workspace,
             commands::ai::ai_kv_get,
             commands::ai::ai_kv_set,

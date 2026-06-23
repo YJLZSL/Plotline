@@ -36,6 +36,10 @@ export interface WorkspaceBundle {
   eventConnections: EventConnection[];
   outlineNodes: OutlineNode[];
   notes: Note[];
+  locations: Location[];
+  locationLinks: LocationLink[];
+  vnScenes: VnScene[];
+  vnLines: VnLine[];
 }
 
 import type { Track } from './track';
@@ -43,3 +47,5 @@ import type { Event, EventConnection } from './event';
 import type { Character, CharacterRelationship } from './character';
 import type { OutlineNode } from './outline';
 import type { Note } from './note';
+import type { Location, LocationLink } from './location';
+import type { VnScene, VnLine } from './vn';

@@ -37,8 +37,22 @@ impl From<rusqlite::Error> for AppError {
     }
 }
 
+/// 将 `QueryReturnedNoRows` 转换为自定义 NotFound，其余 DB 错误原样透传。
+pub fn map_not_found(err: rusqlite::Error, message: impl Into<String>) -> AppError {
+    match err {
+        rusqlite::Error::QueryReturnedNoRows => AppError::NotFound(message.into()),
+        other => other.into(),
+    }
+}
+
 impl From<std::io::Error> for AppError {
     fn from(err: std::io::Error) -> Self {
+        AppError::Io(err.to_string())
+    }
+}
+
+impl From<zip::result::ZipError> for AppError {
+    fn from(err: zip::result::ZipError) -> Self {
         AppError::Io(err.to_string())
     }
 }

@@ -129,3 +129,11 @@ pub struct AiModelInfo {
     pub id: String,
     pub owned_by: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type", content = "data")]
+pub enum AiStreamEvent {
+    Delta(String),
+    Error(String),
+    Done,
+}

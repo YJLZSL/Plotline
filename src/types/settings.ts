@@ -1,6 +1,6 @@
 export type Theme = 'light' | 'dark' | 'sepia';
 export type Language = 'zh-CN' | 'zh-TW' | 'en';
-export type DefaultView = 'timeline' | 'characters' | 'outline' | 'statistics' | 'notebook' | 'map' | 'vn';
+export type DefaultView = 'timeline' | 'characters' | 'outline' | 'statistics' | 'notebook' | 'map' | 'vn' | 'worldbuilding';
 export type TimelineZoom = 'year' | 'month' | 'day' | 'hour';
 export type FontTheme = 'sans' | 'mono' | 'pixel';
 
@@ -23,6 +23,7 @@ export interface AppSettings {
   aiBaseUrl: string;
   aiEnabled: boolean;
   aiRagEnabled: boolean;
+  aiSystemPrompt: string;
   splashEnabled: boolean;
   splashDurationMs: number;
 }
@@ -46,6 +47,7 @@ export interface UpdateSettingsInput {
   aiBaseUrl?: string;
   aiEnabled?: boolean;
   aiRagEnabled?: boolean;
+  aiSystemPrompt?: string;
   splashEnabled?: boolean;
   splashDurationMs?: number;
 }

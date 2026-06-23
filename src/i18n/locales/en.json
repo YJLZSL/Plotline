@@ -10,6 +10,7 @@
     "outline": "Outline",
     "map": "Map",
     "vn": "Visual Novel",
+    "worldbuilding": "Worldbuilding",
     "statistics": "Statistics",
     "notebook": "Notebook",
     "settings": "Settings"
@@ -52,7 +53,10 @@
     },
     "createdAt": "Created {{date}}",
     "updatedAt": "Updated {{date}}",
-    "exportMarkdown": "Export Markdown"
+    "exportMarkdown": "Export Markdown",
+    "exportPdf": "Export PDF",
+    "exportWord": "Export Word",
+    "exportEpub": "Export ePub"
   },
   "timeline": {
     "title": "Timeline",
@@ -253,11 +257,35 @@
     "uploadVoice": "Upload voice",
     "spriteUploaded": "Sprite uploaded",
     "voiceUploaded": "Voice uploaded",
+    "checkBranches": "Check branches",
+    "issuesFound": "{{count}} issue(s) found",
+    "noIssues": "No graph issues",
     "imported": "Ren'Py script imported",
+    "issue": {
+      "missing_choice_target": "Missing choice target",
+      "unreachable_scene": "Unreachable scene",
+      "empty_scene": "Empty scene"
+    },
     "typewriter": "Typewriter",
     "empty": {
       "title": "No scenes yet",
       "description": "Create your first VN scene with dialog, narration, and branching choices."
+    }
+  },
+  "worldbuilding": {
+    "title": "Worldbuilding",
+    "history": "History",
+    "magic": "Magic / Rules",
+    "factions": "Factions",
+    "geography": "Geography",
+    "culture": "Culture",
+    "other": "Other",
+    "add": "Add entry",
+    "newEntry": "New {{category}} entry",
+    "placeholder": "Record worldbuilding details…",
+    "empty": {
+      "title": "No worldbuilding entries",
+      "description": "Build your story world from history, magic, factions, geography and culture."
     }
   },
   "pomodoro": {
@@ -356,6 +384,9 @@
     "aiModel": "Model",
     "aiApiKey": "API Key",
     "aiRagEnabled": "Enable RAG retrieval",
+    "aiSystemPrompt": "System Prompt",
+    "aiSystemPromptPlaceholder": "You are Plotline's AI writing assistant, familiar with narrative writing, character building, outlining and visual novels. Please answer concisely in the user's language.",
+    "aiSystemPromptHint": "Leave blank to use the default prompt. The system prompt is prepended to every AI conversation.",
     "aiGetKey": "Get API Key",
     "splashEnabled": "Show splash animation",
     "splashDuration": "Splash duration"
@@ -377,7 +408,9 @@
     "loading": "Loading…",
     "noResults": "No results",
     "actions": "Actions",
-    "optional": "optional"
+    "optional": "optional",
+    "bold": "Bold",
+    "italic": "Italic"
   },
   "toast": {
     "workspaceCreated": "Workspace created",

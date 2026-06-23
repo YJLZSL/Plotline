@@ -61,6 +61,7 @@ import {
   CardContent,
   Input,
   Label,
+  Textarea,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
@@ -198,7 +199,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                 {t('settings.reset')}
               </Button>
             )}
-            <Button size="sm" onClick={save} loading={update.isPending} disabled={!dirty}>
+            <Button size="sm" onClick={save} loading={update.isPending} disabled={!dirty} data-testid="settings-save-btn">
               {t('common.save')}
             </Button>
           </div>
@@ -301,6 +302,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                           set({ language: lng });
                           void i18n.changeLanguage(lng);
                         }}
+                        data-testid={`lang-${lng}`}
                         className={cn(
                           'h-10 px-4 rounded-[6px] border text-sm transition-colors',
                           draft.language === lng
@@ -377,6 +379,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                       'outline',
                       'map',
                       'vn',
+                      'worldbuilding',
                       'statistics',
                       'notebook',
                     ] as DefaultView[]).map((v) => (
@@ -586,6 +589,18 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                       transition={MOTION_FAST}
                     />
                   </button>
+                </Section>
+                <Section title={t('settings.aiSystemPrompt')}>
+                  <Textarea
+                    value={draft.aiSystemPrompt}
+                    onChange={(e) => set({ aiSystemPrompt: e.target.value })}
+                    placeholder={t('settings.aiSystemPromptPlaceholder')}
+                    rows={5}
+                    className="text-sm"
+                  />
+                  <p className="mt-1.5 text-xs text-text-secondary">
+                    {t('settings.aiSystemPromptHint')}
+                  </p>
                 </Section>
               </div>
             )}

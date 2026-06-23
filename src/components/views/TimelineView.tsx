@@ -831,6 +831,7 @@ function TrackLane({
         {/* 添加按钮 */}
         <button
           onClick={onAddEvent}
+          data-testid="add-event-btn"
           className={cn(
             'absolute top-3 flex items-center justify-center gap-1',
             'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
@@ -1066,6 +1067,7 @@ function EventEditDialog({
               onChange={(e) => setTitle(e.target.value)}
               className="mt-1.5"
               autoFocus
+              data-testid="event-title-input"
             />
           </div>
 
@@ -1205,6 +1207,7 @@ function EventEditDialog({
                   onSave({ title, description, dateType, dateValue, status, trackId, color, characterIds })
                 }
                 disabled={!title.trim()}
+                data-testid="event-save-btn"
               >
                 {t('common.save')}
               </Button>

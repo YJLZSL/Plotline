@@ -113,7 +113,7 @@ describe('mock ipc', () => {
       version: number;
       events: Event[];
     };
-    expect(bundle.version).toBe(1);
+    expect(bundle.version).toBe(2);
     expect(bundle.events).toHaveLength(1);
     const imported = (await mockIpc('import_workspace', { bundle })) as Workspace;
     expect(imported.name).toContain('导入');

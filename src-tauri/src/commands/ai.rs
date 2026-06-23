@@ -1,10 +1,10 @@
-use tauri::State;
+use tauri::{ipc::Channel, State};
 
 use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
 use crate::models::{
     AiChatInput, AiChatResult, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo,
-    AiSession, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
+    AiSession, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
 };
 use crate::services::settings::read_settings;
 use crate::AppState;
@@ -121,6 +121,100 @@ pub async fn ai_chat(state: State<'_, AppState>, input: AiChatInput) -> AppResul
 
     let reply =
         crate::services::ai::call_chat_api(&settings, &history, &user_message, &chunks).await?;
+
+    let messages = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+        crate::services::ai::add_message(
+            &db.conn,
+            &session_id,
+            crate::models::AiRole::Assistant,
+            &reply,
+        )?;
+        crate::services::ai::list_messages(&db.conn, &session_id, None)?
+    };
+
+    Ok(AiChatResult {
+        session_id,
+        reply,
+        messages,
+    })
+}
+
+#[tauri::command]
+pub async fn ai_chat_stream(
+    state: State<'_, AppState>,
+    input: AiChatInput,
+    on_event: Channel<AiStreamEvent>,
+) -> AppResult<AiChatResult> {
+    let user_message = input.message.trim().to_string();
+    if user_message.is_empty() {
+        return Err(AppError::InvalidInput("消息不能为空".into()));
+    }
+
+    let (settings, session_id, history, chunks) = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+        let settings = read_settings(&db.conn)?;
+        if !settings.ai_enabled {
+            return Err(AppError::Forbidden(
+                "AI 助手未启用，请先在设置中开启".into(),
+            ));
+        }
+
+        let session_id = match input.session_id {
+            Some(id) => id,
+            None => {
+                crate::services::ai::create_session(
+                    &db.conn,
+                    CreateAiSessionInput {
+                        workspace_id: input.workspace_id.clone(),
+                        title: None,
+                    },
+                )?
+                .id
+            }
+        };
+
+        crate::services::ai::add_message(
+            &db.conn,
+            &session_id,
+            crate::models::AiRole::User,
+            &user_message,
+        )?;
+
+        let use_rag = input.use_rag.unwrap_or(true) && settings.ai_rag_enabled;
+        let chunks = if use_rag {
+            crate::services::ai::search_chunks(
+                &db.conn,
+                &input.workspace_id,
+                &user_message,
+                Some(crate::services::ai::MAX_RAG_CHUNKS),
+            )?
+        } else {
+            Vec::new()
+        };
+
+        let history = crate::services::ai::list_messages(
+            &db.conn,
+            &session_id,
+            Some(crate::services::ai::MAX_HISTORY_MESSAGES),
+        )?;
+        (settings, session_id, history, chunks)
+    };
+
+    let reply = crate::services::ai::call_chat_api_stream(
+        &settings,
+        &history,
+        &user_message,
+        &chunks,
+        &on_event,
+    )
+    .await?;
 
     let messages = {
         let db = state

@@ -9,6 +9,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (3, include_str!("../../migrations/003_font_theme.sql")),
     (4, include_str!("../../migrations/004_ai_assistant.sql")),
     (5, include_str!("../../migrations/005_vn_assets.sql")),
+    (6, include_str!("../../migrations/006_ai_system_prompt.sql")),
 ];
 
 /// 创建 schema_migrations 表并依次执行迁移。
@@ -65,7 +66,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 5, "迁移 001-005 均应已应用");
+        assert_eq!(v, 6, "迁移 001-006 均应已应用");
     }
 
     #[test]
@@ -104,7 +105,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 5, "重复执行迁移不应改变版本号");
+        assert_eq!(v, 6, "重复执行迁移不应改变版本号");
     }
 
     #[test]
@@ -117,7 +118,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 5, "迁移 005 应使版本号变为 5");
+        assert_eq!(v, 6, "迁移 006 应使版本号变为 6");
         // 验证 locations 表存在
         conn.execute(
             "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",

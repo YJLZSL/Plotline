@@ -53,7 +53,7 @@ fn get(conn: &Connection, id: &str) -> AppResult<OutlineNode> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("大纲节点 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("大纲节点 {} 不存在", id)))
 }
 
 pub fn create(conn: &Connection, input: CreateOutlineNodeInput) -> AppResult<OutlineNode> {

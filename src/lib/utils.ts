@@ -78,3 +78,14 @@ export function downloadJSON(filename: string, data: unknown): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** 下载二进制数据为文件（Web 模式用）。 */
+export function downloadBlob(filename: string, bytes: number[], type: string): void {
+  const blob = new Blob([new Uint8Array(bytes)], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

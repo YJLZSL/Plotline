@@ -45,7 +45,7 @@ fn get(conn: &Connection, id: &str) -> AppResult<Track> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("轨道 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("轨道 {} 不存在", id)))
 }
 
 pub fn create(conn: &Connection, input: CreateTrackInput) -> AppResult<Track> {

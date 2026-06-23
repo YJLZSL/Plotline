@@ -15,6 +15,9 @@ import {
 import {
   exportWorkspaceMarkdown as apiExportWorkspaceMarkdown,
   exportOutlineMarkdown as apiExportOutlineMarkdown,
+  exportWorkspacePdf as apiExportWorkspacePdf,
+  exportWorkspaceWord as apiExportWorkspaceWord,
+  exportWorkspaceEpub as apiExportWorkspaceEpub,
 } from './exportApi';
 
 const KEY = ['workspaces'] as const;
@@ -95,6 +98,27 @@ export function useExportWorkspaceMarkdown() {
 export function useExportOutlineMarkdown() {
   return useMutation({
     mutationFn: apiExportOutlineMarkdown,
+    onError: toastError,
+  });
+}
+
+export function useExportWorkspacePdf() {
+  return useMutation({
+    mutationFn: apiExportWorkspacePdf,
+    onError: toastError,
+  });
+}
+
+export function useExportWorkspaceWord() {
+  return useMutation({
+    mutationFn: apiExportWorkspaceWord,
+    onError: toastError,
+  });
+}
+
+export function useExportWorkspaceEpub() {
+  return useMutation({
+    mutationFn: apiExportWorkspaceEpub,
     onError: toastError,
   });
 }

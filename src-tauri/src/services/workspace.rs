@@ -57,7 +57,7 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Workspace> {
             })
         },
     )
-    .map_err(|_| AppError::NotFound(format!("工作区 {} 不存在", id)))
+    .map_err(|e| crate::error::map_not_found(e, format!("工作区 {} 不存在", id)))
 }
 
 pub fn create(conn: &Connection, input: CreateWorkspaceInput) -> AppResult<Workspace> {
@@ -157,8 +157,13 @@ pub fn delete(conn: &Connection, id: &str) -> AppResult<()> {
 
 /// 导出工作区为完整 Bundle。
 pub fn export_bundle(conn: &Connection, workspace_id: &str) -> AppResult<WorkspaceBundle> {
+    let scenes = crate::services::vn::list_scenes(conn, workspace_id)?;
+    let mut lines = Vec::new();
+    for scene in &scenes {
+        lines.extend(crate::services::vn::list_lines(conn, &scene.id)?);
+    }
     Ok(WorkspaceBundle {
-        version: 1,
+        version: 2,
         workspace: get(conn, workspace_id)?,
         tracks: crate::services::track::list(conn, workspace_id)?,
         events: crate::services::event::list(conn, workspace_id)?,
@@ -167,6 +172,10 @@ pub fn export_bundle(conn: &Connection, workspace_id: &str) -> AppResult<Workspa
         event_connections: crate::services::event::list_connections(conn, workspace_id)?,
         outline_nodes: crate::services::outline::list(conn, workspace_id)?,
         notes: crate::services::note::list(conn, workspace_id)?,
+        locations: crate::services::location::list(conn, workspace_id)?,
+        location_links: crate::services::location::list_links(conn, workspace_id)?,
+        vn_scenes: scenes,
+        vn_lines: lines,
     })
 }
 
@@ -377,6 +386,134 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
         )?;
     }
 
+    let mut location_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for loc in &bundle.locations {
+        location_map.insert(loc.id.clone(), Uuid::new_v4().to_string());
+    }
+    for loc in bundle.locations.drain(..) {
+        let new_id = location_map
+            .get(&loc.id)
+            .cloned()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let new_linked_event = loc
+            .linked_event_id
+            .and_then(|eid| event_map.get(&eid).cloned());
+        let new_char_ids: Vec<String> = loc
+            .character_ids
+            .iter()
+            .filter_map(|cid| char_map.get(cid).cloned())
+            .collect();
+        tx.execute(
+            "INSERT INTO locations
+             (id, workspace_id, name, description, pos_x, pos_y, color, icon,
+              linked_event_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                new_id,
+                new_ws_id,
+                loc.name,
+                loc.description,
+                loc.pos_x,
+                loc.pos_y,
+                loc.color,
+                loc.icon,
+                new_linked_event,
+                now_str,
+                now_str,
+            ],
+        )?;
+        for cid in new_char_ids {
+            tx.execute(
+                "INSERT OR IGNORE INTO location_characters (location_id, character_id) VALUES (?1, ?2)",
+                params![new_id, cid],
+            )?;
+        }
+    }
+
+    for link in bundle.location_links.drain(..) {
+        let new_source = location_map
+            .get(&link.source_id)
+            .cloned()
+            .unwrap_or_default();
+        let new_target = location_map
+            .get(&link.target_id)
+            .cloned()
+            .unwrap_or_default();
+        tx.execute(
+            "INSERT OR IGNORE INTO location_links (source_id, target_id, label) VALUES (?1, ?2, ?3)",
+            params![new_source, new_target, link.label],
+        )?;
+    }
+
+    let mut scene_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for scene in &bundle.vn_scenes {
+        scene_map.insert(scene.id.clone(), Uuid::new_v4().to_string());
+    }
+    for scene in bundle.vn_scenes.drain(..) {
+        let new_id = scene_map
+            .get(&scene.id)
+            .cloned()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let new_outline = scene
+            .outline_node_id
+            .and_then(|oid| outline_map.get(&oid).cloned());
+        tx.execute(
+            "INSERT INTO vn_scenes
+             (id, workspace_id, title, background, background_asset_path, bgm_path,
+              outline_node_id, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                new_id,
+                new_ws_id,
+                scene.title,
+                scene.background,
+                scene.background_asset_path,
+                scene.bgm_path,
+                new_outline,
+                scene.sort_order,
+                now_str,
+                now_str,
+            ],
+        )?;
+    }
+
+    for line in bundle.vn_lines.drain(..) {
+        let new_id = Uuid::new_v4().to_string();
+        let new_scene = scene_map
+            .get(&line.scene_id)
+            .cloned()
+            .unwrap_or_default();
+        let new_character = line
+            .character_id
+            .and_then(|cid| char_map.get(&cid).cloned());
+        let new_choice_target = line
+            .choice_target_scene_id
+            .and_then(|sid| scene_map.get(&sid).cloned());
+        tx.execute(
+            "INSERT INTO vn_lines
+             (id, scene_id, sort_order, line_type, character_id, speaker_name, text,
+              emotion, choice_label, choice_target_scene_id, sprite_asset_path, voice_path, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                new_id,
+                new_scene,
+                line.sort_order,
+                line.line_type,
+                new_character,
+                line.speaker_name,
+                line.text,
+                line.emotion,
+                line.choice_label,
+                new_choice_target,
+                line.sprite_asset_path,
+                line.voice_path,
+                now_str,
+            ],
+        )?;
+    }
+
     tx.commit()?;
     Ok(new_ws)
 }
@@ -488,7 +625,7 @@ mod tests {
             updated_at: t,
         };
         WorkspaceBundle {
-            version: 1,
+            version: 2,
             workspace: ws,
             tracks: vec![track],
             events: vec![event],
@@ -497,6 +634,10 @@ mod tests {
             event_connections: vec![],
             outline_nodes: vec![parent_outline, child_outline],
             notes: vec![folder_note, child_note],
+            locations: vec![],
+            location_links: vec![],
+            vn_scenes: vec![],
+            vn_lines: vec![],
         }
     }
 
@@ -584,5 +725,120 @@ mod tests {
             new_ws.name.contains("导入"),
             "imported name should have suffix"
         );
+    }
+
+    #[test]
+    fn import_preserves_locations_vn_and_links() {
+        let conn = test_conn();
+        let mut bundle = sample_bundle();
+        let t = now();
+
+        let character = crate::models::Character {
+            id: "c1".into(),
+            workspace_id: "old-ws".into(),
+            name: "艾莉丝".into(),
+            aliases: vec![],
+            avatar: None,
+            description: "".into(),
+            appearance: "".into(),
+            backstory: "".into(),
+            goals: "".into(),
+            conflicts: "".into(),
+            arc: "".into(),
+            tags: vec![],
+            color: "".into(),
+            event_ids: vec![],
+            created_at: t,
+            updated_at: t,
+        };
+        bundle.characters.push(character);
+
+        let loc_a = crate::models::Location {
+            id: "loc-a".into(),
+            workspace_id: "old-ws".into(),
+            name: "王城".into(),
+            description: "首都".into(),
+            pos_x: 120.0,
+            pos_y: 80.0,
+            color: "#C68A3E".into(),
+            icon: "🏰".into(),
+            linked_event_id: Some("e1".into()),
+            character_ids: vec!["c1".into()],
+            created_at: t,
+            updated_at: t,
+        };
+        let loc_b = crate::models::Location {
+            id: "loc-b".into(),
+            workspace_id: "old-ws".into(),
+            name: "酒馆".into(),
+            description: "".into(),
+            pos_x: 200.0,
+            pos_y: 150.0,
+            color: "#A86A2C".into(),
+            icon: "🍺".into(),
+            linked_event_id: None,
+            character_ids: vec![],
+            created_at: t,
+            updated_at: t,
+        };
+        bundle.locations.push(loc_a);
+        bundle.locations.push(loc_b);
+        bundle.location_links.push(crate::models::LocationLink {
+            source_id: "loc-a".into(),
+            target_id: "loc-b".into(),
+            label: "主街道".into(),
+            source_name: "王城".into(),
+            target_name: "酒馆".into(),
+        });
+
+        let scene = crate::models::VnScene {
+            id: "vs1".into(),
+            workspace_id: "old-ws".into(),
+            title: "开场".into(),
+            background: "酒馆".into(),
+            background_asset_path: Some("assets/old-ws/bg.png".into()),
+            bgm_path: Some("assets/old-ws/bgm.ogg".into()),
+            outline_node_id: None,
+            sort_order: 0,
+            created_at: t,
+            updated_at: t,
+        };
+        bundle.vn_scenes.push(scene);
+        bundle.vn_lines.push(crate::models::VnLine {
+            id: "vl1".into(),
+            scene_id: "vs1".into(),
+            sort_order: 0,
+            line_type: "dialog".into(),
+            character_id: Some("c1".into()),
+            speaker_name: "艾莉丝".into(),
+            text: "欢迎来到王城。".into(),
+            emotion: "".into(),
+            choice_label: "".into(),
+            choice_target_scene_id: None,
+            sprite_asset_path: Some("assets/old-ws/sprite.png".into()),
+            voice_path: None,
+            created_at: t,
+        });
+
+        let new_ws = import_bundle(&conn, bundle).unwrap();
+
+        let locations = crate::services::location::list(&conn, &new_ws.id).unwrap();
+        assert_eq!(locations.len(), 2, "both locations should be imported");
+        let linked_event_id = locations.iter().find(|l| l.name == "王城").unwrap().linked_event_id.clone();
+        assert!(
+            linked_event_id.is_some(),
+            "linked event id should be remapped"
+        );
+        let links = crate::services::location::list_links(&conn, &new_ws.id).unwrap();
+        assert_eq!(links.len(), 1, "location link should be imported");
+        assert_eq!(links[0].label, "主街道");
+
+        let scenes = crate::services::vn::list_scenes(&conn, &new_ws.id).unwrap();
+        assert_eq!(scenes.len(), 1, "VN scene should be imported");
+        assert_eq!(scenes[0].background_asset_path, Some("assets/old-ws/bg.png".into()));
+        let lines = crate::services::vn::list_lines(&conn, &scenes[0].id).unwrap();
+        assert_eq!(lines.len(), 1, "VN line should be imported");
+        assert_eq!(lines[0].text, "欢迎来到王城。");
+        assert_eq!(lines[0].sprite_asset_path, Some("assets/old-ws/sprite.png".into()));
     }
 }

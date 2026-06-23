@@ -5,6 +5,7 @@ import { toastError, toastSuccess } from '@/stores/toast';
 import { useI18n } from '@/hooks/useI18n';
 
 import {
+  checkVnConsistency as apiCheckVnConsistency,
   createVnLine as apiCreateLine,
   createVnScene as apiCreateScene,
   deleteVnLine as apiDeleteLine,
@@ -78,12 +79,32 @@ export function useVnLinesQuery(sceneId: string | null) {
 }
 
 export const vnAllLinesKey = (wsId: string) => ['vnAllLines', wsId] as const;
+export const vnConsistencyKey = (wsId: string) => ['vnConsistency', wsId] as const;
 
 export function useVnAllLinesQuery(workspaceId: string, enabled = true) {
   return useQuery({
     queryKey: vnAllLinesKey(workspaceId),
     queryFn: () => apiListAllVnLines(workspaceId),
     enabled,
+  });
+}
+
+export function useVnConsistencyQuery(workspaceId: string, enabled = true) {
+  return useQuery({
+    queryKey: vnConsistencyKey(workspaceId),
+    queryFn: () => apiCheckVnConsistency(workspaceId),
+    enabled,
+  });
+}
+
+export function useCheckVnConsistency(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiCheckVnConsistency(workspaceId),
+    onSuccess: (issues) => {
+      qc.setQueryData(vnConsistencyKey(workspaceId), issues);
+    },
+    onError: toastError,
   });
 }
 

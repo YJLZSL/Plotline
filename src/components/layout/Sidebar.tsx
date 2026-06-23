@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Map as MapIcon,
   Film,
+  Globe,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ const items: NavItem[] = [
   { to: 'outline', labelKey: 'nav.outline', icon: ListTree },
   { to: 'map', labelKey: 'nav.map', icon: MapIcon },
   { to: 'vn', labelKey: 'nav.vn', icon: Film },
+  { to: 'worldbuilding', labelKey: 'nav.worldbuilding', icon: Globe },
   { to: 'statistics', labelKey: 'nav.statistics', icon: BarChart3 },
   { to: 'notebook', labelKey: 'nav.notebook', icon: StickyNote },
   { to: 'settings', labelKey: 'nav.settings', icon: SettingsIcon },

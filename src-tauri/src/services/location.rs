@@ -68,7 +68,7 @@ fn get(conn: &Connection, id: &str) -> AppResult<Location> {
                 })
             },
         )
-        .map_err(|_| AppError::NotFound(format!("地点 {} 不存在", id)))?;
+        .map_err(|e| crate::error::map_not_found(e, format!("地点 {} 不存在", id)))?;
     loc.character_ids = list_character_ids(conn, id)?;
     Ok(loc)
 }
@@ -193,10 +193,16 @@ pub fn link(conn: &Connection, input: LinkLocationsInput) -> AppResult<()> {
 }
 
 pub fn unlink(conn: &Connection, source_id: &str, target_id: &str) -> AppResult<()> {
-    conn.execute(
+    let affected = conn.execute(
         "DELETE FROM location_links WHERE source_id=?1 AND target_id=?2",
         params![source_id, target_id],
     )?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!(
+            "地点连接 {} -> {} 不存在",
+            source_id, target_id
+        )));
+    }
     Ok(())
 }
 

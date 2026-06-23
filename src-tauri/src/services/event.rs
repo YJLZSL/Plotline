@@ -76,7 +76,7 @@ fn get(conn: &Connection, id: &str) -> AppResult<Event> {
                 updated_at: row.get(11)?,
             })
         })
-        .map_err(|_| AppError::NotFound(format!("事件 {} 不存在", id)))?;
+        .map_err(|e| crate::error::map_not_found(e, format!("事件 {} 不存在", id)))?;
     event.character_ids = list_character_ids(conn, id)?;
     event.connected_event_ids = list_connected_event_ids(conn, id)?;
     Ok(event)
@@ -188,10 +188,16 @@ pub fn connect(conn: &Connection, input: ConnectEventsInput) -> AppResult<()> {
 }
 
 pub fn disconnect(conn: &Connection, source_id: &str, target_id: &str) -> AppResult<()> {
-    conn.execute(
+    let affected = conn.execute(
         "DELETE FROM event_connections WHERE source_id=?1 AND target_id=?2",
         params![source_id, target_id],
     )?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!(
+            "事件连接 {} -> {} 不存在",
+            source_id, target_id
+        )));
+    }
     Ok(())
 }
 
