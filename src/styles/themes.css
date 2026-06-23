@@ -36,6 +36,23 @@
   --shadow-color: rgba(74, 57, 39, 0.1);
 }
 
+[data-theme="mc"] {
+  --bg-base: #7d96a0;
+  --bg-surface: #8f9f91;
+  --bg-elevated: #7a8b74;
+  --text-primary: #2f2418;
+  --text-secondary: #4a3b2a;
+  --accent: #5b8c39;
+  --accent-soft: #8fb36f;
+  --border: #5c4d3c;
+  --shadow-color: rgba(0, 0, 0, 0.35);
+  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
+}
+
+[data-theme="mc"] body {
+  font-family: var(--font-pixel);
+}
+
 * {
   border-color: var(--border);
 }

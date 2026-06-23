@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -45,6 +45,8 @@ import { useCreateEvent, useTracksQuery } from '@/features/timeline/hooks';
 import { useExportOutlineMarkdown } from '@/features/workspace/hooks';
 import { useMoveOutlineNode } from '@/features/outline/moveHooks';
 import { OutlineTreeChart } from './OutlineTreeChart';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 
 interface OutlineViewProps {
   workspaceId: string;
@@ -79,6 +81,27 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   // 构建树
   const tree = useMemo(() => buildTree(nodes), [nodes]);
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    setAiContext({
+      view: 'outline',
+      viewLabel: t('outline.title'),
+      selection: selected
+        ? {
+            type: selected.type,
+            id: selected.id,
+            label: selected.title,
+            content: selected.content ?? '',
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestOutlineExpand'), prompt: t('ai.promptOutlineExpand') },
+        { label: t('ai.suggestOutlineArc'), prompt: t('ai.promptOutlineArc') },
+        { label: t('ai.suggestOutlineScene'), prompt: t('ai.promptOutlineScene') },
+      ],
+    });
+  }, [t, selected, setAiContext]);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -178,6 +201,26 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('outline.addVolume')}</span>
             </Button>
+            <div className="w-px h-5 bg-border mx-1" />
+            <AiToolbarButton
+              view="outline"
+              viewLabel={t('outline.title')}
+              selection={
+                selected
+                  ? {
+                      type: selected.type,
+                      id: selected.id,
+                      label: selected.title,
+                      content: selected.content ?? '',
+                    }
+                  : null
+              }
+              suggestions={[
+                { label: t('ai.suggestOutlineExpand'), prompt: t('ai.promptOutlineExpand') },
+                { label: t('ai.suggestOutlineArc'), prompt: t('ai.promptOutlineArc') },
+                { label: t('ai.suggestOutlineScene'), prompt: t('ai.promptOutlineScene') },
+              ]}
+            />
           </div>
         }
       />
@@ -521,7 +564,13 @@ function OutlineEditDialog({
         <div className="flex flex-col gap-4">
           <div>
             <Label>{t('common.edit')} - 标题</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1.5" autoFocus />
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1.5"
+              autoFocus
+              data-testid="outline-title-input"
+            />
           </div>
           <div>
             <Label>状态</Label>
@@ -559,7 +608,7 @@ function OutlineEditDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => onSave({ title, content, status })} disabled={!title.trim()}>
+            <Button onClick={() => onSave({ title, content, status })} disabled={!title.trim()} data-testid="outline-save-btn">
               {t('common.save')}
             </Button>
           </div>

@@ -159,14 +159,26 @@ export function SplashOverlay() {
                 </motion.div>
               </div>
 
-              <motion.p
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: t(400), ease: EASE_STANDARD, delay: t(1300) }}
-                className="text-[11px] text-text-secondary/70"
-              >
-                正在准备你的故事…
-              </motion.p>
+              {settings?.theme === 'mc' ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: t(400), ease: EASE_STANDARD, delay: t(1300) }}
+                  className="flex flex-col items-center gap-3"
+                >
+                  <PixelGrassBlock />
+                  <p className="text-[11px] text-text-secondary/70 font-pixel">Creeper? Aww man~</p>
+                </motion.div>
+              ) : (
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: t(400), ease: EASE_STANDARD, delay: t(1300) }}
+                  className="text-[11px] text-text-secondary/70"
+                >
+                  正在准备你的故事…
+                </motion.p>
+              )}
 
               <div className="w-48 h-0.5 bg-border rounded-full overflow-hidden">
                 <motion.div
@@ -185,5 +197,30 @@ export function SplashOverlay() {
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+function PixelGrassBlock() {
+  return (
+    <motion.svg
+      width="64"
+      height="64"
+      viewBox="0 0 8 8"
+      initial={{ y: 20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
+    >
+      {/* grass top */}
+      <rect y="0" width="8" height="3" fill="#5b8c39" />
+      <rect x="0" y="0" width="1" height="1" fill="#6ba845" />
+      <rect x="2" y="1" width="1" height="1" fill="#6ba845" />
+      <rect x="4" y="0" width="1" height="1" fill="#6ba845" />
+      <rect x="6" y="1" width="1" height="1" fill="#6ba845" />
+      {/* dirt body */}
+      <rect y="3" width="8" height="5" fill="#8b5a2b" />
+      <rect x="1" y="4" width="1" height="1" fill="#7a4e25" />
+      <rect x="5" y="5" width="1" height="1" fill="#7a4e25" />
+      <rect x="3" y="6" width="1" height="1" fill="#7a4e25" />
+    </motion.svg>
   );
 }

@@ -41,22 +41,25 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.0.0 最终版本已完成）
-- **导出格式扩展**：工作区新增 PDF（系统 TrueType 中文字体 fallback）、Word、EPUB 导出。
-- **WorkspaceBundle 补全**：导入/导出现在包含地点、地点连线、VN 场景与台词，并正确重映射 ID。
-- **AI 流式输出 + 系统提示词**：新增 `ai_chat_stream` 通道命令实现 SSE 解析与逐字显示；设置页支持自定义 `aiSystemPrompt`。
-- **VN 编辑器增强**：台词支持 `**粗体**` / `*斜体*` 富文本与工具栏；新增分支图一致性检查。
-- **地图 Polish**：地点图标、角色足迹连线、PNG 导出已就位；地图-时间轴联动可跳转。
-- **世界观模块**：新增 `WorldbuildingView`，按历史/魔法/势力/地理/文化/其他维度管理笔记。
-- **CSP 白名单**：`tauri.conf.json` 已配置内容安全策略。
-- **UI/UX 打磨**：世界观工具栏改为下拉选择；修复自动保存定时器重置与硬编码文案。
-- **测试**：`pnpm lint`、`pnpm typecheck`、`pnpm test:run`（138 passed）、`cargo test`（45 passed）、`cargo clippy -- -D warnings`、`pnpm test:e2e`（11 passed）全部通过。
-- **构建与发布**：版本号统一升级到 `v2.0.0`，`CHANGELOG.md` 与 `AGENTS.md` 已更新；本地已构建 NSIS + MSI 安装包并生成 `latest.json`，可推送 GitHub Release v2.0.0。
+### 当前迭代状态（v2.1.0 已发布）
+- **时间轴升级**：重构标尺与刻度，增加主次刻度、今天参考线、轨道 lane 交替背景；事件卡片使用状态色边框；视图切换动画统一下沉到 `WorkspaceLayout`。
+- **MC 主题彩蛋**：新增全局 MC 主题；番茄钟加入心形/苦力怕脸/红石块/草方块元素；开屏动画显示草方块与像素标题；Web Audio 合成 MC 风格 8-bit 音效。
+- **AI 真实图标**：从 LobeHub 品牌 SVG 抓取官方/高辨识度图标，覆盖 OpenAI、DeepSeek、Moonshot、智谱、硅基流动、火山、腾讯、Ollama。
+- **按功能 AI 助手**：新增 `aiContext` 全局上下文；时间轴、角色、大纲、地图、VN、世界观、资料库均提供“建议 / 改写 / 检查”入口，AI 能读取当前选中对象与内容。
+- **统计新图表**：新增思维导图（径向树）、脑状图（角色关系网络）、树状图（大纲层级）。
+- **真实浏览器测试**：Playwright 截图时间轴、MC 主题、AI 面板、统计图表，现场修复 `WorkspaceLayout` 切换时元素重复的问题。
+- `pnpm lint`、`pnpm typecheck`、`pnpm test:run`、`cargo test`、`cargo clippy -- -D warnings`、`pnpm test:e2e` 全部通过。
+- GitHub Release v2.1.0 已发布。
 
-### 下一迭代方向（后续维护/扩展候选）
-- 地图：地点分组/图层、打印/PDF 导出。
+### 上一版本（v2.0.0 已发布）
+- 世界观模块、PDF/Word/ePub 导出、AI 流式输出与系统提示词、VN 富文本与分支调试、WorkspaceBundle 补全、CSP 白名单。
+- GitHub Release v2.0.0 已发布。
+
+### 下一迭代方向（v2.2+ 候选）
+- 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
 - VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
-- 世界观：种族/物种/宗教等实体管理。
+- 世界观：种族/物种/宗教等实体管理、设定冲突检测。
+- AI：Agent 式工作流，自动整理大纲/发现时间轴漏洞。
 - UI 美术：统一空状态插画、卡片质感升级、日文翻译补全。
 - 番茄钟：与写作目标绑定、每日统计、通知提醒。
 

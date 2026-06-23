@@ -1,0 +1,11 @@
+{
+  "version": "2.1.0",
+  "notes": "Plotline v2.1.0：时间轴可读性与视图动画打磨、MC 全局主题与彩蛋、真实 AI 厂商图标与按功能 AI 助手、统计思维导图/脑状图/树状图。",
+  "pub_date": "2026-06-23T07:29:06Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSEFhNThtQVJDRldaUytUK3lsZ2pqOWJpZzRDTVRBaENuaHp2ci9pRmdzRGFwUlBtdEVoZjhQK0dlWlNPZ0RidEZ1S3BOYXErWHR4MVVSZitGaVpmL1pzb1ZyVG9DNGdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTk5NzIyCWZpbGU6UGxvdGxpbmVfMi4xLjBfeDY0LXNldHVwLmV4ZQpmdENVQXo0VlVjNjhIMFZGWlBuMk8rOWJ4T09nMzB3OW83aWRRb054N3NsNmFyODhGOVZadkt0ZGM2emVhMmhqTVk1Z0Zoc2ZVWW4wSWh3MVlqNmZBQT09Cg==",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v2.1.0/Plotline_2.1.0_x64-setup.exe"
+    }
+  }
+}

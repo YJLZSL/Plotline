@@ -56,6 +56,8 @@ import {
   bezierPath,
 } from '@/features/map/footprints';
 import { exportMapAsPng } from '@/features/map/export';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 
 const PALETTE = [
   'var(--accent)',
@@ -157,6 +159,27 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
   }, []);
 
   const selected = locations.find((l) => l.id === selectedId) ?? null;
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    setAiContext({
+      view: 'map',
+      viewLabel: t('map.title'),
+      selection: selected
+        ? {
+            type: 'location',
+            id: selected.id,
+            label: selected.name,
+            content: selected.description ?? '',
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestLocationLore'), prompt: t('ai.promptLocationLore') },
+        { label: t('ai.suggestLocationLinks'), prompt: t('ai.promptLocationLinks') },
+        { label: t('ai.suggestFootprints'), prompt: t('ai.promptFootprints') },
+      ],
+    });
+  }, [t, selected, setAiContext]);
 
   const handleAdd = async () => {
     const cx = size.width / 2 + (Math.random() - 0.5) * 120;
@@ -291,6 +314,26 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('map.addLocation')}</span>
             </Button>
+            <div className="w-px h-5 bg-border" />
+            <AiToolbarButton
+              view="map"
+              viewLabel={t('map.title')}
+              selection={
+                selected
+                  ? {
+                      type: 'location',
+                      id: selected.id,
+                      label: selected.name,
+                      content: selected.description ?? '',
+                    }
+                  : null
+              }
+              suggestions={[
+                { label: t('ai.suggestLocationLore'), prompt: t('ai.promptLocationLore') },
+                { label: t('ai.suggestLocationLinks'), prompt: t('ai.promptLocationLinks') },
+                { label: t('ai.suggestFootprints'), prompt: t('ai.promptFootprints') },
+              ]}
+            />
           </div>
         }
       />

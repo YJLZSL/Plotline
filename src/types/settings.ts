@@ -1,4 +1,4 @@
-export type Theme = 'light' | 'dark' | 'sepia';
+export type Theme = 'light' | 'dark' | 'sepia' | 'mc';
 export type Language = 'zh-CN' | 'zh-TW' | 'en';
 export type DefaultView = 'timeline' | 'characters' | 'outline' | 'statistics' | 'notebook' | 'map' | 'vn' | 'worldbuilding';
 export type TimelineZoom = 'year' | 'month' | 'day' | 'hour';

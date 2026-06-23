@@ -56,6 +56,12 @@ blob-report/
 # 本地规格与任务跟踪
 .trae/
 
+# 发布安装包（仅保留 latest.json）
+releases/**/*.exe
+releases/**/*.msi
+releases/**/*.sig
+public/ai-logos/
+
 # Tauri 更新签名密钥（私钥绝不可提交）
 keys/
 

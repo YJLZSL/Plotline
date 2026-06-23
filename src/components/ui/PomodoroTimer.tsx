@@ -5,6 +5,7 @@ import { Play, Pause, RotateCcw, SkipForward, X, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import { useI18n } from '@/hooks/useI18n';
+import { playSoundIfEnabled } from '@/lib/sound';
 import {
   usePomodoroStore,
   formatPomodoroTime,
@@ -42,6 +43,7 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
   } = usePomodoroStore();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevSecondsRef = useRef(secondsLeft);
 
   useEffect(() => {
     if (isRunning) {
@@ -57,6 +59,13 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
       }
     };
   }, [isRunning, tick]);
+
+  useEffect(() => {
+    if (prevSecondsRef.current === 1 && secondsLeft === 0) {
+      playSoundIfEnabled('complete');
+    }
+    prevSecondsRef.current = secondsLeft;
+  }, [secondsLeft]);
 
   const totalSeconds = phase === 'focus' ? 25 * 60 : phase === 'shortBreak' ? 5 * 60 : 15 * 60;
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
@@ -157,17 +166,21 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
 
             {/* MC 主题方块进度 */}
             {theme === 'mc' && (
-              <div className="w-full mt-3 grid grid-cols-10 gap-1">
+              <div className="w-full mt-3 flex items-center justify-between gap-1">
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      'h-1.5 rounded-sm',
-                      i / 10 < progress ? 'bg-emerald-500' : 'bg-black/10',
-                    )}
-                  />
+                  <PixelHeart key={i} filled={i / 10 < progress} />
                 ))}
               </div>
+            )}
+
+            {theme === 'mc' && progress >= 0.9 && (
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="mt-3"
+              >
+                <CreeperFace />
+              </motion.div>
             )}
 
             <p className="mt-3 text-[11px] opacity-60">
@@ -200,6 +213,40 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+function PixelHeart({ filled }: { filled: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 8 8" className="block">
+      {filled ? (
+        <path
+          d="M1 2 h1 v-1 h1 v1 h1 v1 h1 v1 h-1 v1 h-1 v1 h-1 v-1 h-1 v-1 h-1 v-1 h1 z"
+          fill="#e03e3e"
+        />
+      ) : (
+        <path
+          d="M1 2 h1 v-1 h1 v1 h1 v1 h1 v1 h-1 v1 h-1 v1 h-1 v-1 h-1 v-1 h-1 v-1 h1 z"
+          fill="none"
+          stroke="#3b4a2b"
+          strokeWidth="0.5"
+          opacity="0.3"
+        />
+      )}
+    </svg>
+  );
+}
+
+function CreeperFace() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 8 8" className="block">
+      <rect width="8" height="8" fill="#5b8c39" />
+      <rect x="1" y="2" width="2" height="2" fill="#2f2418" />
+      <rect x="5" y="2" width="2" height="2" fill="#2f2418" />
+      <rect x="2" y="4" width="1" height="2" fill="#2f2418" />
+      <rect x="5" y="4" width="1" height="2" fill="#2f2418" />
+      <rect x="3" y="5" width="2" height="1" fill="#2f2418" />
+    </svg>
   );
 }
 

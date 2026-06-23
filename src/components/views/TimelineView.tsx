@@ -45,6 +45,8 @@ import {
 } from '@/features/timeline/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
 import { checkConsistency } from '@/features/timeline/eventApi';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 import { toastError, toastInfo, toastWarning } from '@/stores/toast';
 
 // ===== 常量 =====
@@ -104,6 +106,28 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
   const connectEvents = useConnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
+    setAiContext({
+      view: 'timeline',
+      viewLabel: t('timeline.title'),
+      selection: selectedEvent
+        ? {
+            type: 'event',
+            id: selectedEvent.id,
+            label: selectedEvent.title,
+            content: selectedEvent.description ?? '',
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
+        { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
+        { label: t('ai.suggestNextEvent'), prompt: t('ai.promptNextEvent') },
+      ],
+    });
+  }, [t, events, selectedEventId, setAiContext]);
 
   const handleConsistencyCheck = async () => {
     setCheckingConsistency(true);
@@ -378,6 +402,26 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
             >
               <ShieldCheck className="h-3.5 w-3.5" />
             </Button>
+            <div className="w-px h-5 bg-border mx-1" />
+            <AiToolbarButton
+              view="timeline"
+              viewLabel={t('timeline.title')}
+              selection={
+                selectedEventId
+                  ? (() => {
+                      const ev = events.find((e) => e.id === selectedEventId);
+                      return ev
+                        ? { type: 'event', id: ev.id, label: ev.title, content: ev.description ?? '' }
+                        : null;
+                    })()
+                  : null
+              }
+              suggestions={[
+                { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
+                { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
+                { label: t('ai.suggestNextEvent'), prompt: t('ai.promptNextEvent') },
+              ]}
+            />
           </div>
         }
       />
@@ -503,14 +547,16 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               )}
 
               {/* 轨道 */}
-              {visibleTracks.map((tr) => (
+              {visibleTracks.map((tr, idx) => (
                 <TrackLane
                   key={tr.id}
+                  index={idx}
                   track={tr}
                   events={eventsByTrack.get(tr.id) ?? []}
                   eventPositions={eventPositions}
                   timeToX={timeToX}
                   totalWidth={totalWidth}
+                  zoom={zoom}
                   selectedEventId={selectedEventId}
                   pendingConnection={pendingConnection}
                   onSelectEvent={(id) => {
@@ -615,63 +661,121 @@ function DateRuler({
   timeToX: (t: number) => number;
   totalWidth: number;
 }) {
-  const ticks = useMemo(() => {
-    const result: Array<{ time: number; label: string; major: boolean }> = [];
-    const stepMs =
-      zoom === 'hour'
-        ? 3600 * 1000
-        : zoom === 'day'
-          ? 24 * 3600 * 1000
-          : zoom === 'month'
-            ? 30 * 24 * 3600 * 1000
-            : 365 * 24 * 3600 * 1000;
-    // 主刻度
-    const majorStep = stepMs * (zoom === 'hour' ? 6 : zoom === 'day' ? 7 : zoom === 'month' ? 3 : 1);
+  const { t, i18n } = useI18n();
+  const [hovered, setHovered] = useState<{ x: number; label: string } | null>(null);
+
+  const { majorTicks, minorTicks, todayX } = useMemo(() => {
+    const majors: Array<{ time: number; label: string }> = [];
+    const minors: Array<{ time: number }> = [];
+    const fmt = new Intl.DateTimeFormat(i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      ...ZOOM_RULER_FORMAT[zoom],
+    });
     let cur = new Date(min);
-    // 对齐到刻度起点
     if (zoom === 'hour') cur.setMinutes(0, 0, 0);
     if (zoom === 'day') cur.setHours(0, 0, 0, 0);
     if (zoom === 'month') cur.setDate(1);
     if (zoom === 'year') cur.setMonth(0, 1);
 
-    while (cur.getTime() < max + majorStep) {
+    const pushMajor = (d: Date) => {
+      majors.push({ time: d.getTime(), label: fmt.format(d) });
+    };
+    const pushMinor = (d: Date) => {
+      minors.push({ time: d.getTime() });
+    };
+
+    while (cur.getTime() < max) {
       const t = cur.getTime();
-      if (t >= min - majorStep) {
-        result.push({
-          time: t,
-          label: new Intl.DateTimeFormat('zh-CN', ZOOM_RULER_FORMAT[zoom]).format(cur),
-          major: true,
-        });
+      if (t >= min) pushMajor(new Date(cur));
+      if (zoom === 'hour') {
+        for (let i = 1; i < 6; i++) pushMinor(new Date(t + i * 3600 * 1000));
+        cur = new Date(t + 6 * 3600 * 1000);
+      } else if (zoom === 'day') {
+        for (let i = 1; i < 7; i++) pushMinor(new Date(t + i * 24 * 3600 * 1000));
+        cur = new Date(t + 7 * 24 * 3600 * 1000);
+      } else if (zoom === 'month') {
+        pushMinor(new Date(cur.getFullYear(), cur.getMonth() + 1, 1));
+        pushMinor(new Date(cur.getFullYear(), cur.getMonth() + 2, 1));
+        cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
+      } else {
+        pushMinor(new Date(cur.getFullYear(), 6, 1));
+        cur = new Date(cur.getFullYear() + 1, 0, 1);
       }
-      if (zoom === 'hour') cur = new Date(cur.getTime() + majorStep);
-      else if (zoom === 'day') cur = new Date(cur.getTime() + majorStep);
-      else if (zoom === 'month') cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
-      else cur = new Date(cur.getFullYear() + 1, 0, 1);
     }
-    return result;
-  }, [min, max, zoom]);
+
+    const now = Date.now();
+    const today = now >= min && now <= max ? timeToX(now) : null;
+    return { majorTicks: majors, minorTicks: minors, todayX: today };
+  }, [min, max, zoom, timeToX, i18n.language]);
 
   return (
     <div
       className="sticky top-0 z-10 bg-bg-surface border-b border-border"
       style={{ height: RULER_HEIGHT, minWidth: totalWidth }}
+      onMouseLeave={() => setHovered(null)}
     >
       <div className="relative h-full">
-        {ticks.map((tick, i) => {
+        {/* 次刻度 */}
+        {minorTicks.map((tick, i) => {
           const x = timeToX(tick.time);
+          if (x < 0 || x > totalWidth) return null;
+          return (
+            <div
+              key={`m-${i}`}
+              className="absolute top-0 bottom-0 border-l border-border/20 pointer-events-none"
+              style={{ left: x }}
+            />
+          );
+        })}
+
+        {/* 主刻度 */}
+        {majorTicks.map((tick, i) => {
+          const x = timeToX(tick.time);
+          if (x < 0 || x > totalWidth) return null;
           return (
             <div
               key={i}
-              className="absolute top-0 bottom-0 border-l border-border/60"
+              className="absolute top-0 bottom-0 border-l border-border/50 cursor-crosshair"
               style={{ left: x }}
+              onMouseEnter={() =>
+                setHovered({
+                  x,
+                  label: new Intl.DateTimeFormat(
+                    i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US',
+                    { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+                  ).format(new Date(tick.time)),
+                })
+              }
             >
-              <span className="absolute top-2 left-1.5 text-[10px] text-text-secondary font-medium whitespace-nowrap">
+              <span className="absolute top-2 left-1.5 text-[10px] text-text-secondary font-semibold whitespace-nowrap">
                 {tick.label}
               </span>
-              <span className="absolute bottom-0 left-0 h-2 w-px bg-accent/50" />
+              <span className="absolute bottom-0 left-0 h-2.5 w-px bg-accent/60" />
             </div>
           );
         })}
+
+        {/* 今天参考线 */}
+        {todayX !== null && todayX >= 0 && todayX <= totalWidth && (
+          <div
+            className="absolute top-0 bottom-0 z-20 pointer-events-none"
+            style={{ left: todayX }}
+          >
+            <div className="h-full w-px bg-red-500/60" />
+            <span className="absolute top-1 -translate-x-1/2 left-0 text-[9px] font-bold text-red-500 bg-bg-surface px-1 rounded">
+              {t('timeline.today')}
+            </span>
+          </div>
+        )}
+
+        {/* hover tooltip */}
+        {hovered && (
+          <div
+            className="absolute top-7 z-30 px-2 py-1 rounded-[5px] bg-bg-elevated border border-border shadow-[var(--shadow-card)] text-[10px] text-text-primary pointer-events-none whitespace-nowrap"
+            style={{ left: hovered.x }}
+          >
+            {hovered.label}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -743,11 +847,13 @@ function ConnectionLayer({
 
 // ===== 轨道行 =====
 function TrackLane({
+  index,
   track,
   events,
   eventPositions,
   timeToX,
   totalWidth,
+  zoom,
   selectedEventId,
   pendingConnection,
   onSelectEvent,
@@ -757,11 +863,13 @@ function TrackLane({
   onEventDragEnd,
   onStartConnection,
 }: {
+  index: number;
   track: Track;
   events: Event[];
   eventPositions: Map<string, number>;
   timeToX: (t: number) => number;
   totalWidth: number;
+  zoom: ZoomLevel;
   selectedEventId: string | null;
   pendingConnection: string | null;
   onSelectEvent: (id: string) => void;
@@ -774,13 +882,18 @@ function TrackLane({
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div
+    <motion.div
       ref={containerRef}
-      className="group relative border-b border-border/40"
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ ...MOTION_BASE, delay: Math.min(index * 0.04, 0.2) }}
+      className={cn(
+        'group relative border-b border-border/40',
+        index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
+      )}
       style={{
         height: TRACK_HEIGHT,
         minWidth: totalWidth,
-        backgroundImage: `linear-gradient(90deg, ${track.color}08 0%, transparent 60%)`,
       }}
       onDoubleClick={(e) => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -793,14 +906,14 @@ function TrackLane({
         style={{ backgroundColor: track.color }}
       />
 
-      {/* 棋盘格背景帮助视觉对齐 */}
+      {/* 时间网格背景 */}
       <div
-        className="absolute inset-0 opacity-30 pointer-events-none"
+        className="absolute inset-0 opacity-20 pointer-events-none"
         style={{
           backgroundImage: `repeating-linear-gradient(90deg, transparent 0, transparent ${
-            ZOOM_UNIT_WIDTH.month
-          }px, var(--border) ${ZOOM_UNIT_WIDTH.month}px, var(--border) ${
-            ZOOM_UNIT_WIDTH.month + 1
+            ZOOM_UNIT_WIDTH[zoom]
+          }px, var(--border) ${ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
+            ZOOM_UNIT_WIDTH[zoom] + 1
           }px)`,
         }}
       />
@@ -843,7 +956,7 @@ function TrackLane({
           <Plus className="h-4 w-4" />
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -871,13 +984,18 @@ function EventCard({
   onDragEnd: (info: PanInfo) => void;
   onStartConnection: () => void;
 }) {
+  const { t } = useI18n();
   const color = event.color ?? track.color;
-  const statusMap: Record<EventStatus, { dot: string; label: string }> = {
-    draft: { dot: 'bg-text-secondary/60', label: '草稿' },
-    done: { dot: 'bg-status-done', label: '完成' },
-    revise: { dot: 'bg-status-revise', label: '待修改' },
+  const statusMap: Record<
+    EventStatus,
+    { dot: string; border: string; labelKey: string }
+  > = {
+    draft: { dot: 'bg-text-secondary/60', border: 'border-status-draft', labelKey: 'timeline.event.statusDraft' },
+    done: { dot: 'bg-status-done', border: 'border-status-done', labelKey: 'timeline.event.statusDone' },
+    revise: { dot: 'bg-status-revise', border: 'border-status-revise', labelKey: 'timeline.event.statusRevise' },
   };
   const status = statusMap[event.status];
+  const isRelative = event.dateType !== 'absolute';
 
   return (
     <motion.div
@@ -893,6 +1011,7 @@ function EventCard({
       onDoubleClick={onDoubleClick}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
+      title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
       className={cn(
         'absolute top-3 cursor-grab active:cursor-grabbing select-none',
         'rounded-[8px] overflow-hidden',
@@ -900,14 +1019,14 @@ function EventCard({
         'border-2 backdrop-blur-sm',
         selected
           ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
-          : 'border-border/60',
+          : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
         pendingConnection && 'border-accent animate-pulse',
       )}
       style={{
         left: x,
         width: EVENT_MIN_WIDTH,
         height: EVENT_HEIGHT,
-        background: `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)`,
+        background: `linear-gradient(135deg, ${color}25 0%, ${color}08 100%)`,
       }}
     >
       {/* 顶部色带 */}
@@ -919,6 +1038,11 @@ function EventCard({
           <span className="text-xs font-semibold text-text-primary truncate flex-1">
             {event.title}
           </span>
+          {isRelative && (
+            <span className="text-[9px] px-1 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
+              {t('timeline.relativeBadge')}
+            </span>
+          )}
           {/* 连线手柄 */}
           <button
             onClick={(e) => {
@@ -926,7 +1050,7 @@ function EventCard({
               onStartConnection();
             }}
             className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-all"
-            title="拖拽建立连接"
+            title={t('timeline.startConnection')}
           >
             <Link2 className="h-3 w-3" />
           </button>

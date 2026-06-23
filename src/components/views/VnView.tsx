@@ -67,6 +67,8 @@ import {
   updateVnScene as apiUpdateVnScene,
 } from '@/features/vn/api';
 import { useCharactersQuery } from '@/features/characters/hooks';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 
 const EMOTIONS: Array<{ value: string; label: string; emoji: string }> = [
   { value: '', label: '默认', emoji: '😐' },
@@ -329,6 +331,27 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
   const [confirmDeleteScene, setConfirmDeleteScene] = useState<string | null>(null);
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null;
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    setAiContext({
+      view: 'vn',
+      viewLabel: t('vn.title'),
+      selection: selectedScene
+        ? {
+            type: 'vn_scene',
+            id: selectedScene.id,
+            label: selectedScene.title,
+            content: selectedScene.background ?? '',
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestVnLines'), prompt: t('ai.promptVnLines') },
+        { label: t('ai.suggestVnScene'), prompt: t('ai.promptVnScene') },
+        { label: t('ai.suggestVnBranch'), prompt: t('ai.promptVnBranch') },
+      ],
+    });
+  }, [t, selectedScene, setAiContext]);
 
   const handleAddScene = async () => {
     const s = await createScene.mutateAsync({
@@ -414,6 +437,26 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('vn.addScene')}</span>
             </Button>
+            <div className="w-px h-5 bg-border" />
+            <AiToolbarButton
+              view="vn"
+              viewLabel={t('vn.title')}
+              selection={
+                selectedScene
+                  ? {
+                      type: 'vn_scene',
+                      id: selectedScene.id,
+                      label: selectedScene.title,
+                      content: selectedScene.background ?? '',
+                    }
+                  : null
+              }
+              suggestions={[
+                { label: t('ai.suggestVnLines'), prompt: t('ai.promptVnLines') },
+                { label: t('ai.suggestVnScene'), prompt: t('ai.promptVnScene') },
+                { label: t('ai.suggestVnBranch'), prompt: t('ai.promptVnBranch') },
+              ]}
+            />
           </div>
         }
       />

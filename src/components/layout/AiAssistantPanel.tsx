@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { toastError } from '@/stores/toast';
+import { useAiContextStore } from '@/stores/aiContext';
 import { getProviderPreset } from '@/features/ai/providers';
 import { aiChatStream } from '@/features/ai/api';
 import {
@@ -80,18 +81,37 @@ export function AiAssistantPanel({
     setCurrentSessionId(session.id);
   };
 
+  const aiContext = useAiContextStore();
+
+  const buildContextPrefix = () => {
+    const parts: string[] = [];
+    if (aiContext.viewLabel) {
+      parts.push(`【当前视图：${aiContext.viewLabel}】`);
+    }
+    if (aiContext.selection) {
+      const sel = aiContext.selection;
+      parts.push(`【选中对象：${sel.label}（类型：${sel.type}，ID：${sel.id}）】`);
+      if (sel.content) {
+        const snippet = sel.content.length > 300 ? `${sel.content.slice(0, 300)}…` : sel.content;
+        parts.push(`【选中内容：\n${snippet}】`);
+      }
+    }
+    return parts.length > 0 ? `${parts.join('\n')}\n\n` : '';
+  };
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
     setInput('');
     setIsStreaming(true);
     setStreamingContent('');
+    const message = `${buildContextPrefix()}${text}`;
     try {
       const result = await aiChatStream(
         {
           workspaceId,
           sessionId: currentSessionId,
-          message: text,
+          message,
           useRag: true,
         },
         (event) => {
@@ -139,6 +159,7 @@ export function AiAssistantPanel({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={MOTION_BASE}
+            data-testid="ai-assistant-panel"
             className="fixed right-0 top-12 bottom-0 w-full max-w-md border-l border-border bg-bg-surface shadow-[var(--shadow-elevated)] z-40 flex flex-col"
           >
             <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-bg-base flex-shrink-0">
@@ -206,6 +227,37 @@ export function AiAssistantPanel({
                       {t('ai.context')}
                     </span>
                     ：{summary.value}
+                  </div>
+                )}
+
+                {(aiContext.viewLabel || aiContext.selection || aiContext.suggestions.length > 0) && (
+                  <div className="mx-4 mt-3 px-3 py-2 rounded-[6px] bg-bg-elevated border border-border text-xs">
+                    <div className="flex flex-wrap gap-1.5 items-center text-text-secondary">
+                      {aiContext.viewLabel && (
+                        <span className="px-1.5 py-0.5 rounded-[4px] bg-accent/10 text-accent">
+                          {t('ai.contextView', { view: aiContext.viewLabel })}
+                        </span>
+                      )}
+                      {aiContext.selection && (
+                        <span className="px-1.5 py-0.5 rounded-[4px] bg-bg-base border border-border truncate max-w-[200px]">
+                          {t('ai.contextSelection', { label: aiContext.selection.label })}
+                        </span>
+                      )}
+                    </div>
+                    {aiContext.suggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {aiContext.suggestions.map((s) => (
+                          <button
+                            key={s.label}
+                            data-testid={`ai-suggestion-${s.label}`}
+                            onClick={() => setInput(s.prompt)}
+                            className="px-2 py-1 rounded-[4px] bg-bg-base border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-colors"
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

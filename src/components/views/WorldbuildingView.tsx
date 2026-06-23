@@ -22,6 +22,8 @@ import {
   useNotesQuery,
   useUpdateNote,
 } from '@/features/notebook/hooks';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 import type { Note } from '@/types';
 
 interface WorldbuildingViewProps {
@@ -77,6 +79,18 @@ export function WorldbuildingView({ workspaceId, workspaceName }: WorldbuildingV
       tags: [`${CATEGORY_TAG_PREFIX}${category}`],
     });
   };
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    setAiContext({
+      view: 'worldbuilding',
+      viewLabel: t('nav.worldbuilding'),
+      selection: null,
+      suggestions: [
+        { label: t('ai.suggestWorldbuilding'), prompt: t('ai.promptWorldbuilding') },
+      ],
+    });
+  }, [t, setAiContext]);
 
   return (
     <>
@@ -85,6 +99,7 @@ export function WorldbuildingView({ workspaceId, workspaceName }: WorldbuildingV
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         right={
+          <div className="flex items-center gap-2">
           <div className="relative">
             <select
               value=""
@@ -103,6 +118,13 @@ export function WorldbuildingView({ workspaceId, workspaceName }: WorldbuildingV
               ))}
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-secondary pointer-events-none" />
+          </div>
+          <div className="w-px h-5 bg-border" />
+          <AiToolbarButton
+            view="worldbuilding"
+            viewLabel={t('nav.worldbuilding')}
+            suggestions={[{ label: t('ai.suggestWorldbuilding'), prompt: t('ai.promptWorldbuilding') }]}
+          />
           </div>
         }
       />

@@ -27,6 +27,8 @@ import {
   useNotesQuery,
   useUpdateNote,
 } from '@/features/notebook/hooks';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 
 interface NotebookViewProps {
   workspaceId: string;
@@ -61,6 +63,27 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
   }, [notes, search]);
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    setAiContext({
+      view: 'notebook',
+      viewLabel: t('nav.notebook'),
+      selection: selected
+        ? {
+            type: 'note',
+            id: selected.id,
+            label: selected.title,
+            content: stripHtml(selected.content),
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestPolish'), prompt: t('ai.promptPolishNote') },
+        { label: t('ai.suggestContinue'), prompt: t('ai.promptContinueNote') },
+        { label: t('ai.suggestTags'), prompt: t('ai.promptSuggestTags') },
+      ],
+    });
+  }, [t, selected, setAiContext]);
 
   // 同步编辑器内容
   useEffect(() => {
@@ -117,10 +140,32 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         right={
-          <Button size="sm" onClick={handleAdd} className="gap-2">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">新建笔记</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handleAdd} className="gap-2">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">新建笔记</span>
+            </Button>
+            <div className="w-px h-5 bg-border" />
+            <AiToolbarButton
+              view="notebook"
+              viewLabel={t('nav.notebook')}
+              selection={
+                selected
+                  ? {
+                      type: 'note',
+                      id: selected.id,
+                      label: selected.title,
+                      content: stripHtml(selected.content),
+                    }
+                  : null
+              }
+              suggestions={[
+                { label: t('ai.suggestPolish'), prompt: t('ai.promptPolishNote') },
+                { label: t('ai.suggestContinue'), prompt: t('ai.promptContinueNote') },
+                { label: t('ai.suggestTags'), prompt: t('ai.promptSuggestTags') },
+              ]}
+            />
+          </div>
         }
       />
 

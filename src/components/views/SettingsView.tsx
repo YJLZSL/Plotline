@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sun, Moon, BookOpen, Check, RotateCcw, RefreshCw, ExternalLink } from 'lucide-react';
+import { Sun, Moon, BookOpen, Box, Check, RotateCcw, RefreshCw, ExternalLink } from 'lucide-react';
 
 const FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
   { labelKey: 'settings.fontPresetDefault', value: '' },
@@ -97,6 +97,7 @@ const THEMES: Array<{ value: Theme; labelKey: string; icon: React.ComponentType<
   { value: 'light', labelKey: 'settings.themeLight', icon: Sun },
   { value: 'dark', labelKey: 'settings.themeDark', icon: Moon },
   { value: 'sepia', labelKey: 'settings.themeSepia', icon: BookOpen },
+  { value: 'mc', labelKey: 'settings.themeMc', icon: Box },
 ];
 
 const ACCENT_PALETTE = ['#C68A3E', '#A86A2C', '#B85537', '#7B5E3C', '#D4A574', '#9C6B3E'];
@@ -211,6 +212,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
           {TABS.map((tb) => (
             <button
               key={tb.id}
+              data-testid={`settings-tab-${tb.id}`}
               onClick={() => setTab(tb.id)}
               className={cn(
                 'w-full text-left text-sm px-3 h-9 rounded-[6px] transition-colors',
@@ -242,6 +244,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                       return (
                         <button
                           key={th.value}
+                          data-testid={`theme-${th.value}`}
                           onClick={() => set({ theme: th.value })}
                           className={cn(
                             'flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-all',
@@ -450,6 +453,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
               <div className="flex flex-col gap-6">
                 <Section title={t('settings.aiEnabled')}>
                   <button
+                    data-testid="ai-enabled-toggle"
                     onClick={() => set({ aiEnabled: !draft.aiEnabled })}
                     className={cn(
                       'w-12 h-7 rounded-full transition-colors relative',

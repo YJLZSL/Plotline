@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -39,6 +39,8 @@ import {
 import { RelationshipGraph } from '@/features/characters/RelationshipGraph';
 import { RelationshipMatrix } from './RelationshipMatrix';
 import { useRelationshipsQuery } from '@/features/characters/relationshipHooks';
+import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
+import { useAiContextStore } from '@/stores/aiContext';
 
 const PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
 
@@ -79,6 +81,29 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
   });
 
   const selected = characters.find((c) => c.id === selectedId) ?? null;
+  const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    setAiContext({
+      view: 'characters',
+      viewLabel: t('characters.title'),
+      selection: selected
+        ? {
+            type: 'character',
+            id: selected.id,
+            label: selected.name,
+            content: [selected.description, selected.backstory, selected.goals, selected.conflicts]
+              .filter(Boolean)
+              .join('\n'),
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestEnrichCharacter'), prompt: t('ai.promptEnrichCharacter') },
+        { label: t('ai.suggestRelationships'), prompt: t('ai.promptRelationships') },
+        { label: t('ai.suggestBackstory'), prompt: t('ai.promptBackstory') },
+      ],
+    });
+  }, [t, selected, setAiContext]);
 
   const handleAdd = async () => {
     const c = await createMutation.mutateAsync({
@@ -141,6 +166,28 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t('characters.add')}</span>
             </Button>
+            <div className="w-px h-5 bg-border mx-1" />
+            <AiToolbarButton
+              view="characters"
+              viewLabel={t('characters.title')}
+              selection={
+                selected
+                  ? {
+                      type: 'character',
+                      id: selected.id,
+                      label: selected.name,
+                      content: [selected.description, selected.backstory, selected.goals, selected.conflicts]
+                        .filter(Boolean)
+                        .join('\n'),
+                    }
+                  : null
+              }
+              suggestions={[
+                { label: t('ai.suggestEnrichCharacter'), prompt: t('ai.promptEnrichCharacter') },
+                { label: t('ai.suggestRelationships'), prompt: t('ai.promptRelationships') },
+                { label: t('ai.suggestBackstory'), prompt: t('ai.promptBackstory') },
+              ]}
+            />
           </div>
         }
       />
@@ -536,6 +583,7 @@ function CharacterEditDialog({
                 onChange={(e) => update({ name: e.target.value })}
                 className="mt-1.5"
                 autoFocus
+                data-testid="character-name-input"
               />
             </div>
             <div>
@@ -667,7 +715,7 @@ function CharacterEditDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => onSave(form)} disabled={!form.name?.trim()}>
+            <Button onClick={() => onSave(form)} disabled={!form.name?.trim()} data-testid="character-save-btn">
               {t('common.save')}
             </Button>
           </div>

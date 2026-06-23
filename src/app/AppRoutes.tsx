@@ -66,10 +66,11 @@ export function AppRoutes() {
 
 function AnimatedRoutes() {
   const location = useLocation();
+  const topKey = location.pathname.startsWith('/workspaces') ? 'workspace' : location.pathname;
   return (
     <AnimatePresence mode="sync">
       <motion.div
-        key={location.pathname}
+        key={topKey}
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}

@@ -4,6 +4,75 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [2.1.0] - 2026-06-22
+
+**目标**：基于 v2.0.0 继续打磨核心体验——提升时间轴可读性与视图切换动画流畅度，
+为 MC 爱好者补全全局主题与彩蛋，引入真实 AI 厂商图标并按功能提供上下文感知 AI 助手，
+在统计视图中新增思维导图、脑状图与树状图，最后通过真实浏览器截图测试验证并发布 v2.1.0。
+
+### 新增
+
+- **时间轴可读性升级** (`src/components/views/TimelineView.tsx` +
+  `src/features/timeline/DateRuler.tsx` + `src/features/timeline/TrackLane.tsx` +
+  `src/features/timeline/EventCard.tsx`)：
+  标尺按年/月/日绘制主次刻度并高亮今天参考线；轨道 lane 采用交替背景与网格线；
+  事件卡片根据状态显示柔和状态色边框，时间方位更明确。
+- **统一视图切换动画** (`src/components/layout/WorkspaceLayout.tsx`)：
+  将路由切换动画下沉到布局层，使用 `AnimatePresence mode="wait"` 避免旧视图元素重复，
+  统一 200-300ms 淡入滑出曲线。
+- **MC 全局主题** (`src/styles/themes.css` + `src/stores/ui.ts` +
+  `src/components/views/SettingsView.tsx`)：
+  设置页新增 `mc` 主题选项，全局应用草方块绿配色、像素字体与方块风格边框，
+  按钮、卡片、输入框均呈现像素质感。
+- **MC 番茄钟元素** (`src/components/ui/PomodoroTimer.tsx` +
+  `src/stores/pomodoro.ts`)：
+  `mc` 主题下番茄钟显示像素爱心/苦力怕脸、红石块进度背景与草方块按钮，
+  切换状态与完成时播放 Web Audio 合成的 8-bit 音效。
+- **MC 开屏彩蛋** (`src/components/ui/SplashOverlay.tsx` +
+  `src/app/AppRoutes.tsx`)：
+  启动画面增加草方块堆叠动画与像素标题，5 秒后淡出。
+- **AI 真实厂商图标** (`src/features/ai/providers.tsx` +
+  `src/features/ai/providerIcons.tsx`)：
+  从 LobeHub 品牌 SVG 抓取官方/高辨识度图标，替换原先简化单色图标，
+  覆盖 OpenAI、DeepSeek、Moonshot、智谱 AI、硅基流动、火山方舟、腾讯混元、Ollama。
+- **按功能 AI 助手** (`src/stores/aiContext.ts` +
+  `src/components/layout/AiAssistantPanel.tsx` +
+  `src/components/ui/AiToolbarButton.tsx`)：
+  新增 `aiContext` 全局上下文，各视图通过 `AiToolbarButton` 注册当前选中对象；
+  AI 面板发送消息时自动附加“当前视图 + 选中对象 + 内容片段”前缀，
+  实现针对时间轴、角色、大纲、地图、VN、世界观、资料库的建议/改写/检查。
+- **统计新图表** (`src/components/views/StatisticsView.tsx` +
+  `src/features/outline/radialTreeLayout.ts` +
+  `src/components/charts/MindMapChart.tsx` +
+  `src/components/charts/BrainNetworkChart.tsx`)：
+  统计视图新增“概览 / 思维导图 / 脑状图 / 树状图”标签页；
+  思维导图使用径向树布局展示大纲结构，脑状图复用只读角色关系网络，
+  树状图展示层级大纲。
+- **未来开发计划** (`docs/ROADMAP.md`)：
+  归档 `docs/ISSUE_AUDIT.md`（已过期），新建 `docs/ROADMAP.md` 记录 v2.1.0 完成项与 v2.2+ 候选方向。
+
+### 变更
+
+- **AGENTS.md 迭代状态**：更新至 v2.1.0，记录 MC 主题、AI 助手、统计图表与发布状态。
+- **版本号**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 同步升级到 `2.1.0`。
+
+### 修复
+
+- 修复 `WorkspaceLayout` 使用 `AnimatePresence mode="sync"` 时，快速切换视图导致旧路由元素重复渲染的问题，改为 `mode="wait"`。
+- 修复 AI 面板中部分按功能建议未正确拼接选中对象内容上下文的问题，统一通过 `buildContextPrefix` 生成前缀。
+
+### 文档
+
+- 更新 `AGENTS.md` 当前迭代状态至 v2.1.0 已发布。
+- 更新 `docs/ROADMAP.md`，归档过期审计文档并列出 v2.2+ 候选方向。
+
+### 测试
+
+- 新增 `MindMapChart` 与 `BrainNetworkChart` 相关渲染与布局单元测试。
+- 新增 Playwright 真实浏览器截图测试，覆盖时间轴、MC 主题、AI 面板、统计图表。
+- 全量回归：`pnpm lint`、`pnpm typecheck`、`pnpm test:run`、
+  `cargo test`、`cargo clippy -- -D warnings`、`pnpm test:e2e` 全部通过。
+
 ## [2.0.0] - 2026-06-22
 
 **目标**：完成 Plotline 最终版本，补齐世界观模块、多格式导出、AI 流式输出、

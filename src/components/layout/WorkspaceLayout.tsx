@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useParams, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Timer } from 'lucide-react';
 
 import { Sidebar } from './Sidebar';
@@ -10,9 +11,11 @@ import { PomodoroTimer } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
+import { MOTION_BASE } from '@/lib/motion';
 
 export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const location = useLocation();
   const [pomoOpen, setPomoOpen] = useState(false);
   const { aiPanelOpen, setAiPanelOpen } = useUIStore();
   if (!workspaceId) return null;
@@ -21,7 +24,18 @@ export function WorkspaceLayout() {
     <div className="flex h-screen w-screen overflow-hidden bg-bg-base">
       <Sidebar workspaceId={workspaceId} />
       <div className="flex flex-1 flex-col min-w-0">
-        <Outlet />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={MOTION_BASE}
+            className="flex-1 min-h-0 flex flex-col"
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
         <StatusBar
           left={<HistoryControls />}
           right={

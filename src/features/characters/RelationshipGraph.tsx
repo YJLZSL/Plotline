@@ -57,9 +57,10 @@ interface RelationshipGraphProps {
   workspaceId: string;
   characters: Character[];
   onCharacterClick?: (id: string) => void;
+  readOnly?: boolean;
 }
 
-export function RelationshipGraph({ workspaceId, characters, onCharacterClick }: RelationshipGraphProps) {
+export function RelationshipGraph({ workspaceId, characters, onCharacterClick, readOnly }: RelationshipGraphProps) {
   const { t } = useI18n();
   const { data: relationships = [] } = useRelationshipsQuery(workspaceId);
   const createRel = useCreateRelationship(workspaceId);
@@ -250,12 +251,14 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
   return (
     <div ref={containerRef} className="relative flex-1 overflow-hidden bg-bg-base">
       {/* 顶部操作 */}
-      <div className="absolute top-3 right-3 z-10 flex gap-2">
-        <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5">
-          <Plus className="h-3.5 w-3.5" />
-          添加关系
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="absolute top-3 right-3 z-10 flex gap-2">
+          <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            添加关系
+          </Button>
+        </div>
+      )}
 
       {/* 图例 */}
       <div className="absolute bottom-3 left-3 z-10 bg-bg-surface/80 backdrop-blur-sm border border-border rounded-[8px] p-2 flex flex-col gap-1">
@@ -286,7 +289,14 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
           const my = (s.y + t.y) / 2;
           const color = RELATIONSHIP_COLORS[e.type];
           return (
-            <g key={i} onClick={() => setSelectedRel(relationships.find((r) => r.sourceId === e.source && r.targetId === e.target) ?? null)} className="cursor-pointer">
+            <g
+              key={i}
+              onClick={() => {
+                if (readOnly) return;
+                setSelectedRel(relationships.find((r) => r.sourceId === e.source && r.targetId === e.target) ?? null);
+              }}
+              className={readOnly ? '' : 'cursor-pointer'}
+            >
               <line
                 x1={s.x}
                 y1={s.y}
@@ -306,9 +316,12 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
           <g
             key={n.id}
             transform={`translate(${n.x}, ${n.y})`}
-            onMouseDown={() => handleMouseDown(n.id)}
+            onMouseDown={() => {
+              if (readOnly) return;
+              handleMouseDown(n.id);
+            }}
             onClick={() => onCharacterClick?.(n.id)}
-            className="cursor-grab active:cursor-grabbing"
+            className={readOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}
           >
             <circle r={24} fill={n.color} opacity={0.9} stroke="var(--bg-surface)" strokeWidth={2} />
             <text
@@ -335,7 +348,7 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
       </svg>
 
       {/* 关系详情侧滑 */}
-      {selectedRel && (
+      {!readOnly && selectedRel && (
         <motion.div
           initial={{ x: 280, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -370,7 +383,7 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
       )}
 
       {/* 创建关系对话框 */}
-      <Dialog open={creating} onOpenChange={setCreating}>
+      {!readOnly && <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent title="添加关系" className="max-w-md">
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
@@ -459,9 +472,9 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
-      <ConfirmDialog
+      {!readOnly && <ConfirmDialog
         open={confirmDelete !== null}
         onOpenChange={(v) => !v && setConfirmDelete(null)}
         title={t('common.delete')}
@@ -472,7 +485,7 @@ export function RelationshipGraph({ workspaceId, characters, onCharacterClick }:
           if (confirmDelete) void deleteRel.mutateAsync(confirmDelete);
           setSelectedRel(null);
         }}
-      />
+      />}
     </div>
   );
 }
