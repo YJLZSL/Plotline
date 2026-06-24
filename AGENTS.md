@@ -35,10 +35,11 @@
 
 必读文档：
 - `AGENTS.md` — 本文件（AI 协作规范）
-- `docs/ARCHITECTURE.md` — 整体架构
-- `docs/TESTING.md` — 测试流程
-- `docs/DECISIONS.md` — 关键技术决策
-- `docs/DATA_MODEL.md` — 数据模型与 ER 图
+- `docs/文档索引.md` — 文档状态总览（先读）
+- `docs/架构设计.md` — 整体架构
+- `docs/测试规范.md` — 测试流程
+- `docs/技术决策.md` — 关键技术决策
+- `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
 ### 当前迭代状态（v2.2.0 已发布）
@@ -198,7 +199,7 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 - `main` 上的代码必须始终可发布（已通过完整测试）
 - 禁止从 main 切出长期存在的功能分支；所有改动直接提交到 main
 - Release tag 应指向 `main` 上的某个 commit
-- 发布前统一版本号、CHANGELOG、releases/vX.Y.Z/latest.json
+- 发布前统一版本号、`更新日志.md`、releases/vX.Y.Z/latest.json
 
 ### 4.2 Commit 信息
 遵循 **Conventional Commits**：
@@ -234,7 +235,7 @@ docs(agents): 补充 IPC 调用规范
 
 ## 5. 测试规范
 
-详见 `docs/TESTING.md`。要点：
+详见 `docs/测试规范.md`。要点：
 
 - **单元测试**：`*.test.ts(x)` 与被测文件同目录，Vitest 运行。
 - **Rust 测试**：`#[cfg(test)] mod tests { ... }` 在文件底部，`cargo test` 运行。
@@ -291,7 +292,7 @@ docs(agents): 补充 IPC 调用规范
 | `unwrap()` 在生产路径 | `?` + `AppError` |
 | 改已发布迁移 | 新增迁移补丁 |
 | 删除测试 | 改测试以匹配新行为 |
-| 引入新依赖未经 ADR | 在 `docs/DECISIONS.md` 记录 |
+| 引入新依赖未经 ADR | 在 `docs/技术决策.md` 记录 |
 | 用 Python 脚本生成图标 | 使用 `scripts/render-icon.py`（基于 SVG + Skia） |
 | 组件内硬编码 `font-family` | 使用 CSS 变量 `--font-sans` / `--font-mono` / `--font-pixel` |
 | 冷蓝色主色 | 暖色调主题 |
@@ -302,7 +303,7 @@ docs(agents): 补充 IPC 调用规范
 
 ## 8. AI 接手时的 5 步上手流程
 
-1. `Read` 本文件 + `docs/ARCHITECTURE.md` + `产品需求与设计文档.md`。
+1. `Read` 本文件 + `docs/文档索引.md` + `docs/架构设计.md` + `产品需求与设计文档.md`。
 2. `git log --oneline -20` 看最近提交，了解项目节奏。
 3. 若 `pnpm` 不可用，可直接使用 `node_modules/.bin` 中的 `tsc`、`eslint`、`vitest`、`tauri` 等命令。
 4. `pnpm install && pnpm dev`（或 `./node_modules/.bin/vite`）跑起来，体验当前状态。

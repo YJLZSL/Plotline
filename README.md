@@ -50,7 +50,7 @@
 - **数据库**：SQLite (rusqlite)
 - **测试**：Vitest + Playwright
 
-详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+详见 [`docs/架构设计.md`](docs/架构设计.md)。
 
 ---
 
@@ -108,7 +108,7 @@ plotline/
 └── 产品需求与设计文档.md  # PRD（最终事实源）
 ```
 
-完整目录与模块边界见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+完整目录与模块边界见 [`docs/架构设计.md`](docs/架构设计.md)。
 
 ---
 
@@ -116,7 +116,7 @@ plotline/
 
 本项目欢迎 AI 辅助开发。**任何 AI 接手前必须阅读：**
 1. [`AGENTS.md`](AGENTS.md) — 编码规范、禁忌、提交流程
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 架构与数据流
+2. [`docs/架构设计.md`](docs/架构设计.md) — 架构与数据流
 3. [`产品需求与设计文档.md`](产品需求与设计文档.md) — 产品最终事实源
 
 接手 5 步流程见 `AGENTS.md` § 8。
