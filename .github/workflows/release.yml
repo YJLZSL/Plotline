@@ -52,7 +52,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Plotline ${{ github.ref_name }}'
           releaseBody: '见 `更新日志.md` 获取发布说明。自动更新清单：latest.json'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
           args: ''
