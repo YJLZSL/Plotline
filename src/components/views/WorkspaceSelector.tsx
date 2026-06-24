@@ -10,6 +10,8 @@ import {
   Users,
   Layers,
   FileText,
+  Pencil,
+  Check,
 } from 'lucide-react';
 
 import { AppIcon, BrandMark, Button, Card, CardContent, EmptyState, Input } from '@/components/ui';
@@ -22,13 +24,15 @@ import {
   useExportWorkspaceWord,
   useExportWorkspaceEpub,
   useImportWorkspace,
+  useUpdateWorkspace,
   useWorkspacesQuery,
 } from '@/features/workspace/hooks';
 import { ConfirmDialog, Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { useI18n } from '@/hooks/useI18n';
-import { relativeTime, truncate, downloadJSON, downloadText, downloadBlob } from '@/lib/utils';
+import { relativeTime, truncate, downloadJSON, downloadText, downloadBlob, cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
-import type { WorkspaceTemplate, WorkspaceBundle } from '@/types';
+import { useHistoryStore, makeUpdateWorkspaceAction } from '@/stores/historyStore';
+import type { Workspace, WorkspaceTemplate, WorkspaceBundle } from '@/types';
 
 const TRANSITION = MOTION_BASE;
 
@@ -40,12 +44,29 @@ const TEMPLATES: Array<{ value: WorkspaceTemplate; labelKey: string; descKey: st
   { value: 'biography', labelKey: 'workspace.form.templateBiography', descKey: 'workspace.form.templateBiographyDesc' },
 ];
 
+const COVER_PALETTE = [
+  '#C68A3E',
+  '#A86A2C',
+  '#B85537',
+  '#7B5E3C',
+  '#D4A574',
+  '#9C6B3E',
+  '#F4B6C2',
+  '#B6D4F4',
+  '#B6F4C8',
+  '#F4E4B6',
+  '#D8B6F4',
+  '#F4CBB6',
+];
+
 export function WorkspaceSelector() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { data: workspaces, isLoading } = useWorkspacesQuery();
   const createMutation = useCreateWorkspace();
+  const updateMutation = useUpdateWorkspace();
   const deleteMutation = useDeleteWorkspace();
+  const pushHistory = useHistoryStore((s) => s.push);
   const exportMutation = useExportWorkspace();
   const exportMdMutation = useExportWorkspaceMarkdown();
   const exportPdfMutation = useExportWorkspacePdf();
@@ -56,6 +77,8 @@ export function WorkspaceSelector() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<Workspace | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', description: '', coverColor: '' });
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -76,6 +99,25 @@ export function WorkspaceSelector() {
     setCreateOpen(false);
     setForm({ name: '', description: '', template: 'blank' });
     navigate(`/workspaces/${ws.id}/timeline`);
+  };
+
+  const handleEditSave = async () => {
+    if (!editTarget || !editForm.name.trim()) return;
+    const previous = editTarget;
+    const next: Workspace = {
+      ...previous,
+      name: editForm.name.trim(),
+      description: editForm.description.trim(),
+      coverColor: editForm.coverColor,
+    };
+    await updateMutation.mutateAsync({
+      id: next.id,
+      name: next.name,
+      description: next.description,
+      coverColor: next.coverColor,
+    });
+    pushHistory(makeUpdateWorkspaceAction(next.id, previous, next));
+    setEditTarget(null);
   };
 
   const handleExport = async (id: string) => {
@@ -250,6 +292,21 @@ export function WorkspaceSelector() {
                             {t('workspace.createdAt', { date: relativeTime(w.createdAt) })}
                           </span>
                           <div className="flex gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditTarget(w);
+                                setEditForm({
+                                  name: w.name,
+                                  description: w.description,
+                                  coverColor: w.coverColor,
+                                });
+                              }}
+                              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
+                              title={t('workspace.edit')}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -492,13 +549,80 @@ export function WorkspaceSelector() {
         open={deleteTarget !== null}
         onOpenChange={(v) => !v && setDeleteTarget(null)}
         title={t('workspace.delete')}
-        description={t('workspace.empty.title')}
+        description={t('workspace.deleteConfirm', {
+          name: workspaces?.find((w) => w.id === deleteTarget)?.name ?? '',
+        })}
         confirmText={t('common.delete')}
         destructive
         onConfirm={() => {
           if (deleteTarget) void deleteMutation.mutateAsync(deleteTarget);
         }}
       />
+
+      <Dialog open={editTarget !== null} onOpenChange={(v) => !v && setEditTarget(null)}>
+        <DialogContent title={t('workspace.editTitle')} className="max-w-xl">
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="text-sm font-medium text-text-primary">
+                {t('workspace.form.name')}
+              </label>
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder={t('workspace.form.namePlaceholder')}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-text-primary">
+                {t('workspace.form.description')}{' '}
+                <span className="text-text-secondary text-xs">({t('common.optional')})</span>
+              </label>
+              <Input
+                value={editForm.description}
+                onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder={t('workspace.form.descriptionPlaceholder')}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-text-primary">
+                {t('workspace.coverColor')}
+              </label>
+              <div className="flex gap-2 flex-wrap mt-2">
+                {COVER_PALETTE.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setEditForm((f) => ({ ...f, coverColor: c }))}
+                    className={cn(
+                      'h-8 w-8 rounded-full transition-transform flex items-center justify-center',
+                      editForm.coverColor === c
+                        ? 'ring-2 ring-offset-2 ring-text-primary/40 scale-110'
+                        : 'hover:scale-110',
+                    )}
+                    style={{ backgroundColor: c }}
+                    aria-label={c}
+                  >
+                    {editForm.coverColor === c && <Check className="h-3 w-3 text-white" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditTarget(null)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                onClick={handleEditSave}
+                loading={updateMutation.isPending}
+                disabled={!editForm.name.trim()}
+              >
+                {t('common.save')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

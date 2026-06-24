@@ -41,21 +41,20 @@
 - `docs/DATA_MODEL.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.1.0 已发布）
-- **时间轴升级**：重构标尺与刻度，增加主次刻度、今天参考线、轨道 lane 交替背景；事件卡片使用状态色边框；视图切换动画统一下沉到 `WorkspaceLayout`。
-- **MC 主题彩蛋**：新增全局 MC 主题；番茄钟加入心形/苦力怕脸/红石块/草方块元素；开屏动画显示草方块与像素标题；Web Audio 合成 MC 风格 8-bit 音效。
-- **AI 真实图标**：从 LobeHub 品牌 SVG 抓取官方/高辨识度图标，覆盖 OpenAI、DeepSeek、Moonshot、智谱、硅基流动、火山、腾讯、Ollama。
-- **按功能 AI 助手**：新增 `aiContext` 全局上下文；时间轴、角色、大纲、地图、VN、世界观、资料库均提供“建议 / 改写 / 检查”入口，AI 能读取当前选中对象与内容。
-- **统计新图表**：新增思维导图（径向树）、脑状图（角色关系网络）、树状图（大纲层级）。
-- **真实浏览器测试**：Playwright 截图时间轴、MC 主题、AI 面板、统计图表，现场修复 `WorkspaceLayout` 切换时元素重复的问题。
-- `pnpm lint`、`pnpm typecheck`、`pnpm test:run`、`cargo test`、`cargo clippy -- -D warnings`、`pnpm test:e2e` 全部通过。
-- GitHub Release v2.1.0 已发布。
+### 当前迭代状态（v2.2.0 已发布）
+- **时间轴/事件逻辑重写**：新增 `src/features/timeline/timeScale.ts` 用真实日历步进替换 `timeToX`/`xToTime` 固定 30/365 天近似；`TimelineView` 全面接入 `timeScale` 并修复 `DateRuler` 刻度对齐；移除 `EventCard.dragConstraints`，实现真实横向拖拽与相邻事件排序；连线层支持点击删除连接；一致性冲突在事件卡片与编辑对话框可视化；事件编辑对话框新增颜色选择器；甘特图改用真实日期布局；轨道层引入水平虚拟化与 `useMemo` 优化。
+- **动画与性能优化**：视图/弹窗动画压缩到 150-200ms；支持 `prefers-reduced-motion`；用 CSS active 反馈替代部分 Framer Motion；全局 mutation 保存状态指示 + `beforeunload` 保护。
+- **MC 主题再设计**：避免“绿油油”单一色调，引入泥土棕/草绿/红石红/圆石灰/木板褐；控件方块化；番茄钟音效闭环；修复设置预览与 accent 冲突。
+- **工作区保存改进**：工作区选择器支持重命名/封面/描述编辑；实现 `autoBackup` 定时备份调度器；扩展 undo/redo 至工作区编辑；bundle 导入版本校验；子实体变更联动 `workspaces.updated_at`。
+- **自定义字体导入**：默认内置得意黑（Smiley Sans）；统一 `fontTheme` 与 `uiFont`/`editorFont` 模型；支持导入 `.ttf/.otf/.woff/.woff2` 到 `app_data/fonts/` 并动态注入 `@font-face`。
+- **真实浏览器测试**：Playwright 截图覆盖关键流程并现场修复问题。
+- GitHub Release v2.2.0 已发布：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
 
-### 上一版本（v2.0.0 已发布）
-- 世界观模块、PDF/Word/ePub 导出、AI 流式输出与系统提示词、VN 富文本与分支调试、WorkspaceBundle 补全、CSP 白名单。
-- GitHub Release v2.0.0 已发布。
+### 上一版本（v2.1.0 已发布）
+- 时间轴可读性升级、视图切换动画、MC 全局主题与彩蛋、AI 真实厂商图标、按功能 AI 助手、统计新图表、真实浏览器测试。
+- GitHub Release v2.1.0 已发布： <https://github.com/YJLZSL/Plotline/releases/tag/v2.1.0>
 
-### 下一迭代方向（v2.2+ 候选）
+### 下一迭代方向（v2.3+ 候选）
 - 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
 - VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
 - 世界观：种族/物种/宗教等实体管理、设定冲突检测。

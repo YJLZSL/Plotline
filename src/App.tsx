@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIsMutating } from '@tanstack/react-query';
 
 import { AppProviders } from './app/AppProviders';
 import { AppRoutes } from './app/AppRoutes';
@@ -8,6 +9,20 @@ import { useI18n } from './hooks/useI18n';
 import { checkForUpdates } from './features/settings/updater';
 import { toastError, toastInfo } from './stores/toast';
 import { APP_VERSION } from './lib/version';
+
+function BeforeUnloadGuard() {
+  const isMutating = useIsMutating();
+  useEffect(() => {
+    if (isMutating === 0) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isMutating]);
+  return null;
+}
 
 function UpdatePrompt() {
   const { t } = useI18n();
@@ -57,6 +72,7 @@ function UpdatePrompt() {
 export default function App() {
   return (
     <AppProviders>
+      <BeforeUnloadGuard />
       <SplashOverlay />
       <UpdatePrompt />
       <AppRoutes />

@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
+import { useRef, useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import {
   Plus,
@@ -15,6 +15,7 @@ import {
   CalendarRange,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
+import { createTimeScale, type ZoomLevel, type TimeScale } from '@/features/timeline/timeScale';
 
 import {
   Button,
@@ -41,6 +42,7 @@ import {
   useUpdateEvent,
   useUpdateTrack,
   useConnectEvents,
+  useDisconnectEvents,
   useEventConnectionsQuery,
 } from '@/features/timeline/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
@@ -56,8 +58,9 @@ const EVENT_MIN_WIDTH = 180;
 const EVENT_HEIGHT = 64;
 const RULER_HEIGHT = 44;
 const LEFT_PADDING = 24;
+const DAY_MS = 24 * 3600 * 1000;
 const ZOOM_LEVELS = ['hour', 'day', 'month', 'year'] as const;
-type ZoomLevel = (typeof ZOOM_LEVELS)[number];
+const EVENT_COLOR_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
 
 // 每个缩放级别下，单位宽度（像素 / 单位）
 const ZOOM_UNIT_WIDTH: Record<ZoomLevel, number> = {
@@ -102,11 +105,29 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [newTrackName, setNewTrackName] = useState('');
   const [showConnections, setShowConnections] = useState(true);
   const [checkingConsistency, setCheckingConsistency] = useState(false);
+  const [conflictEventIds, setConflictEventIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'timeline' | 'gantt'>('timeline');
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const connectEvents = useConnectEvents(workspaceId);
+  const disconnectEvents = useDisconnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
   const setAiContext = useAiContextStore((s) => s.setContext);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (el) {
+      setViewportWidth(el.clientWidth);
+      setScrollLeft(el.scrollLeft);
+    }
+    const onResize = () => {
+      if (el) setViewportWidth(el.clientWidth);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
@@ -133,6 +154,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     setCheckingConsistency(true);
     try {
       const conflicts = await checkConsistency(workspaceId);
+      const ids = new Set<string>();
+      for (const c of conflicts) {
+        for (const id of c.eventIds) {
+          ids.add(id);
+        }
+      }
+      setConflictEventIds(ids);
       if (conflicts.length === 0) {
         toastInfo(t('timeline.consistencyClean'));
       } else {
@@ -149,22 +177,31 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const visibleTracks = tracks.filter((tr) => tr.isVisible);
 
   // 计算时间轴范围：找出所有绝对日期事件的最早/最晚时间
-  const { timeRange, eventPositions } = useMemo(() => {
+  const timeScale = useMemo(() => {
     const absoluteEvents = events.filter((e) => e.dateType === 'absolute' && e.dateValue);
     let minTime = Date.now();
-    let maxTime = Date.now() + 365 * 24 * 3600 * 1000;
+    let maxTime = Date.now() + 365 * DAY_MS;
     if (absoluteEvents.length > 0) {
       const times = absoluteEvents.map((e) => new Date(e.dateValue).getTime()).filter((n) => !Number.isNaN(n));
       if (times.length > 0) {
         minTime = Math.min(...times);
         maxTime = Math.max(...times);
         // 留一些边距
-        const span = maxTime - minTime || 365 * 24 * 3600 * 1000;
+        const span = maxTime - minTime || 365 * DAY_MS;
         minTime -= span * 0.1;
         maxTime += span * 0.15;
       }
     }
-    // 把相对事件按 sortOrder 排在绝对事件之前/之后
+    return createTimeScale(minTime, maxTime, zoom, LEFT_PADDING, ZOOM_UNIT_WIDTH[zoom]);
+  }, [events, zoom]);
+
+  const totalWidth = useMemo(
+    () => Math.max(800, timeScale.timeToX(timeScale.max) + LEFT_PADDING + EVENT_MIN_WIDTH),
+    [timeScale],
+  );
+
+  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 min 的伪时间戳
+  const eventPositions = useMemo(() => {
     const positions = new Map<string, number>();
     events.forEach((ev) => {
       if (ev.dateType === 'absolute' && ev.dateValue) {
@@ -174,58 +211,16 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         }
       }
     });
-    // 相对事件按 sortOrder 排布
     const relativeEvents = events
       .filter((e) => e.dateType !== 'absolute' || !positions.has(e.id))
       .sort((a, b) => a.sortOrder - b.sortOrder);
-    const unit = ZOOM_UNIT_WIDTH[zoom];
-    const fallbackStart = minTime;
+    const unitMs = timeScale.getMsPerUnit();
+    const fallbackStart = timeScale.min;
     relativeEvents.forEach((ev, i) => {
-      positions.set(ev.id, fallbackStart + i * unit * 2 * 24 * 3600 * 1000);
+      positions.set(ev.id, fallbackStart + i * unitMs * 2);
     });
-    return { timeRange: { min: minTime, max: maxTime }, eventPositions: positions };
-  }, [events, zoom]);
-
-  const totalWidth = Math.max(
-    800,
-    (timeRange.max - timeRange.min) / (24 * 3600 * 1000) * ZOOM_UNIT_WIDTH[zoom] +
-      LEFT_PADDING * 2 +
-      EVENT_MIN_WIDTH,
-  );
-
-  // 时间 → x 坐标
-  const timeToX = useCallback(
-    (time: number) => {
-      const unit = ZOOM_UNIT_WIDTH[zoom];
-      const msPerUnit =
-        zoom === 'hour'
-          ? 3600 * 1000
-          : zoom === 'day'
-            ? 24 * 3600 * 1000
-            : zoom === 'month'
-              ? 30 * 24 * 3600 * 1000
-              : 365 * 24 * 3600 * 1000;
-      return LEFT_PADDING + ((time - timeRange.min) / msPerUnit) * unit;
-    },
-    [timeRange.min, zoom],
-  );
-
-  // x → 时间
-  const xToTime = useCallback(
-    (x: number) => {
-      const unit = ZOOM_UNIT_WIDTH[zoom];
-      const msPerUnit =
-        zoom === 'hour'
-          ? 3600 * 1000
-          : zoom === 'day'
-            ? 24 * 3600 * 1000
-            : zoom === 'month'
-              ? 30 * 24 * 3600 * 1000
-              : 365 * 24 * 3600 * 1000;
-      return timeRange.min + ((x - LEFT_PADDING) / unit) * msPerUnit;
-    },
-    [timeRange.min, zoom],
-  );
+    return positions;
+  }, [events, timeScale]);
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -259,7 +254,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   };
 
   const handleCanvasDoubleClick = async (trackId: string, x: number) => {
-    const time = xToTime(x);
+    const time = timeScale.xToTime(x);
     const ev = await createEvent.mutateAsync({
       workspaceId,
       trackId,
@@ -273,16 +268,26 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     setSelectedEventId(ev.id);
   };
 
-  const handleEventDragEnd = async (ev: Event, track: Track, info: PanInfo, x: number) => {
-    const newTime = xToTime(x + info.offset.x);
-    const newSort = ev.sortOrder + Math.round(info.offset.x / 40);
-    await updateEvent.mutateAsync({
-      id: ev.id,
-      dateType: 'absolute',
-      dateValue: new Date(newTime).toISOString().slice(0, 10),
-      sortOrder: newSort,
-      trackId: track.id,
-    });
+  const handleEventDragEnd = async (ev: Event, track: Track, _info: PanInfo, finalX: number) => {
+    if (ev.dateType === 'absolute') {
+      const newTime = timeScale.xToTime(finalX);
+      await updateEvent.mutateAsync({
+        id: ev.id,
+        dateType: 'absolute',
+        dateValue: new Date(newTime).toISOString().slice(0, 10),
+        trackId: track.id,
+      });
+    } else {
+      const trackEvents = eventsByTrack.get(track.id) ?? [];
+      const newSort = computeNewSortOrder(ev, finalX, trackEvents, eventPositions, timeScale);
+      if (newSort !== ev.sortOrder) {
+        await updateEvent.mutateAsync({
+          id: ev.id,
+          sortOrder: newSort,
+          trackId: track.id,
+        });
+      }
+    }
   };
 
   const handleSaveEvent = async (data: Partial<Event> & { title: string; characterIds: string[] }) => {
@@ -430,6 +435,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         <GanttChart
           tracks={tracks}
           events={events}
+          timeScale={timeScale}
           selectedEventId={selectedEventId}
           onSelectEvent={(id) => {
             setSelectedEventId(id);
@@ -492,6 +498,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
         {/* 画布区域 */}
         <div
+          ref={canvasRef}
           className="flex-1 overflow-auto bg-bg-base relative"
           onWheel={(e) => {
             const el = e.currentTarget;
@@ -502,6 +509,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               e.preventDefault();
               el.scrollLeft += e.deltaY * 0.8;
             }
+          }}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setScrollLeft(el.scrollLeft);
+            setViewportWidth(el.clientWidth);
           }}
         >
           {visibleTracks.length === 0 ? (
@@ -526,10 +538,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
             <div style={{ minWidth: totalWidth, minHeight: visibleTracks.length * (TRACK_HEIGHT + TRACK_GAP) + RULER_HEIGHT }}>
               {/* 日期标尺 */}
               <DateRuler
-                min={timeRange.min}
-                max={timeRange.max}
-                zoom={zoom}
-                timeToX={timeToX}
+                timeScale={timeScale}
                 totalWidth={totalWidth}
               />
 
@@ -539,10 +548,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 events={events}
                 tracks={visibleTracks}
                 eventPositions={eventPositions}
-                timeToX={timeToX}
+                timeScale={timeScale}
+                scrollLeft={scrollLeft}
+                viewportWidth={viewportWidth}
                 pendingConnection={pendingConnection}
                 selectedEventId={selectedEventId}
                 eventConnections={eventConnections}
+                onDisconnect={(sourceId, targetId) => void disconnectEvents.mutateAsync({ sourceId, targetId })}
               />
               )}
 
@@ -554,11 +566,14 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   track={tr}
                   events={eventsByTrack.get(tr.id) ?? []}
                   eventPositions={eventPositions}
-                  timeToX={timeToX}
+                  timeScale={timeScale}
                   totalWidth={totalWidth}
                   zoom={zoom}
+                  scrollLeft={scrollLeft}
+                  viewportWidth={viewportWidth}
                   selectedEventId={selectedEventId}
                   pendingConnection={pendingConnection}
+                  conflictEventIds={conflictEventIds}
                   onSelectEvent={(id) => {
                     if (pendingConnection && pendingConnection !== id) {
                       void connectEvents.mutateAsync({
@@ -610,6 +625,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           if (!v) setEditingEvent(null);
         }}
         event={editingEvent}
+        isConflict={!!editingEvent && conflictEventIds.has(editingEvent.id)}
         tracks={tracks}
         characters={characters}
         onSave={handleSaveEvent}
@@ -649,63 +665,28 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
 // ===== 日期标尺 =====
 function DateRuler({
-  min,
-  max,
-  zoom,
-  timeToX,
+  timeScale,
   totalWidth,
 }: {
-  min: number;
-  max: number;
-  zoom: ZoomLevel;
-  timeToX: (t: number) => number;
+  timeScale: TimeScale;
   totalWidth: number;
 }) {
+  const { min, max, zoom } = timeScale;
   const { t, i18n } = useI18n();
   const [hovered, setHovered] = useState<{ x: number; label: string } | null>(null);
 
   const { majorTicks, minorTicks, todayX } = useMemo(() => {
-    const majors: Array<{ time: number; label: string }> = [];
-    const minors: Array<{ time: number }> = [];
     const fmt = new Intl.DateTimeFormat(i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US', {
       ...ZOOM_RULER_FORMAT[zoom],
     });
-    let cur = new Date(min);
-    if (zoom === 'hour') cur.setMinutes(0, 0, 0);
-    if (zoom === 'day') cur.setHours(0, 0, 0, 0);
-    if (zoom === 'month') cur.setDate(1);
-    if (zoom === 'year') cur.setMonth(0, 1);
-
-    const pushMajor = (d: Date) => {
-      majors.push({ time: d.getTime(), label: fmt.format(d) });
-    };
-    const pushMinor = (d: Date) => {
-      minors.push({ time: d.getTime() });
-    };
-
-    while (cur.getTime() < max) {
-      const t = cur.getTime();
-      if (t >= min) pushMajor(new Date(cur));
-      if (zoom === 'hour') {
-        for (let i = 1; i < 6; i++) pushMinor(new Date(t + i * 3600 * 1000));
-        cur = new Date(t + 6 * 3600 * 1000);
-      } else if (zoom === 'day') {
-        for (let i = 1; i < 7; i++) pushMinor(new Date(t + i * 24 * 3600 * 1000));
-        cur = new Date(t + 7 * 24 * 3600 * 1000);
-      } else if (zoom === 'month') {
-        pushMinor(new Date(cur.getFullYear(), cur.getMonth() + 1, 1));
-        pushMinor(new Date(cur.getFullYear(), cur.getMonth() + 2, 1));
-        cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
-      } else {
-        pushMinor(new Date(cur.getFullYear(), 6, 1));
-        cur = new Date(cur.getFullYear() + 1, 0, 1);
-      }
-    }
+    const { major, minor } = timeScale.getTicks();
+    const majors = major.map((time) => ({ time, label: fmt.format(new Date(time)) }));
+    const minors = minor.map((time) => ({ time }));
 
     const now = Date.now();
-    const today = now >= min && now <= max ? timeToX(now) : null;
+    const today = now >= min && now <= max ? timeScale.timeToX(now) : null;
     return { majorTicks: majors, minorTicks: minors, todayX: today };
-  }, [min, max, zoom, timeToX, i18n.language]);
+  }, [min, max, zoom, timeScale, i18n.language]);
 
   return (
     <div
@@ -716,7 +697,7 @@ function DateRuler({
       <div className="relative h-full">
         {/* 次刻度 */}
         {minorTicks.map((tick, i) => {
-          const x = timeToX(tick.time);
+          const x = timeScale.timeToX(tick.time);
           if (x < 0 || x > totalWidth) return null;
           return (
             <div
@@ -729,7 +710,7 @@ function DateRuler({
 
         {/* 主刻度 */}
         {majorTicks.map((tick, i) => {
-          const x = timeToX(tick.time);
+          const x = timeScale.timeToX(tick.time);
           if (x < 0 || x > totalWidth) return null;
           return (
             <div
@@ -786,18 +767,24 @@ function ConnectionLayer({
   events,
   tracks,
   eventPositions,
-  timeToX,
+  timeScale,
+  scrollLeft,
+  viewportWidth,
   pendingConnection,
   selectedEventId,
   eventConnections,
+  onDisconnect,
 }: {
   events: Event[];
   tracks: Track[];
   eventPositions: Map<string, number>;
-  timeToX: (t: number) => number;
+  timeScale: TimeScale;
+  scrollLeft: number;
+  viewportWidth: number;
   pendingConnection: string | null;
   selectedEventId: string | null;
   eventConnections: EventConnection[];
+  onDisconnect: (sourceId: string, targetId: string) => void;
 }) {
   const trackIndex = (id: string) => tracks.findIndex((t) => t.id === id);
   const eventY = (ev: Event) => {
@@ -806,18 +793,30 @@ function ConnectionLayer({
     return RULER_HEIGHT + ti * (TRACK_HEIGHT + TRACK_GAP) + TRACK_HEIGHT / 2;
   };
 
+  const buffer = EVENT_MIN_WIDTH * 2;
+  const visibleMin = scrollLeft - buffer;
+  const visibleMax = scrollLeft + viewportWidth + buffer;
+
+  const visibleConnections = useMemo(() => {
+    return eventConnections.filter((conn) => {
+      const sx = timeScale.timeToX(eventPositions.get(conn.sourceId) ?? 0);
+      const tx = timeScale.timeToX(eventPositions.get(conn.targetId) ?? 0);
+      return sx >= visibleMin && sx <= visibleMax && tx >= visibleMin && tx <= visibleMax;
+    });
+  }, [eventConnections, eventPositions, timeScale, visibleMin, visibleMax]);
+
   return (
     <svg
-      className="absolute top-0 left-0 pointer-events-none"
-      style={{ width: '100%', height: '100%' }}
+      className="absolute top-0 left-0"
+      style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
     >
-      {eventConnections.map((conn) => {
+      {visibleConnections.map((conn) => {
         const source = events.find((e) => e.id === conn.sourceId);
         const target = events.find((e) => e.id === conn.targetId);
         if (!source || !target) return null;
-        const sx = timeToX(eventPositions.get(conn.sourceId) ?? 0);
+        const sx = timeScale.timeToX(eventPositions.get(conn.sourceId) ?? 0);
         const sy = eventY(source);
-        const tx = timeToX(eventPositions.get(conn.targetId) ?? 0);
+        const tx = timeScale.timeToX(eventPositions.get(conn.targetId) ?? 0);
         const ty = eventY(target);
         const midX = (sx + tx) / 2;
         const isActive =
@@ -833,11 +832,21 @@ function ConnectionLayer({
               d={path}
               fill="none"
               stroke={isForeshadow ? 'var(--accent-soft)' : isActive ? 'var(--accent)' : 'var(--text-secondary)'}
-              strokeWidth={isActive ? 2 : 1.5}
+              strokeWidth={isActive ? 2.5 : 1.5}
               strokeDasharray={isForeshadow ? '6 4' : '4 3'}
               opacity={isActive ? 0.9 : 0.4}
+              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+              onClick={() => onDisconnect(conn.sourceId, conn.targetId)}
+              onMouseEnter={(e) => {
+                e.currentTarget.setAttribute('stroke-width', '3');
+                e.currentTarget.setAttribute('opacity', '0.9');
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.setAttribute('stroke-width', isActive ? '2.5' : '1.5');
+                e.currentTarget.setAttribute('opacity', isActive ? '0.9' : '0.4');
+              }}
             />
-            <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} />
+            <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} style={{ pointerEvents: 'none' }} />
           </g>
         );
       })}
@@ -851,11 +860,14 @@ function TrackLane({
   track,
   events,
   eventPositions,
-  timeToX,
+  timeScale,
   totalWidth,
   zoom,
+  scrollLeft,
+  viewportWidth,
   selectedEventId,
   pendingConnection,
+  conflictEventIds,
   onSelectEvent,
   onEditEvent,
   onAddEvent,
@@ -867,19 +879,33 @@ function TrackLane({
   track: Track;
   events: Event[];
   eventPositions: Map<string, number>;
-  timeToX: (t: number) => number;
+  timeScale: TimeScale;
   totalWidth: number;
   zoom: ZoomLevel;
+  scrollLeft: number;
+  viewportWidth: number;
   selectedEventId: string | null;
   pendingConnection: string | null;
+  conflictEventIds: Set<string>;
   onSelectEvent: (id: string) => void;
   onEditEvent: (ev: Event) => void;
   onAddEvent: () => void;
   onCanvasDoubleClick: (x: number) => void;
-  onEventDragEnd: (ev: Event, track: Track, info: PanInfo, x: number) => void;
+  onEventDragEnd: (ev: Event, track: Track, info: PanInfo, finalX: number) => void;
   onStartConnection: (id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const visibleEvents = useMemo(() => {
+    if (viewportWidth === 0) return events;
+    const buffer = EVENT_MIN_WIDTH * 2;
+    const min = scrollLeft - buffer;
+    const max = scrollLeft + viewportWidth + buffer;
+    return events.filter((ev) => {
+      const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
+      return x + EVENT_MIN_WIDTH >= min && x <= max;
+    });
+  }, [events, eventPositions, timeScale, scrollLeft, viewportWidth]);
 
   return (
     <motion.div
@@ -921,8 +947,8 @@ function TrackLane({
       {/* 事件卡片 */}
       <div className="absolute inset-0 px-6">
         <AnimatePresence>
-          {events.map((ev, i) => {
-            const x = timeToX(eventPositions.get(ev.id) ?? 0);
+          {visibleEvents.map((ev, i) => {
+            const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
             return (
               <EventCard
                 key={ev.id}
@@ -932,9 +958,10 @@ function TrackLane({
                 x={x}
                 selected={ev.id === selectedEventId}
                 pendingConnection={pendingConnection === ev.id}
+                isConflict={conflictEventIds.has(ev.id)}
                 onClick={() => onSelectEvent(ev.id)}
                 onDoubleClick={() => onEditEvent(ev)}
-                onDragEnd={(info) => onEventDragEnd(ev, track, info, x)}
+                onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
                 onStartConnection={() => onStartConnection(ev.id)}
               />
             );
@@ -968,6 +995,7 @@ function EventCard({
   x,
   selected,
   pendingConnection,
+  isConflict,
   onClick,
   onDoubleClick,
   onDragEnd,
@@ -979,9 +1007,10 @@ function EventCard({
   x: number;
   selected: boolean;
   pendingConnection: boolean;
+  isConflict: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
-  onDragEnd: (info: PanInfo) => void;
+  onDragEnd: (info: PanInfo, finalX: number) => void;
   onStartConnection: () => void;
 }) {
   const { t } = useI18n();
@@ -1004,16 +1033,15 @@ function EventCard({
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ ...MOTION_BASE, delay: Math.min(index * 0.015, 0.1) }}
       drag="x"
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.15}
-      onDragEnd={(_, info) => onDragEnd(info)}
+      dragMomentum={false}
+      dragElastic={0}
+      onDragEnd={(_, info) => onDragEnd(info, x + info.offset.x)}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
       title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
       className={cn(
-        'absolute top-3 cursor-grab active:cursor-grabbing select-none',
+        'absolute top-3 cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
         'rounded-[8px] overflow-hidden',
         'shadow-[var(--shadow-card)] transition-shadow',
         'border-2 backdrop-blur-sm',
@@ -1021,6 +1049,7 @@ function EventCard({
           ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
           : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
         pendingConnection && 'border-accent animate-pulse',
+        isConflict && 'ring-2 ring-red-500/50 border-red-400',
       )}
       style={{
         left: x,
@@ -1031,6 +1060,13 @@ function EventCard({
     >
       {/* 顶部色带 */}
       <div className="h-1 w-full" style={{ backgroundColor: color }} />
+
+      {isConflict && (
+        <div
+          className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+          title={t('timeline.conflictBadge')}
+        />
+      )}
 
       <div className="px-3 py-2 flex flex-col gap-1">
         <div className="flex items-center gap-1.5">
@@ -1081,6 +1117,27 @@ function EventCard({
       </div>
     </motion.div>
   );
+}
+
+function computeNewSortOrder(
+  ev: Event,
+  finalX: number,
+  trackEvents: Event[],
+  eventPositions: Map<string, number>,
+  timeScale: TimeScale,
+): number {
+  const sameType = trackEvents.filter((e) => e.dateType === ev.dateType && e.id !== ev.id);
+  const sorted = [...sameType].sort((a, b) => a.sortOrder - b.sortOrder);
+  let index = sorted.length;
+  for (let i = 0; i < sorted.length; i++) {
+    const other = sorted[i]!;
+    const ox = timeScale.timeToX(eventPositions.get(other.id) ?? 0);
+    if (finalX < ox) {
+      index = i;
+      break;
+    }
+  }
+  return index;
 }
 
 // ===== 轨道行（左侧面板项） =====
@@ -1137,6 +1194,7 @@ function EventEditDialog({
   open,
   onOpenChange,
   event,
+  isConflict,
   tracks,
   characters,
   onSave,
@@ -1145,6 +1203,7 @@ function EventEditDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   event: Event | null;
+  isConflict: boolean;
   tracks: Track[];
   characters: Character[];
   onSave: (data: Partial<Event> & { title: string; characterIds: string[] }) => void;
@@ -1184,6 +1243,11 @@ function EventEditDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title={t('timeline.addEvent')} className="max-w-lg">
         <div className="flex flex-col gap-4">
+          {isConflict && (
+            <div className="rounded-[6px] border border-red-400/50 bg-red-500/10 px-3 py-2 text-xs text-red-600">
+              {t('timeline.conflictHint')}
+            </div>
+          )}
           <div>
             <Label>{t('timeline.event.title')}</Label>
             <Input
@@ -1263,6 +1327,37 @@ function EventEditDialog({
                 className="mt-1.5"
                 type={dateType === 'absolute' ? 'date' : 'text'}
               />
+            </div>
+          </div>
+
+          <div>
+            <Label>{t('timeline.event.color')}</Label>
+            <div className="flex gap-2 mt-1.5 flex-wrap">
+              {EVENT_COLOR_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    'h-7 w-7 rounded-full transition-transform',
+                    color === c ? 'ring-2 ring-offset-2 ring-accent scale-110' : 'hover:scale-110',
+                  )}
+                  style={{ backgroundColor: c }}
+                  title={c}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => setColor(null)}
+                className={cn(
+                  'h-7 px-2 rounded-full text-[10px] border transition-colors',
+                  color === null
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-border text-text-secondary hover:bg-bg-elevated',
+                )}
+              >
+                {t('timeline.event.colorDefault')}
+              </button>
             </div>
           </div>
 
@@ -1375,15 +1470,11 @@ function TrackEditDialog({
       setColor(track.color);
     } else {
       setName('');
-      setColor(
-        ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'][
-          Math.floor(Math.random() * 6)
-        ] ?? '#F4B6C2',
-      );
+      setColor(EVENT_COLOR_PALETTE[Math.floor(Math.random() * EVENT_COLOR_PALETTE.length)] ?? '#F4B6C2');
     }
   }, [track, open]);
 
-  const palette = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
+  const palette = EVENT_COLOR_PALETTE;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

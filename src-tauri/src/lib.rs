@@ -60,6 +60,8 @@ pub fn run() {
                 }
             }
 
+            services::backup::start_auto_backup_scheduler(db_path.clone());
+
             let database = Database::open(&db_path).expect("failed to open database");
             app.manage(AppState {
                 db: Mutex::new(database),

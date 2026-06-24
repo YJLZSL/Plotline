@@ -1,10 +1,7 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import { motion } from 'framer-motion';
-
 import { cn } from '@/lib/utils';
-import { MOTION_FAST } from '@/lib/motion';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -114,21 +111,19 @@ export function ConfirmDialog({
               {cancelText}
             </button>
           </DialogClose>
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            transition={MOTION_FAST}
+          <button
             onClick={() => {
               onConfirm();
               onOpenChange(false);
             }}
             className={cn(
-              'h-9 px-4 rounded-[6px] text-sm font-medium text-white shadow-sm',
+              'h-9 px-4 rounded-[6px] text-sm font-medium text-white shadow-sm active:scale-[0.98]',
               destructive ? 'bg-red-500/90 hover:bg-red-500' : 'bg-accent hover:brightness-110',
               'transition-colors',
             )}
           >
             {confirmText}
-          </motion.button>
+          </button>
         </div>
       </DialogContent>
     </Dialog>

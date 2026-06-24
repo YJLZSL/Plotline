@@ -4,9 +4,7 @@ import { Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useHistoryStore } from '@/stores/historyStore';
 import { useHistoryDispatcher } from '@/hooks/useHistoryDispatcher';
-import { MOTION_FAST } from '@/lib/motion';
 import { useI18n } from '@/hooks/useI18n';
-import { motion } from 'framer-motion';
 
 export function HistoryControls() {
   const { t } = useI18n();
@@ -50,30 +48,26 @@ export function HistoryControls() {
 
   return (
     <div className="flex items-center gap-1">
-      <motion.div whileTap={{ scale: 0.94 }} transition={MOTION_FAST}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleUndo}
-          disabled={!canUndo}
-          className="h-7 px-2 text-text-secondary"
-          title={`${t('common.undo')} (Ctrl+Z)`}
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-        </Button>
-      </motion.div>
-      <motion.div whileTap={{ scale: 0.94 }} transition={MOTION_FAST}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleRedo}
-          disabled={!canRedo}
-          className="h-7 px-2 text-text-secondary"
-          title={`${t('common.redo')} (Ctrl+Y / Ctrl+Shift+Z)`}
-        >
-          <Redo2 className="h-3.5 w-3.5" />
-        </Button>
-      </motion.div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleUndo}
+        disabled={!canUndo}
+        className="h-7 px-2 text-text-secondary"
+        title={`${t('common.undo')} (Ctrl+Z)`}
+      >
+        <Undo2 className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleRedo}
+        disabled={!canRedo}
+        className="h-7 px-2 text-text-secondary"
+        title={`${t('common.redo')} (Ctrl+Y / Ctrl+Shift+Z)`}
+      >
+        <Redo2 className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

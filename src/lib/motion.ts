@@ -3,10 +3,10 @@ import type { Transition } from 'framer-motion';
 export const EASE_STANDARD = [0.16, 1, 0.3, 1] as const;
 
 /**
- * 项目动效 token。所有数值与 PRD §5.5 的 200-300ms ease-out 区间保持一致：
- * - `fast`（160ms）用于按钮 tap、Dialog overlay 等微交互
- * - `base`（220ms）用于视图切换、Toast、Sidebar、卡片入场
- * - `slow`（300ms）用于 Splash 退场、骨架屏淡入等需要节奏更舒缓的场景
+ * 项目动效 token。v2.2.0 将时长压缩到 150-200ms：
+ * - `fast`（150ms）用于按钮 tap、Dialog overlay 等微交互
+ * - `base`（180ms）用于视图切换、Toast、Sidebar、卡片入场
+ * - `slow`（200ms）用于 Splash 退场、骨架屏淡入等需要节奏更舒缓的场景
  */
 export interface MotionTokenSpec {
   duration: number;
@@ -14,17 +14,17 @@ export interface MotionTokenSpec {
 }
 
 export const MOTION_FAST_SPEC: MotionTokenSpec = {
-  duration: 0.16,
+  duration: 0.15,
   ease: EASE_STANDARD,
 };
 
 export const MOTION_BASE_SPEC: MotionTokenSpec = {
-  duration: 0.22,
+  duration: 0.18,
   ease: EASE_STANDARD,
 };
 
 export const MOTION_SLOW_SPEC: MotionTokenSpec = {
-  duration: 0.3,
+  duration: 0.2,
   ease: EASE_STANDARD,
 };
 

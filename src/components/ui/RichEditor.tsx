@@ -15,8 +15,6 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { MOTION_FAST } from '@/lib/motion';
-import { motion } from 'framer-motion';
 
 interface RichEditorProps {
   value: string;
@@ -122,46 +120,40 @@ function MenuBar({ editor }: { editor: Editor | null }) {
   return (
     <div className="flex items-center gap-1 px-3 py-2 border-b border-border bg-bg-elevated/40 flex-wrap">
       {items.map((item) => (
-        <motion.button
+        <button
           key={item.label}
-          whileTap={{ scale: 0.94 }}
-          transition={MOTION_FAST}
           type="button"
           onClick={item.onClick}
           title={item.label}
           className={cn(
-            'p-1.5 rounded-[6px] transition-colors',
+            'p-1.5 rounded-[6px] transition-colors active:scale-[0.94]',
             item.active
               ? 'bg-accent/15 text-accent'
               : 'text-text-secondary hover:bg-bg-surface hover:text-text-primary',
           )}
         >
           <item.icon className="h-4 w-4" />
-        </motion.button>
+        </button>
       ))}
       <div className="w-px h-5 bg-border mx-1" />
-      <motion.button
-        whileTap={{ scale: 0.94 }}
-        transition={MOTION_FAST}
+      <button
         type="button"
         onClick={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().undo()}
         title="撤销"
-        className="p-1.5 rounded-[6px] text-text-secondary hover:bg-bg-surface hover:text-text-primary disabled:opacity-30"
+        className="p-1.5 rounded-[6px] text-text-secondary hover:bg-bg-surface hover:text-text-primary disabled:opacity-30 active:scale-[0.94]"
       >
         <Undo2 className="h-4 w-4" />
-      </motion.button>
-      <motion.button
-        whileTap={{ scale: 0.94 }}
-        transition={MOTION_FAST}
+      </button>
+      <button
         type="button"
         onClick={() => editor.chain().focus().redo().run()}
         disabled={!editor.can().redo()}
         title="重做"
-        className="p-1.5 rounded-[6px] text-text-secondary hover:bg-bg-surface hover:text-text-primary disabled:opacity-30"
+        className="p-1.5 rounded-[6px] text-text-secondary hover:bg-bg-surface hover:text-text-primary disabled:opacity-30 active:scale-[0.94]"
       >
         <Redo2 className="h-4 w-4" />
-      </motion.button>
+      </button>
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sun, Moon, BookOpen, Box, Check, RotateCcw, RefreshCw, ExternalLink } from 'lucide-react';
+import { Sun, Moon, BookOpen, Box, Check, RotateCcw, RefreshCw, ExternalLink, Upload } from 'lucide-react';
 
 const FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
   { labelKey: 'settings.fontPresetDefault', value: '' },
   { labelKey: 'settings.fontPresetInter', value: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
   { labelKey: 'settings.fontPresetSans', value: '"PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
   { labelKey: 'settings.fontPresetMono', value: '"JetBrains Mono", "Cascadia Code", Consolas, monospace' },
-  { labelKey: 'settings.fontPresetPixel', value: '"Fusion Pixel 10px", monospace' },
+  { labelKey: 'settings.fontPresetPixel', value: '"Smiley Sans", "Fusion Pixel 10px", monospace' },
+  { labelKey: 'settings.fontPresetSmiley', value: '"Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
 ];
 
 function FontPicker({
@@ -71,6 +72,7 @@ import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
 import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/types';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
+import { importFont, listImportedFonts, loadImportedFontFaces } from '@/features/font/api';
 import { useThemeStore } from '@/stores/ui';
 import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
 import { useAiModelsQuery } from '@/features/ai/hooks';
@@ -108,6 +110,21 @@ const FONT_THEMES: Array<{ value: FontTheme; labelKey: string }> = [
   { value: 'pixel', labelKey: 'settings.fontThemePixel' },
 ];
 
+const FONT_THEME_STACKS: Record<FontTheme, { ui: string; editor: string }> = {
+  sans: {
+    ui: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+    editor: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+  },
+  mono: {
+    ui: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+    editor: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+  },
+  pixel: {
+    ui: '"Smiley Sans", "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+    editor: '"Smiley Sans", "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+  },
+};
+
 export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) {
   const { t, i18n } = useI18n();
   const { data: settings } = useSettingsQuery();
@@ -124,6 +141,27 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const [installUpdate, setInstallUpdate] = useState<(() => Promise<void>) | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [importedFonts, setImportedFonts] = useState<string[]>([]);
+
+  useEffect(() => {
+    void listImportedFonts().then((fonts) => setImportedFonts(fonts));
+  }, []);
+
+  const handleImportFont = async (file: File) => {
+    const family = await importFont(file);
+    await loadImportedFontFaces();
+    const fonts = await listImportedFonts();
+    setImportedFonts(fonts);
+    toastSuccess(t('settings.fontImported', { family }));
+  };
+
+  const applyImportedFont = (family: string, target: 'ui' | 'editor') => {
+    const fallback =
+      target === 'ui'
+        ? `"${family}", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`
+        : `"${family}", "JetBrains Mono", "Cascadia Code", Consolas, monospace`;
+    set(target === 'ui' ? { uiFont: fallback } : { editorFont: fallback });
+  };
 
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
@@ -277,6 +315,9 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                 </Section>
 
                 <Section title={t('settings.accentColor')}>
+                  {draft.theme === 'mc' && (
+                    <p className="text-xs text-text-secondary mb-2">{t('settings.accentColorMcHint')}</p>
+                  )}
                   <div className="flex gap-2 flex-wrap">
                     {ACCENT_PALETTE.map((c) => (
                       <button
@@ -324,7 +365,13 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     {FONT_THEMES.map((ft) => (
                       <button
                         key={ft.value}
-                        onClick={() => set({ fontTheme: ft.value })}
+                        onClick={() =>
+                          set({
+                            fontTheme: ft.value,
+                            uiFont: FONT_THEME_STACKS[ft.value].ui,
+                            editorFont: FONT_THEME_STACKS[ft.value].editor,
+                          })
+                        }
                         className={cn(
                           'h-10 px-4 rounded-[6px] border text-sm transition-colors',
                           draft.fontTheme === ft.value
@@ -403,6 +450,57 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     <option value="day">{t('timeline.day')}</option>
                     <option value="hour">{t('timeline.hour')}</option>
                   </select>
+                </Section>
+                <Section title={t('settings.importFont')}>
+                  <p className="text-xs text-text-secondary mb-2">{t('settings.importFontDesc')}</p>
+                  <label className="inline-flex">
+                    <Button variant="secondary" size="sm" className="gap-2 cursor-pointer">
+                      <Upload className="h-3.5 w-3.5" />
+                      {t('settings.importFontBtn')}
+                    </Button>
+                    <input
+                      type="file"
+                      accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleImportFont(f);
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                  {importedFonts.length > 0 && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      <p className="text-xs text-text-secondary">{t('settings.importedFonts')}</p>
+                      {importedFonts.map((name) => {
+                        const family = name.replace(/\.(ttf|otf|woff|woff2)$/i, '');
+                        return (
+                          <div
+                            key={name}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] border border-border bg-bg-surface"
+                          >
+                            <span className="text-sm text-text-primary truncate">{family}</span>
+                            <div className="flex gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => applyImportedFont(family, 'ui')}
+                              >
+                                {t('settings.setUiFont')}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => applyImportedFont(family, 'editor')}
+                              >
+                                {t('settings.setEditorFont')}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </Section>
               </div>
             )}

@@ -18,9 +18,9 @@ describe('theme store', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('should set accent color css variable', () => {
+  it('should set custom accent color css variable', () => {
     useThemeStore.getState().setAccentColor('#ff0000');
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#ff0000');
+    expect(document.documentElement.style.getPropertyValue('--accent-custom')).toBe('#ff0000');
   });
 
   it('should apply sans font theme to --font-sans', () => {
@@ -30,7 +30,7 @@ describe('theme store', () => {
 
   it('should apply pixel font theme to --font-sans and --font-mono', () => {
     useThemeStore.getState().setFontTheme('pixel');
-    expect(document.documentElement.style.getPropertyValue('--font-sans')).toContain('Zpix');
-    expect(document.documentElement.style.getPropertyValue('--font-mono')).toContain('Zpix');
+    expect(document.documentElement.style.getPropertyValue('--font-sans')).toContain('Smiley Sans');
+    expect(document.documentElement.style.getPropertyValue('--font-mono')).toContain('Smiley Sans');
   });
 });

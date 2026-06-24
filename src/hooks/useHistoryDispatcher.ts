@@ -30,6 +30,7 @@ import {
   deleteOutlineNode as apiDeleteOutlineNode,
   updateOutlineNode as apiUpdateOutlineNode,
 } from '@/features/outline/api';
+import { updateWorkspace as apiUpdateWorkspace } from '@/features/workspace/api';
 
 export function useHistoryDispatcher() {
   const qc = useQueryClient();
@@ -96,6 +97,10 @@ export function useHistoryDispatcher() {
         await apiDeleteOutlineNode(action.id);
         break;
       }
+      case 'updateWorkspace': {
+        await apiUpdateWorkspace(action.input);
+        break;
+      }
       default:
         return;
     }
@@ -106,5 +111,7 @@ export function useHistoryDispatcher() {
     void qc.invalidateQueries({ queryKey: charactersKey(action.workspaceId) });
     void qc.invalidateQueries({ queryKey: notesKey(action.workspaceId) });
     void qc.invalidateQueries({ queryKey: outlineNodesKey(action.workspaceId) });
+    void qc.invalidateQueries({ queryKey: ['workspaces'] });
+    void qc.invalidateQueries({ queryKey: ['workspace', action.workspaceId] });
   };
 }

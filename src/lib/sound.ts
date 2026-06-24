@@ -7,10 +7,16 @@ export type SoundType = 'click' | 'switch' | 'complete' | 'explosion';
 
 let audioCtx: AudioContext | null = null;
 
+interface WindowWithAudioContext extends Window {
+  AudioContext: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+}
+
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioCtx) {
-    const Ctx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext) as typeof AudioContext | undefined;
+    const w = window as WindowWithAudioContext;
+    const Ctx = w.AudioContext || w.webkitAudioContext;
     if (!Ctx) return null;
     audioCtx = new Ctx();
   }

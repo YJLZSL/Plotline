@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Timer } from 'lucide-react';
 
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { HistoryControls } from './HistoryControls';
+import { SaveStatus } from './SaveStatus';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { PomodoroTimer } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ export function WorkspaceLayout() {
   const location = useLocation();
   const [pomoOpen, setPomoOpen] = useState(false);
   const { aiPanelOpen, setAiPanelOpen } = useUIStore();
+  const reduced = useReducedMotion();
   if (!workspaceId) return null;
 
   return (
@@ -27,17 +29,22 @@ export function WorkspaceLayout() {
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
-            initial={{ opacity: 0, x: 8 }}
+            initial={reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
-            transition={MOTION_BASE}
+            exit={reduced ? { opacity: 1 } : { opacity: 0, x: -8 }}
+            transition={reduced ? { duration: 0 } : MOTION_BASE}
             className="flex-1 min-h-0 flex flex-col"
           >
             <Outlet />
           </motion.div>
         </AnimatePresence>
         <StatusBar
-          left={<HistoryControls />}
+          left={
+            <div className="flex items-center gap-3">
+              <HistoryControls />
+              <SaveStatus />
+            </div>
+          }
           right={
             <div className="flex items-center gap-3">
               <button

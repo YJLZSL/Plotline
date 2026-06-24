@@ -44,6 +44,7 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSecondsRef = useRef(secondsLeft);
+  const prevPhaseRef = useRef(phase);
 
   useEffect(() => {
     if (isRunning) {
@@ -62,10 +63,17 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
 
   useEffect(() => {
     if (prevSecondsRef.current === 1 && secondsLeft === 0) {
-      playSoundIfEnabled('complete');
+      playSoundIfEnabled(theme === 'mc' ? 'explosion' : 'complete');
     }
     prevSecondsRef.current = secondsLeft;
-  }, [secondsLeft]);
+  }, [secondsLeft, theme]);
+
+  useEffect(() => {
+    if (prevPhaseRef.current !== phase) {
+      playSoundIfEnabled(theme === 'mc' ? 'switch' : 'click');
+      prevPhaseRef.current = phase;
+    }
+  }, [phase, theme]);
 
   const totalSeconds = phase === 'focus' ? 25 * 60 : phase === 'shortBreak' ? 5 * 60 : 15 * 60;
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
@@ -192,7 +200,14 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
           <div className="px-4 pb-4 flex items-center justify-center gap-2">
             <Button
               size="sm"
-              onClick={isRunning ? pause : start}
+              onClick={() => {
+                playSoundIfEnabled('click');
+                if (isRunning) {
+                  pause();
+                } else {
+                  start();
+                }
+              }}
               className={cn('gap-1.5 min-w-[88px]', themeClasses.button)}
             >
               {isRunning ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -201,12 +216,23 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={reset}
+              onClick={() => {
+                playSoundIfEnabled(theme === 'mc' ? 'switch' : 'switch');
+                reset();
+              }}
               className="gap-1.5 px-2.5"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="outline" size="sm" onClick={skip} className="gap-1.5 px-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                playSoundIfEnabled(theme === 'mc' ? 'switch' : 'switch');
+                skip();
+              }}
+              className="gap-1.5 px-2.5"
+            >
               <SkipForward className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -260,9 +286,8 @@ const THEME_CLASSES: Record<
     button: 'bg-amber-600 hover:bg-amber-700 text-white',
   },
   mc: {
-    container:
-      'bg-[#f0f5e8] text-[#3b4a2b] border-[#8fb36f] font-pixel',
-    button: 'bg-[#5b8c39] hover:bg-[#4a7530] text-white',
+    container: 'bg-bg-surface text-text-primary border-border font-pixel',
+    button: 'bg-accent hover:brightness-110 text-white',
   },
   minimal: {
     container: 'bg-bg-surface text-text-primary border-border',

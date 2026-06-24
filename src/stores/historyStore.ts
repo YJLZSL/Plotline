@@ -16,6 +16,8 @@ import type {
   UpdateNoteInput,
   UpdateOutlineNodeInput,
   UpdateTrackInput,
+  UpdateWorkspaceInput,
+  Workspace,
 } from '@/types';
 
 export type HistoryAction =
@@ -33,7 +35,8 @@ export type HistoryAction =
   | { type: 'deleteNote'; workspaceId: string; id: string }
   | { type: 'createOutlineNode'; workspaceId: string; input: CreateOutlineNodeInput }
   | { type: 'updateOutlineNode'; workspaceId: string; input: UpdateOutlineNodeInput }
-  | { type: 'deleteOutlineNode'; workspaceId: string; id: string };
+  | { type: 'deleteOutlineNode'; workspaceId: string; id: string }
+  | { type: 'updateWorkspace'; workspaceId: string; input: UpdateWorkspaceInput };
 
 interface HistoryItem {
   id: string;
@@ -477,5 +480,24 @@ export function makeDeleteOutlineNodeAction(
         eventId: deleted.eventId ?? undefined,
       },
     },
+  };
+}
+
+export function makeUpdateWorkspaceAction(
+  workspaceId: string,
+  previous: Workspace,
+  next: Workspace,
+): { redo: HistoryAction; undo: HistoryAction; label: string } {
+  const toInput = (w: Workspace): UpdateWorkspaceInput => ({
+    id: w.id,
+    name: w.name,
+    description: w.description,
+    coverColor: w.coverColor,
+    settings: w.settings,
+  });
+  return {
+    label: `编辑工作区 "${next.name}"`,
+    redo: { type: 'updateWorkspace', workspaceId, input: toInput(next) },
+    undo: { type: 'updateWorkspace', workspaceId, input: toInput(previous) },
   };
 }

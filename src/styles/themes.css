@@ -5,7 +5,8 @@
   --bg-elevated: #f5efe3;
   --text-primary: #3a2e26;
   --text-secondary: #7a6b5e;
-  --accent: #c68a3e;
+  --accent-custom: #c68a3e;
+  --accent: var(--accent-custom);
   --accent-soft: #e8c988;
   --border: #e5ddc9;
   --shadow-color: rgba(58, 46, 38, 0.08);
@@ -18,7 +19,7 @@
   --bg-elevated: #352d27;
   --text-primary: #f5efe3;
   --text-secondary: #b5a89a;
-  --accent: #e0a95c;
+  --accent: var(--accent-custom);
   --accent-soft: #8a5e2c;
   --border: #3d352e;
   --shadow-color: rgba(0, 0, 0, 0.4);
@@ -30,27 +31,44 @@
   --bg-elevated: #e7d7b6;
   --text-primary: #4a3927;
   --text-secondary: #7a6347;
-  --accent: #a86a2c;
+  --accent: var(--accent-custom);
   --accent-soft: #d4b47c;
   --border: #d6c29c;
   --shadow-color: rgba(74, 57, 39, 0.1);
 }
 
 [data-theme="mc"] {
-  --bg-base: #7d96a0;
-  --bg-surface: #8f9f91;
-  --bg-elevated: #7a8b74;
-  --text-primary: #2f2418;
-  --text-secondary: #4a3b2a;
-  --accent: #5b8c39;
-  --accent-soft: #8fb36f;
+  /* v2.2.0 MC 主题再设计：避免单一绿油油，使用泥土棕/草绿/红石红/圆石灰/木板褐 */
+  --bg-base: #6b4c2e;           /* 泥土棕 */
+  --bg-surface: #7d8b74;        /* 草绿 */
+  --bg-elevated: #8f6a4a;       /* 木板褐 */
+  --text-primary: #f5efe3;
+  --text-secondary: #d4c4b0;
+  --accent: #5b8c39;            /* 草绿 */
+  --accent-soft: #7d96a0;       /* 圆石灰 */
   --border: #5c4d3c;
-  --shadow-color: rgba(0, 0, 0, 0.35);
+  --shadow-color: rgba(0, 0, 0, 0.45);
   --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
 }
 
 [data-theme="mc"] body {
   font-family: var(--font-pixel);
+}
+
+/* MC 主题控件方块化 */
+[data-theme="mc"] button,
+[data-theme="mc"] [role="button"],
+[data-theme="mc"] input,
+[data-theme="mc"] textarea,
+[data-theme="mc"] select {
+  border-radius: 2px;
+}
+
+[data-theme="mc"] .mc-block {
+  border-radius: 0;
+  border-width: 3px;
+  border-style: solid;
+  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.2), inset 3px 3px 0 rgba(255, 255, 255, 0.1);
 }
 
 * {
@@ -173,4 +191,16 @@ html.mc-easter body {
 html.mc-easter [data-theme] {
   --accent: #5b8c39;
   --accent-soft: #8fb36f;
+}
+
+/* 尊重系统减少动效设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

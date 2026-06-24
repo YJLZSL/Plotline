@@ -10,6 +10,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (4, include_str!("../../migrations/004_ai_assistant.sql")),
     (5, include_str!("../../migrations/005_vn_assets.sql")),
     (6, include_str!("../../migrations/006_ai_system_prompt.sql")),
+    (7, include_str!("../../migrations/007_workspace_updated_at_triggers.sql")),
 ];
 
 /// 创建 schema_migrations 表并依次执行迁移。
@@ -66,7 +67,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 6, "迁移 001-006 均应已应用");
+        assert_eq!(v, 7, "迁移 001-007 均应已应用");
     }
 
     #[test]
@@ -105,7 +106,34 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 6, "重复执行迁移不应改变版本号");
+        assert_eq!(v, 7, "重复执行迁移不应改变版本号");
+    }
+
+    #[test]
+    fn child_entity_change_updates_workspace_updated_at() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",
+            [],
+        )
+        .unwrap();
+        let before: String = conn
+            .query_row("SELECT updated_at FROM workspaces WHERE id='w1'", [], |r| r.get(0))
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        conn.execute(
+            "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
+             VALUES ('t1', 'w1', '主线', '#F4B6C2', 0, 1, 't')",
+            [],
+        )
+        .unwrap();
+        let after: String = conn
+            .query_row("SELECT updated_at FROM workspaces WHERE id='w1'", [], |r| r.get(0))
+            .unwrap();
+        assert_ne!(
+            before, after,
+            "子表插入应联动更新 workspaces.updated_at"
+        );
     }
 
     #[test]
@@ -118,7 +146,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 6, "迁移 006 应使版本号变为 6");
+        assert_eq!(v, 7, "迁移 007 应使版本号变为 7");
         // 验证 locations 表存在
         conn.execute(
             "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",

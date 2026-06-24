@@ -16,6 +16,29 @@
     "fs:allow-write-text-file",
     "fs:allow-read-file",
     "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-create",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$APPDATA/fonts" }, { "path": "$APPDATA/fonts/*" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$APPDATA/fonts" }, { "path": "$APPDATA/fonts/*" }]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "$APPDATA/fonts" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$APPDATA/fonts" }]
+    },
+    {
+      "identifier": "fs:allow-create",
+      "allow": [{ "path": "$APPDATA/fonts/*" }]
+    },
     "updater:default"
   ]
 }

@@ -1,7 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 use chrono::Utc;
+use rusqlite::{Connection, OpenFlags};
 
 use crate::error::{AppError, AppResult};
 
@@ -42,6 +45,44 @@ pub fn backup_workspace_db(db_path: &Path, max_keep: usize) -> AppResult<PathBuf
     }
 
     Ok(target)
+}
+
+/// 启动后台线程，按 `app_settings.auto_backup` 与 `backup_interval_hours` 定期备份数据库。
+/// 首次调用后线程即进入睡眠，因此不会与启动时的一次性备份重复。
+pub fn start_auto_backup_scheduler(db_path: PathBuf) {
+    thread::spawn(move || {
+        let one_hour = Duration::from_secs(60 * 60);
+        loop {
+            let (enabled, interval_hours) = match read_backup_config(&db_path) {
+                Ok(cfg) => cfg,
+                Err(err) => {
+                    log::warn!("[backup-scheduler] failed to read settings: {err}");
+                    thread::sleep(one_hour);
+                    continue;
+                }
+            };
+            if enabled == 0 {
+                thread::sleep(one_hour);
+                continue;
+            }
+            let interval = Duration::from_secs((interval_hours.max(1) as u64) * 3600);
+            thread::sleep(interval);
+            match backup_workspace_db(&db_path, DEFAULT_MAX_BACKUPS) {
+                Ok(path) => log::info!("[backup-scheduler] created {}", path.display()),
+                Err(err) => log::warn!("[backup-scheduler] backup failed: {err}"),
+            }
+        }
+    });
+}
+
+fn read_backup_config(db_path: &Path) -> AppResult<(i64, i64)> {
+    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    conn.query_row(
+        "SELECT auto_backup, backup_interval_hours FROM app_settings WHERE id = 1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .map_err(Into::into)
 }
 
 /// 按文件名升序排序后删除最旧的，只保留最新的 `max_keep` 份。
@@ -153,5 +194,33 @@ mod tests {
         }
         let removed = prune_old_backups(&backups_dir, 10).unwrap();
         assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn read_backup_config_reads_settings() {
+        use rusqlite::Connection;
+
+        let dir = TempDir::new().expect("tempdir");
+        let db_path = dir.path().join("plotline.db");
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE app_settings (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                auto_backup INTEGER NOT NULL DEFAULT 1,
+                backup_interval_hours INTEGER NOT NULL DEFAULT 24
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO app_settings (id, auto_backup, backup_interval_hours) VALUES (1, 1, 6)",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let (enabled, interval) = read_backup_config(&db_path).unwrap();
+        assert_eq!(enabled, 1);
+        assert_eq!(interval, 6);
     }
 }

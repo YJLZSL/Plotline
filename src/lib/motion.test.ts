@@ -21,10 +21,10 @@ describe('motion tokens', () => {
     expect(MOTION_BASE_SPEC.duration).toBeLessThan(MOTION_SLOW_SPEC.duration);
   });
 
-  it('should set fast at 160ms, base at 220ms, slow at 300ms', () => {
-    expect(MOTION_FAST_SPEC.duration).toBeCloseTo(0.16);
-    expect(MOTION_BASE_SPEC.duration).toBeCloseTo(0.22);
-    expect(MOTION_SLOW_SPEC.duration).toBeCloseTo(0.3);
+  it('should set fast at 150ms, base at 180ms, slow at 200ms', () => {
+    expect(MOTION_FAST_SPEC.duration).toBeCloseTo(0.15);
+    expect(MOTION_BASE_SPEC.duration).toBeCloseTo(0.18);
+    expect(MOTION_SLOW_SPEC.duration).toBeCloseTo(0.2);
   });
 
   it('should share the same easing curve across tokens', () => {

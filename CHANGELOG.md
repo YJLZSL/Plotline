@@ -4,6 +4,45 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [2.2.0] - 2026-06-24
+
+**目标**：基于用户反馈，重新打磨时间轴/事件核心逻辑与动画性能，深度重构 MC 主题与番茄钟 MC 体验，改进工作区保存逻辑，并支持自定义字体导入（默认使用得意黑/Smiley Sans）。完成后构建并发布 v2.2.0，确保 v2.1.0 可正常热更新。
+
+### 新增
+
+- **时间轴/事件逻辑重写**：
+  - 新增 `src/features/timeline/timeScale.ts`，使用真实日历步进（UTC 小时/天/月/年）替换 `timeToX`/`xToTime` 的固定 30/365 天近似。
+  - `TimelineView` 全面接入 `timeScale`，`DateRuler` 主/次刻度与事件坐标严格对齐。
+  - 移除 `EventCard.dragConstraints`，改为无约束横向拖拽；拖拽绝对事件时直接写入真实日期，相对事件按最终位置重新计算 `sortOrder`。
+  - 连线层支持 hover 加粗并点击删除连接。
+  - 一致性冲突事件在卡片上显示红色角标/边框，编辑对话框顶部显示冲突提示。
+  - 事件编辑对话框新增马卡龙色板颜色选择器。
+  - 甘特图改用真实日期布局，相对事件排在左侧按 `sortOrder` 堆叠。
+  - 轨道事件卡片引入水平虚拟化，连线层使用 `useMemo` 缓存可见路径。
+- **工作区保存改进**：
+  - 工作区选择器支持重命名、编辑描述与封面颜色。
+  - 新增后台定时备份调度器，按 `app_settings.auto_backup` 与 `backup_interval_hours` 定期备份数据库。
+  - 撤销/重做扩展至工作区元数据编辑。
+  - Bundle 导入增加版本校验（仅支持版本 2）。
+  - 数据库触发器联动子表变更，自动更新 `workspaces.updated_at`。
+- **自定义字体导入**：
+  - 默认内置得意黑（Smiley Sans）。
+  - 支持在设置面板导入 `.ttf/.otf/.woff/.woff2` 到 `app_data/fonts/` 并动态注入 `@font-face`。
+
+### 变更
+
+- 动画时长统一压缩至 150-200ms。
+- `fontTheme` 与 `uiFont`/`editorFont` 统一为预设/自定义模型：`fontTheme` 选择时同步设置 `uiFont` 与 `editorFont`，避免互相覆盖。
+- MC 主题强调色固定为草绿，用户自定义 accent 不再覆盖 MC 主题。
+
+### 修复
+
+- 修复时间轴 `timeToX` 固定 30/365 天近似导致的刻度错位。
+- 修复事件卡片拖拽 `dragConstraints` 限制导致无法真实横向移动的问题。
+- 修复相邻事件拖拽后 `sortOrder` 估算不准确的问题。
+- 修复 MC 主题下设置预览为空、accent 色冲突的问题。
+- 修复 `src/lib/sound.ts` 中 `as unknown as` 类型断言违规。
+
 ## [2.1.0] - 2026-06-22
 
 **目标**：基于 v2.0.0 继续打磨核心体验——提升时间轴可读性与视图切换动画流畅度，

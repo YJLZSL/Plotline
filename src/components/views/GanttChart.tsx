@@ -7,6 +7,7 @@ import { Clock4, Plus } from 'lucide-react';
 import { computeGanttLayout } from '@/features/timeline/ganttLayout';
 import { MOTION_BASE } from '@/lib/motion';
 import type { Event, Track } from '@/types';
+import type { TimeScale } from '@/features/timeline/timeScale';
 
 const STATUS_DOT: Record<Event['status'], string> = {
   draft: '#9b9b9b',
@@ -17,6 +18,7 @@ const STATUS_DOT: Record<Event['status'], string> = {
 interface GanttChartProps {
   tracks: Track[];
   events: Event[];
+  timeScale: TimeScale;
   selectedEventId: string | null;
   onSelectEvent: (id: string) => void;
   onEditEvent: (ev: Event) => void;
@@ -26,6 +28,7 @@ interface GanttChartProps {
 export function GanttChart({
   tracks,
   events,
+  timeScale,
   selectedEventId,
   onSelectEvent,
   onEditEvent,
@@ -33,8 +36,8 @@ export function GanttChart({
 }: GanttChartProps) {
   const { t } = useI18n();
   const layout = useMemo(
-    () => computeGanttLayout(tracks, events),
-    [tracks, events],
+    () => computeGanttLayout(tracks, events, timeScale),
+    [tracks, events, timeScale],
   );
 
   if (layout.rowCount === 0) {

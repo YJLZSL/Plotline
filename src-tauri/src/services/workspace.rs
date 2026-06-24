@@ -163,7 +163,7 @@ pub fn export_bundle(conn: &Connection, workspace_id: &str) -> AppResult<Workspa
         lines.extend(crate::services::vn::list_lines(conn, &scene.id)?);
     }
     Ok(WorkspaceBundle {
-        version: 2,
+        version: BUNDLE_VERSION,
         workspace: get(conn, workspace_id)?,
         tracks: crate::services::track::list(conn, workspace_id)?,
         events: crate::services::event::list(conn, workspace_id)?,
@@ -179,8 +179,18 @@ pub fn export_bundle(conn: &Connection, workspace_id: &str) -> AppResult<Workspa
     })
 }
 
+/// 当前支持的 Bundle 版本号。导出时写入，导入时必须一致。
+pub const BUNDLE_VERSION: u32 = 2;
+
 /// 从 Bundle 导入：用新 ID 重建所有数据，避免冲突。
 pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResult<Workspace> {
+    if bundle.version != BUNDLE_VERSION {
+        return Err(AppError::InvalidInput(format!(
+            "不支持的 Bundle 版本 {}，当前仅支持版本 {}",
+            bundle.version, BUNDLE_VERSION
+        )));
+    }
+
     let now = Utc::now();
     let now_str = now.to_rfc3339();
     let new_ws_id = Uuid::new_v4().to_string();
@@ -725,6 +735,18 @@ mod tests {
             new_ws.name.contains("导入"),
             "imported name should have suffix"
         );
+    }
+
+    #[test]
+    fn import_rejects_incompatible_bundle_version() {
+        let conn = test_conn();
+        let mut bundle = sample_bundle();
+        bundle.version = 999;
+        let err = import_bundle(&conn, bundle).unwrap_err();
+        match err {
+            AppError::InvalidInput(msg) => assert!(msg.contains("999")),
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
     }
 
     #[test]

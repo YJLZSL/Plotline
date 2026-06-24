@@ -35,7 +35,7 @@ export const useUIStore = create<UIState>()(
 const FONT_STACKS: Record<FontTheme, string> = {
   sans: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
   mono: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-  pixel: '"Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+  pixel: '"Smiley Sans", "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
 };
 
 interface ThemeState {
@@ -62,7 +62,9 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   },
   setFontTheme: (fontTheme) => {
     set({ fontTheme });
-    get().applyToDOM({ fontTheme });
+    const uiFont = FONT_STACKS[fontTheme];
+    const editorFont = fontTheme === 'pixel' ? FONT_STACKS.pixel : FONT_STACKS.mono;
+    get().applyToDOM({ uiFont, editorFont });
   },
   applyToDOM: (settings) => {
     if (typeof document === 'undefined') return;
@@ -71,17 +73,12 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
       root.setAttribute('data-theme', settings.theme);
     }
     if (settings.accentColor) {
-      root.style.setProperty('--accent', settings.accentColor);
+      root.style.setProperty('--accent-custom', settings.accentColor);
     }
     if (settings.fontSize) {
       root.style.fontSize = `${settings.fontSize}px`;
     }
-    if (settings.fontTheme) {
-      root.style.setProperty('--font-sans', FONT_STACKS[settings.fontTheme]);
-      if (settings.fontTheme === 'pixel') {
-        root.style.setProperty('--font-mono', FONT_STACKS.pixel);
-      }
-    }
+
     if (settings.uiFont) {
       root.style.setProperty('--font-sans', settings.uiFont);
     }

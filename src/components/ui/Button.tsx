@@ -1,15 +1,13 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
-import { motion, type HTMLMotionProps } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
-import { MOTION_FAST } from '@/lib/motion';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type Size = 'sm' | 'md' | 'lg' | 'icon';
 
 export interface ButtonProps
-  extends Omit<HTMLMotionProps<'button'>, 'ref'> {
+  extends React.ComponentPropsWithoutRef<'button'> {
   variant?: Variant;
   size?: Size;
   asChild?: boolean;
@@ -52,7 +50,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const classes = cn(
       'inline-flex items-center justify-center font-medium rounded-[6px] transition-colors',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
-      'disabled:opacity-50 disabled:pointer-events-none select-none',
+      'disabled:opacity-50 disabled:pointer-events-none select-none active:scale-[0.98]',
       variants[variant],
       sizes[size],
       className,
@@ -64,17 +62,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         </Slot>
       );
     }
-    const { whileTap: _whileTap, transition: _transition, ...rest } = props;
-    void _whileTap;
-    void _transition;
     return (
-      <motion.button
+      <button
         ref={ref}
         className={classes}
         disabled={disabled || loading}
-        whileTap={disabled || loading ? {} : { scale: 0.98 }}
-        transition={MOTION_FAST}
-        {...rest}
+        {...props}
       >
         {loading && (
           <span
@@ -87,7 +80,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           </span>
         )}
         {children as React.ReactNode}
-      </motion.button>
+      </button>
     );
   },
 );

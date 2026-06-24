@@ -1,0 +1,11 @@
+{
+  "version": "2.2.0",
+  "notes": "Plotline v2.2.0：时间轴真实日历映射与事件逻辑重写、动画性能优化、MC 主题再设计、番茄钟音效闭环、工作区保存改进、自定义字体导入（默认得意黑/Smiley Sans）。",
+  "pub_date": "2026-06-24T16:15:33Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSEFhNThtQVJDRmNqNWRWV0ViT0p3cy9FcmM4UzNvYkRJdWZUWnYyNG1TRnExKytZQSthSEVaNWlEMjVqNGNxUXhJN1VIS2J6NEZkRDk1dXFPZ0l3cWhsV21WMzAwTUE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMzE3NzMzCWZpbGU6UGxvdGxpbmVfMi4yLjBfeDY0LXNldHVwLmV4ZQpjOGtnM1JVZjhwOE9PMXgraEZtVXJjRFlwdVcrdVdWSjhRQTM4Y0lWaEVGblFrSlRhYzQxN2Nvbm42TWZUUlpkYlU4WXBmOWFvN2pyeEhNQXZZU29CZz09Cg==",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v2.2.0/Plotline_2.2.0_x64-setup.exe"
+    }
+  }
+}

@@ -19,6 +19,15 @@ vi.mock('@/features/timeline/hooks', () => ({
 }));
 
 import { GanttChart } from './GanttChart';
+import { createTimeScale } from '@/features/timeline/timeScale';
+
+const mockScale = createTimeScale(
+  new Date('2024-01-01').getTime(),
+  new Date('2024-12-31').getTime(),
+  'month',
+  24,
+  100,
+);
 
 describe('GanttChart', () => {
   it('should render an SVG gantt layout with one bar', () => {
@@ -30,6 +39,7 @@ describe('GanttChart', () => {
           dateType: 'absolute', dateValue: '2024-01-01', sortOrder: 0, status: 'draft',
           color: null, characterIds: [], connectedEventIds: [], createdAt: '', updatedAt: '',
         }]}
+        timeScale={mockScale}
         selectedEventId={null}
         onSelectEvent={() => {}}
         onEditEvent={() => {}}
@@ -46,6 +56,7 @@ describe('GanttChart', () => {
       <GanttChart
         tracks={[]}
         events={[]}
+        timeScale={mockScale}
         selectedEventId={null}
         onSelectEvent={() => {}}
         onEditEvent={() => {}}
