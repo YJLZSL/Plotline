@@ -42,20 +42,21 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.2.0 已发布）
-- **时间轴/事件逻辑重写**：新增 `src/features/timeline/timeScale.ts` 用真实日历步进替换 `timeToX`/`xToTime` 固定 30/365 天近似；`TimelineView` 全面接入 `timeScale` 并修复 `DateRuler` 刻度对齐；移除 `EventCard.dragConstraints`，实现真实横向拖拽与相邻事件排序；连线层支持点击删除连接；一致性冲突在事件卡片与编辑对话框可视化；事件编辑对话框新增颜色选择器；甘特图改用真实日期布局；轨道层引入水平虚拟化与 `useMemo` 优化。
-- **动画与性能优化**：视图/弹窗动画压缩到 150-200ms；支持 `prefers-reduced-motion`；用 CSS active 反馈替代部分 Framer Motion；全局 mutation 保存状态指示 + `beforeunload` 保护。
-- **MC 主题再设计**：避免“绿油油”单一色调，引入泥土棕/草绿/红石红/圆石灰/木板褐；控件方块化；番茄钟音效闭环；修复设置预览与 accent 冲突。
-- **工作区保存改进**：工作区选择器支持重命名/封面/描述编辑；实现 `autoBackup` 定时备份调度器；扩展 undo/redo 至工作区编辑；bundle 导入版本校验；子实体变更联动 `workspaces.updated_at`。
-- **自定义字体导入**：默认内置得意黑（Smiley Sans）；统一 `fontTheme` 与 `uiFont`/`editorFont` 模型；支持导入 `.ttf/.otf/.woff/.woff2` 到 `app_data/fonts/` 并动态注入 `@font-face`。
-- **真实浏览器测试**：Playwright 截图覆盖关键流程并现场修复问题。
-- GitHub Release v2.2.0 已发布：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
+### 当前迭代状态（v2.4.0 已发布）
+- **大纲横向卡片模式**：大纲视图新增第三种「卡片视图」，按卷分组横向滚动，卡片展示封面图片与节点标题；点击卡片直接打开编辑；大纲节点新增 `cover_image` 字段，编辑对话框支持本地图片选择；数据库迁移 `010_outline_cover_image.sql`。
+- **时间轴事件地点字段**：事件编辑对话框新增「地点」选择器，关联地图中的地点；后端 `location_id` 已完整支持，前端 UI 补齐选择器与保存逻辑。
+- **MC 主题素材丰富**：新增 5 种像素纹理（工作台、熔炉、砖块、钻石矿石、TNT）；通过 CSS 选择器自动给 Toolbar 添加圆石纹理、按钮添加木板纹理、危险按钮添加 TNT 纹理、弹窗添加石头纹理；新增 `.mc-crafting`、`.mc-furnace`、`.mc-brick`、`.mc-diamond`、`.mc-tnt` 工具类。
+- **v2.3.0 回顾**：修复时间轴连线偏移（移除 `+ scrollLeft/Top`）；文本模式按钮添加文字标签提升可发现性；MC 主题配色重构（泥土棕/米白/草绿）；设置界面新增 `help` 教程标签页；番茄钟显示工作区名称、专注/休息结束 Toast 提示。
+- GitHub Release v2.4.0 已发布：<https://github.com/YJLZSL/Plotline/releases/tag/v2.4.0>
+- **自动更新签名问题**：Release 缺少 `.sig` 和 `latest.json`，已记录三种解决方案到 `交接文档.md` 和发布检查清单。需要配置 `TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 后重新触发构建或手动签名。
 
-### 上一版本（v2.1.0 已发布）
-- 时间轴可读性升级、视图切换动画、MC 全局主题与彩蛋、AI 真实厂商图标、按功能 AI 助手、统计新图表、真实浏览器测试。
-- GitHub Release v2.1.0 已发布： <https://github.com/YJLZSL/Plotline/releases/tag/v2.1.0>
+### 上一版本（v2.3.0 / v2.2.0 已发布）
+- v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
+- v2.2.0：时间轴/事件逻辑重写、动画与性能优化、MC 主题再设计、工作区保存改进、自定义字体导入、真实浏览器测试。
+- GitHub Release v2.2.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
+- GitHub Release v2.3.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.3.0>
 
-### 下一迭代方向（v2.3+ 候选）
+### 下一迭代方向（v2.5+ 候选）
 - 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
 - VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
 - 世界观：种族/物种/宗教等实体管理、设定冲突检测。
