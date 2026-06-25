@@ -72,7 +72,7 @@ describe('WorkspaceSelector', () => {
     expect(screen.getByText('5')).toBeInTheDocument();
   });
 
-  it('should filter workspaces by search term', () => {
+  it('should filter workspaces by search term', async () => {
     vi.mocked(useWorkspacesQuery).mockReturnValue({
       data: [
         makeWorkspace({ id: 'ws-1', name: '奇幻冒险' }),
@@ -85,7 +85,9 @@ describe('WorkspaceSelector', () => {
     const searchInput = screen.getByPlaceholderText('workspace.search');
     fireEvent.change(searchInput, { target: { value: '都市' } });
 
-    expect(screen.queryByText('奇幻冒险')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('奇幻冒险')).not.toBeInTheDocument();
+    });
     expect(screen.getByText('都市恋爱')).toBeInTheDocument();
   });
 
