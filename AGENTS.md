@@ -35,7 +35,9 @@
 
 必读文档：
 - `AGENTS.md` — 本文件（AI 协作规范）
+- `交接文档.md` — 项目环境、构建检查、密钥状态（必读）
 - `docs/文档索引.md` — 文档状态总览（先读）
+- `docs/密钥管理指南.md` — 签名密钥位置、GitHub Secret 配置（必读）
 - `docs/架构设计.md` — 整体架构
 - `docs/测试规范.md` — 测试流程
 - `docs/技术决策.md` — 关键技术决策
@@ -314,14 +316,15 @@ docs(agents): 补充 IPC 调用规范
 
 ## 8. AI 接手时的 5 步上手流程
 
-1. `Read` 本文件 + `docs/文档索引.md` + `docs/架构设计.md` + `产品需求与设计文档.md`。
+1. `Read` 本文件 + `交接文档.md` + `docs/文档索引.md` + `docs/架构设计.md` + `产品需求与设计文档.md`。
 2. `git log --oneline -20` 看最近提交，了解项目节奏。
-3. 若 `pnpm` 不可用，可直接使用 `node_modules/.bin` 中的 `tsc`、`eslint`、`vitest`、`tauri` 等命令。
-4. `pnpm install && pnpm dev`（或 `./node_modules/.bin/vite`）跑起来，体验当前状态。
-5. 用 `Grep`/`Glob` 定位要改的文件，**不要凭文件名猜路径**。
-6. 改动后立即 `pnpm lint && pnpm typecheck && pnpm test:run && cargo test --manifest-path src-tauri/Cargo.toml`，全绿再提交。
+3. **检查密钥环境**：确认 `keys/plotline.key` 存在；若需 CI 自动签名，确认 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 已配置（详见 `docs/密钥管理指南.md`）。
+4. 若 `pnpm` 不可用，可直接使用 `node_modules/.bin` 中的 `tsc`、`eslint`、`vitest`、`tauri` 等命令。
+5. `pnpm install && pnpm dev`（或 `./node_modules/.bin/vite`）跑起来，体验当前状态。
+6. 用 `Grep`/`Glob` 定位要改的文件，**不要凭文件名猜路径**。
+7. 改动后立即 `pnpm lint && pnpm typecheck && pnpm test:run && cargo test --manifest-path src-tauri/Cargo.toml`，全绿再提交。
 
 ---
 
-> 文档版本：v0.5.0  
-> 最后更新：2026-06-23
+> 文档版本：v0.5.1  
+> 最后更新：2026-06-26
