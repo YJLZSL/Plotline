@@ -50,7 +50,7 @@
 - **MC 主题素材丰富**：新增 5 种像素纹理（工作台、熔炉、砖块、钻石矿石、TNT）；通过 CSS 选择器自动给 Toolbar 添加圆石纹理、按钮添加木板纹理、危险按钮添加 TNT 纹理、弹窗添加石头纹理；新增 `.mc-crafting`、`.mc-furnace`、`.mc-brick`、`.mc-diamond`、`.mc-tnt` 工具类。
 - **v2.3.0 回顾**：修复时间轴连线偏移（移除 `+ scrollLeft/Top`）；文本模式按钮添加文字标签提升可发现性；MC 主题配色重构（泥土棕/米白/草绿）；设置界面新增 `help` 教程标签页；番茄钟显示工作区名称、专注/休息结束 Toast 提示。
 - GitHub Release v2.4.0 已发布：<https://github.com/YJLZSL/Plotline/releases/tag/v2.4.0>
-- **自动更新签名问题**：Release 缺少 `.sig` 和 `latest.json`，已记录三种解决方案到 `交接文档.md` 和发布检查清单。需要配置 `TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 后重新触发构建或手动签名。
+- **自动更新签名状态**：`TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 已于 2026-06-26 配置/更新。下次推送 tag 触发 CI 后，验证 Release 页面是否包含 `.sig` 签名文件。若仍缺失，参考 `docs/密钥管理指南.md` 排查。
 
 ### 上一版本（v2.3.0 / v2.2.0 已发布）
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
