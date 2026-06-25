@@ -838,6 +838,7 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                     content: Some(body),
                     parent_id: None,
                     event_id: None,
+                    cover_image: None,
                 },
             )?;
             Ok(AiInsertResult {
@@ -997,6 +998,7 @@ mod tests {
                 content: Some("介绍世界观".into()),
                 parent_id: None,
                 event_id: None,
+                cover_image: None,
             },
         )
         .unwrap();

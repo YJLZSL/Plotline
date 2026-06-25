@@ -633,6 +633,7 @@ mod tests {
             sort_order: 0,
             event_id: None,
             status: "draft".into(),
+            cover_image: None,
             created_at: t,
             updated_at: t,
         };
@@ -646,6 +647,7 @@ mod tests {
             sort_order: 0,
             event_id: None,
             status: "draft".into(),
+            cover_image: None,
             created_at: t,
             updated_at: t,
         };
