@@ -231,6 +231,16 @@ docs(agents): 补充 IPC 调用规范
 - [ ] 改动数据库时新增了迁移文件
 - [ ] UI 改动截图/录屏附在提交说明或相关 issue 中
 
+### 4.4 发布检查清单（Release）
+- [ ] 版本号已统一（`package.json`、`Cargo.toml`、`tauri.conf.json`）
+- [ ] `更新日志.md` 已更新
+- [ ] `releases/vX.Y.Z/latest.json` 已创建（signature 字段已填入真实签名，不是 `<PLACEHOLDER>`）
+- [ ] **签名密钥检查**：GitHub Secrets 中已配置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（如果私钥有密码）
+- [ ] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
+- [ ] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
+
+> **⚠️ 签名密钥问题**：如果 CI 构建成功但 Release 缺少 `.sig` 和 `latest.json`，说明 `TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 未配置或已失效。详见 `交接文档.md` 中的 "签名密钥问题" 部分。
+
 ---
 
 ## 5. 测试规范
