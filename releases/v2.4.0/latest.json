@@ -1,0 +1,11 @@
+{
+  "version": "2.4.0",
+  "notes": "Plotline v2.4.0：新增大纲横向卡片视图（支持封面图片），时间轴事件编辑新增地点字段，MC主题新增5种像素纹理并自动应用到主要UI元素。",
+  "pub_date": "2026-06-26T10:14:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "<PLACEHOLDER: 构建后填入签名>",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v2.4.0/Plotline_2.4.0_x64-setup.exe"
+    }
+  }
+}
