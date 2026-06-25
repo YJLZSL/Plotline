@@ -15,12 +15,13 @@ fn parse_settings(s: &str) -> Value {
 
 pub fn list(conn: &Connection) -> AppResult<Vec<Workspace>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, template, cover_color, settings_json,
-                created_at, updated_at
-         FROM workspaces ORDER BY updated_at DESC",
+        "SELECT w.id, w.name, w.description, w.template, w.cover_color, w.cover_image,
+                w.settings_json, w.created_at, w.updated_at,
+                (SELECT COUNT(*) FROM events WHERE workspace_id = w.id) as event_count
+         FROM workspaces w ORDER BY w.updated_at DESC",
     )?;
     let rows = stmt.query_map([], |row| {
-        let settings_str: String = row.get(5)?;
+        let settings_str: String = row.get(6)?;
         let settings = parse_settings(&settings_str);
         Ok(Workspace {
             id: row.get(0)?,
@@ -28,9 +29,11 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Workspace>> {
             description: row.get(2)?,
             template: row.get(3)?,
             cover_color: row.get(4)?,
+            cover_image: row.get(5)?,
             settings,
-            created_at: row.get(6)?,
-            updated_at: row.get(7)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            event_count: row.get(9)?,
         })
     })?;
     rows.collect::<Result<_, _>>().map_err(Into::into)
@@ -38,12 +41,13 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Workspace>> {
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<Workspace> {
     conn.query_row(
-        "SELECT id, name, description, template, cover_color, settings_json,
-                created_at, updated_at
-         FROM workspaces WHERE id=?1",
+        "SELECT w.id, w.name, w.description, w.template, w.cover_color, w.cover_image,
+                w.settings_json, w.created_at, w.updated_at,
+                (SELECT COUNT(*) FROM events WHERE workspace_id = w.id) as event_count
+         FROM workspaces w WHERE w.id=?1",
         params![id],
         |row| {
-            let settings_str: String = row.get(5)?;
+            let settings_str: String = row.get(6)?;
             let settings = parse_settings(&settings_str);
             Ok(Workspace {
                 id: row.get(0)?,
@@ -51,9 +55,11 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Workspace> {
                 description: row.get(2)?,
                 template: row.get(3)?,
                 cover_color: row.get(4)?,
+                cover_image: row.get(5)?,
                 settings,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+                event_count: row.get(9)?,
             })
         },
     )
@@ -66,15 +72,17 @@ pub fn create(conn: &Connection, input: CreateWorkspaceInput) -> AppResult<Works
     let now_str = now.to_rfc3339();
     let template = input.template.unwrap_or_else(|| "blank".into());
     let cover_color = input.cover_color.unwrap_or_else(|| "#C68A3E".into());
+    let cover_image = input.cover_image;
     conn.execute(
-        "INSERT INTO workspaces (id, name, description, template, cover_color, settings_json, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6, ?7)",
+        "INSERT INTO workspaces (id, name, description, template, cover_color, cover_image, settings_json, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '{}', ?7, ?8)",
         params![
             id,
             input.name,
             input.description.unwrap_or_default(),
             template,
             cover_color,
+            cover_image,
             now_str,
             now_str,
         ],
@@ -136,13 +144,14 @@ pub fn update(conn: &Connection, input: UpdateWorkspaceInput) -> AppResult<Works
     let name = input.name.unwrap_or(existing.name);
     let description = input.description.unwrap_or(existing.description);
     let cover_color = input.cover_color.unwrap_or(existing.cover_color);
+    let cover_image = input.cover_image.or(existing.cover_image);
     let settings = input.settings.unwrap_or(existing.settings);
     let settings_str = serde_json::to_string(&settings)?;
     let now_str = Utc::now().to_rfc3339();
     conn.execute(
-        "UPDATE workspaces SET name=?1, description=?2, cover_color=?3, settings_json=?4, updated_at=?5
-         WHERE id=?6",
-        params![name, description, cover_color, settings_str, now_str, input.id],
+        "UPDATE workspaces SET name=?1, description=?2, cover_color=?3, cover_image=?4, settings_json=?5, updated_at=?6
+         WHERE id=?7",
+        params![name, description, cover_color, cover_image, settings_str, now_str, input.id],
     )?;
     get(conn, &input.id)
 }
@@ -203,19 +212,22 @@ pub fn import_bundle(conn: &Connection, mut bundle: WorkspaceBundle) -> AppResul
         description: bundle.workspace.description.clone(),
         template: bundle.workspace.template.clone(),
         cover_color: bundle.workspace.cover_color.clone(),
+        cover_image: bundle.workspace.cover_image.clone(),
         settings: bundle.workspace.settings.clone(),
         created_at: now,
         updated_at: now,
+        event_count: 0,
     };
     tx.execute(
-        "INSERT INTO workspaces (id, name, description, template, cover_color, settings_json, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO workspaces (id, name, description, template, cover_color, cover_image, settings_json, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             new_ws.id,
             new_ws.name,
             new_ws.description,
             new_ws.template,
             new_ws.cover_color,
+            new_ws.cover_image,
             serde_json::to_string(&new_ws.settings)?,
             now_str,
             now_str,
@@ -555,9 +567,11 @@ mod tests {
             description: "".into(),
             template: "blank".into(),
             cover_color: "#C68A3E".into(),
+            cover_image: None,
             settings: serde_json::json!({}),
             created_at: t,
             updated_at: t,
+            event_count: 0,
         };
         let track = Track {
             id: "t1".into(),
@@ -579,6 +593,7 @@ mod tests {
             sort_order: 0,
             status: "draft".into(),
             color: None,
+            location_id: None,
             character_ids: vec![],
             connected_event_ids: vec![],
             created_at: t,

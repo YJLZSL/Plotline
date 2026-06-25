@@ -83,7 +83,7 @@ interface SettingsViewProps {
   workspaceName?: string;
 }
 
-type Tab = 'appearance' | 'editor' | 'data' | 'ai' | 'startup' | 'shortcuts' | 'about';
+type Tab = 'appearance' | 'editor' | 'data' | 'ai' | 'startup' | 'shortcuts' | 'about' | 'help';
 
 const TABS: Array<{ id: Tab; labelKey: string }> = [
   { id: 'appearance', labelKey: 'settings.appearance' },
@@ -92,6 +92,7 @@ const TABS: Array<{ id: Tab; labelKey: string }> = [
   { id: 'ai', labelKey: 'settings.ai' },
   { id: 'startup', labelKey: 'settings.startup' },
   { id: 'shortcuts', labelKey: 'settings.shortcuts' },
+  { id: 'help', labelKey: 'settings.help' },
   { id: 'about', labelKey: 'settings.about' },
 ];
 
@@ -755,6 +756,46 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                       <li>• Ctrl/Cmd + N - 新建工作区</li>
                       <li>• Ctrl/Cmd + B - 切换侧栏</li>
                       <li>• Esc - 关闭对话框</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {tab === 'help' && (
+              <div className="flex flex-col gap-4 text-sm">
+                <Card>
+                  <CardContent className="space-y-4">
+                    <h3 className="text-sm font-semibold text-text-primary">{t('settings.helpTimeline')}</h3>
+                    <p className="text-xs text-text-secondary">{t('settings.helpTimelineDesc')}</p>
+                    <ul className="text-xs text-text-primary/80 space-y-1">
+                      <li>• {t('settings.helpTimeline1')}</li>
+                      <li>• {t('settings.helpTimeline2')}</li>
+                      <li>• {t('settings.helpTimeline3')}</li>
+                      <li>• {t('settings.helpTimeline4')}</li>
+                      <li>• {t('settings.helpTimeline5')}</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="space-y-4">
+                    <h3 className="text-sm font-semibold text-text-primary">{t('settings.helpOutline')}</h3>
+                    <p className="text-xs text-text-secondary">{t('settings.helpOutlineDesc')}</p>
+                    <ul className="text-xs text-text-primary/80 space-y-1">
+                      <li>• {t('settings.helpOutline1')}</li>
+                      <li>• {t('settings.helpOutline2')}</li>
+                      <li>• {t('settings.helpOutline3')}</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="space-y-4">
+                    <h3 className="text-sm font-semibold text-text-primary">{t('settings.helpPomodoro')}</h3>
+                    <p className="text-xs text-text-secondary">{t('settings.helpPomodoroDesc')}</p>
+                    <ul className="text-xs text-text-primary/80 space-y-1">
+                      <li>• {t('settings.helpPomodoro1')}</li>
+                      <li>• {t('settings.helpPomodoro2')}</li>
+                      <li>• {t('settings.helpPomodoro3')}</li>
                     </ul>
                   </CardContent>
                 </Card>

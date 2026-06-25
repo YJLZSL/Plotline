@@ -868,6 +868,7 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                     sort_order: None,
                     status: None,
                     color: None,
+                    location_id: None,
                     character_ids: None,
                 },
             )?;
@@ -942,6 +943,7 @@ mod tests {
                 description: None,
                 template: None,
                 cover_color: None,
+                cover_image: None,
             },
         )
         .unwrap();
@@ -980,6 +982,7 @@ mod tests {
                 sort_order: None,
                 status: None,
                 color: None,
+                location_id: None,
                 character_ids: None,
             },
         )

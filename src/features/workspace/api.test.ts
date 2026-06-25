@@ -21,6 +21,8 @@ describe('workspace api', () => {
         description: '',
         template: 'blank',
         coverColor: '#C68A3E',
+        coverImage: null,
+        eventCount: 3,
         settings: {},
         createdAt: '2026-01-01T00:00:00Z',
         updatedAt: '2026-01-01T00:00:00Z',
@@ -29,6 +31,7 @@ describe('workspace api', () => {
     const result = await listWorkspaces();
     expect(result).toHaveLength(1);
     expect(result[0]?.name).toBe('demo');
+    expect(result[0]?.eventCount).toBe(3);
     expect(invoke).toHaveBeenCalledWith('list_workspaces');
   });
 
@@ -39,6 +42,8 @@ describe('workspace api', () => {
       description: '',
       template: 'blank',
       coverColor: '#C68A3E',
+      coverImage: null,
+      eventCount: 0,
       settings: {},
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-01-01T00:00:00Z',

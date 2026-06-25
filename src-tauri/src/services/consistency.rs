@@ -81,6 +81,7 @@ mod tests {
             sort_order: 0,
             status: "draft".into(),
             color: None,
+            location_id: None,
             character_ids: characters.iter().map(|s| s.to_string()).collect(),
             connected_event_ids: Vec::new(),
             created_at: Utc::now(),

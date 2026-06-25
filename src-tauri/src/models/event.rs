@@ -14,6 +14,7 @@ pub struct Event {
     pub sort_order: i64,
     pub status: String,
     pub color: Option<String>,
+    pub location_id: Option<String>,
     pub character_ids: Vec<String>,
     pub connected_event_ids: Vec<String>,
     pub created_at: DateTime<Utc>,
@@ -42,6 +43,7 @@ pub struct CreateEventInput {
     pub sort_order: Option<i64>,
     pub status: Option<String>,
     pub color: Option<String>,
+    pub location_id: Option<String>,
     pub character_ids: Option<Vec<String>>,
 }
 
@@ -57,6 +59,7 @@ pub struct UpdateEventInput {
     pub sort_order: Option<i64>,
     pub status: Option<String>,
     pub color: Option<Option<String>>,
+    pub location_id: Option<Option<String>>,
     pub character_ids: Option<Vec<String>>,
 }
 

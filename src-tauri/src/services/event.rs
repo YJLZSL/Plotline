@@ -10,7 +10,7 @@ use crate::models::{
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, track_id, title, description, date_type, date_value,
-                sort_order, status, color, created_at, updated_at
+                sort_order, status, color, location_id, created_at, updated_at
          FROM events WHERE workspace_id = ?1 ORDER BY track_id, sort_order, created_at",
     )?;
     let rows = stmt.query_map(params![workspace_id], |row| {
@@ -25,10 +25,11 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
             sort_order: row.get(7)?,
             status: row.get(8)?,
             color: row.get(9)?,
+            location_id: row.get(10)?,
             character_ids: Vec::new(),
             connected_event_ids: Vec::new(),
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
+            created_at: row.get(11)?,
+            updated_at: row.get(12)?,
         })
     })?;
     let mut events: Vec<Event> = rows.collect::<Result<_, _>>()?;
@@ -54,7 +55,7 @@ fn list_connected_event_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<
 fn get(conn: &Connection, id: &str) -> AppResult<Event> {
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, track_id, title, description, date_type, date_value,
-                sort_order, status, color, created_at, updated_at
+                sort_order, status, color, location_id, created_at, updated_at
          FROM events WHERE id = ?1",
     )?;
     let mut event = stmt
@@ -70,10 +71,11 @@ fn get(conn: &Connection, id: &str) -> AppResult<Event> {
                 sort_order: row.get(7)?,
                 status: row.get(8)?,
                 color: row.get(9)?,
+                location_id: row.get(10)?,
                 character_ids: Vec::new(),
                 connected_event_ids: Vec::new(),
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .map_err(|e| crate::error::map_not_found(e, format!("事件 {} 不存在", id)))?;
@@ -93,8 +95,8 @@ pub fn create(conn: &Connection, input: CreateEventInput) -> AppResult<Event> {
     tx.execute(
         "INSERT INTO events
          (id, workspace_id, track_id, title, description, date_type, date_value,
-          sort_order, status, color, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+          sort_order, status, color, location_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             id,
             input.workspace_id,
@@ -106,6 +108,7 @@ pub fn create(conn: &Connection, input: CreateEventInput) -> AppResult<Event> {
             sort_order,
             status,
             input.color,
+            input.location_id,
             now_str,
             now_str,
         ],
@@ -132,12 +135,13 @@ pub fn update(conn: &Connection, input: UpdateEventInput) -> AppResult<Event> {
     let sort_order = input.sort_order.unwrap_or(existing.sort_order);
     let status = input.status.unwrap_or(existing.status);
     let color = input.color.unwrap_or(existing.color);
+    let location_id = input.location_id.unwrap_or(existing.location_id);
     let now_str = Utc::now().to_rfc3339();
 
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "UPDATE events SET title=?1, description=?2, track_id=?3, date_type=?4,
-            date_value=?5, sort_order=?6, status=?7, color=?8, updated_at=?9 WHERE id=?10",
+            date_value=?5, sort_order=?6, status=?7, color=?8, location_id=?9, updated_at=?10 WHERE id=?11",
         params![
             title,
             description,
@@ -147,6 +151,7 @@ pub fn update(conn: &Connection, input: UpdateEventInput) -> AppResult<Event> {
             sort_order,
             status,
             color,
+            location_id,
             now_str,
             input.id,
         ],
@@ -310,5 +315,65 @@ mod tests {
         assert_eq!(conns[0].connection_type, "causal");
         assert_eq!(conns[0].source_title, "Source");
         assert_eq!(conns[0].target_title, "Target");
+    }
+
+    #[test]
+    fn event_persists_location_id() {
+        let conn = in_memory_db();
+        conn.execute(
+            "INSERT INTO workspaces (id, name, description, template, cover_color, settings_json, created_at, updated_at)
+             VALUES ('ws', 'WS', '', 'blank', '#C68A3E', '{}', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at)
+             VALUES ('t1', 'ws', 'T1', '#F4B6C2', 0, 1, '2024-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO locations (id, workspace_id, name, pos_x, pos_y, color, icon, created_at, updated_at)
+             VALUES ('l1', 'ws', 'City', 0, 0, '#C68A3E', '📍', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        let created = create(
+            &conn,
+            CreateEventInput {
+                workspace_id: "ws".into(),
+                track_id: "t1".into(),
+                title: "Located".into(),
+                description: None,
+                date_type: None,
+                date_value: None,
+                sort_order: None,
+                status: None,
+                color: None,
+                location_id: Some("l1".into()),
+                character_ids: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(created.location_id, Some("l1".into()));
+
+        let updated = update(
+            &conn,
+            UpdateEventInput {
+                id: created.id.clone(),
+                title: None,
+                description: None,
+                track_id: None,
+                date_type: None,
+                date_value: None,
+                sort_order: None,
+                status: None,
+                color: None,
+                location_id: Some(None),
+                character_ids: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.location_id, None);
     }
 }

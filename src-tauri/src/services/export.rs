@@ -370,6 +370,7 @@ mod tests {
                 description: Some("一个测试".into()),
                 template: Some("blank".into()),
                 cover_color: None,
+                cover_image: None,
             },
         )
         .unwrap();
@@ -396,6 +397,7 @@ mod tests {
                 description: None,
                 template: Some("blank".into()),
                 cover_color: None,
+                cover_image: None,
             },
         )
         .unwrap();
@@ -418,6 +420,7 @@ mod tests {
                 description: Some("测试描述".into()),
                 template: Some("blank".into()),
                 cover_color: None,
+                cover_image: None,
             },
         )
         .unwrap();
@@ -450,6 +453,7 @@ mod tests {
                 description: None,
                 template: Some("blank".into()),
                 cover_color: None,
+                cover_image: None,
             },
         )
         .unwrap();
@@ -473,6 +477,7 @@ mod tests {
                 description: None,
                 template: Some("blank".into()),
                 cover_color: None,
+                cover_image: None,
             },
         )
         .unwrap();

@@ -42,6 +42,7 @@ function mkEvent(
     sortOrder: order,
     status: 'draft',
     color: null,
+    locationId: null,
     characterIds: [],
     connectedEventIds: [],
     createdAt: '',

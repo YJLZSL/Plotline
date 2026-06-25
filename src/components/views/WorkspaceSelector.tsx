@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -7,10 +7,13 @@ import {
   Upload,
   Settings as SettingsIcon,
   Clock4,
-  Users,
-  Layers,
-  FileText,
   Pencil,
+  FileText,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  X,
   Check,
 } from 'lucide-react';
 
@@ -20,16 +23,13 @@ import {
   useDeleteWorkspace,
   useExportWorkspace,
   useExportWorkspaceMarkdown,
-  useExportWorkspacePdf,
-  useExportWorkspaceWord,
-  useExportWorkspaceEpub,
   useImportWorkspace,
   useUpdateWorkspace,
   useWorkspacesQuery,
 } from '@/features/workspace/hooks';
 import { ConfirmDialog, Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { useI18n } from '@/hooks/useI18n';
-import { relativeTime, truncate, downloadJSON, downloadText, downloadBlob, cn } from '@/lib/utils';
+import { relativeTime, truncate, downloadJSON, downloadText, cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { useHistoryStore, makeUpdateWorkspaceAction } from '@/stores/historyStore';
 import type { Workspace, WorkspaceTemplate, WorkspaceBundle } from '@/types';
@@ -59,6 +59,9 @@ const COVER_PALETTE = [
   '#F4CBB6',
 ];
 
+const CARD_WIDTH = 280;
+const CARD_GAP = 24;
+
 export function WorkspaceSelector() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -69,16 +72,17 @@ export function WorkspaceSelector() {
   const pushHistory = useHistoryStore((s) => s.push);
   const exportMutation = useExportWorkspace();
   const exportMdMutation = useExportWorkspaceMarkdown();
-  const exportPdfMutation = useExportWorkspacePdf();
-  const exportWordMutation = useExportWorkspaceWord();
-  const exportEpubMutation = useExportWorkspaceEpub();
   const importMutation = useImportWorkspace();
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Workspace | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', description: '', coverColor: '' });
+  const [editForm, setEditForm] = useState({ name: '', description: '', coverColor: '', coverImage: '' });
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -86,8 +90,32 @@ export function WorkspaceSelector() {
   });
 
   const filtered = (workspaces ?? []).filter((w) =>
-    w.name.toLowerCase().includes(search.toLowerCase()),
+    w.name.toLowerCase().includes(search.toLowerCase()) ||
+    w.description.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const updateScrollability = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  const scrollBy = (direction: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const delta = direction === 'left' ? -(CARD_WIDTH + CARD_GAP) : CARD_WIDTH + CARD_GAP;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
+  };
+
+  const handleWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    el.scrollLeft += e.deltaY;
+    updateScrollability();
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -109,12 +137,14 @@ export function WorkspaceSelector() {
       name: editForm.name.trim(),
       description: editForm.description.trim(),
       coverColor: editForm.coverColor,
+      coverImage: editForm.coverImage || null,
     };
     await updateMutation.mutateAsync({
       id: next.id,
       name: next.name,
       description: next.description,
       coverColor: next.coverColor,
+      coverImage: next.coverImage,
     });
     pushHistory(makeUpdateWorkspaceAction(next.id, previous, next));
     setEditTarget(null);
@@ -130,21 +160,6 @@ export function WorkspaceSelector() {
     downloadText(`${name}.md`, md);
   };
 
-  const handleExportPdf = async (id: string, name: string) => {
-    const bytes = await exportPdfMutation.mutateAsync(id);
-    downloadBlob(`${name}.pdf`, bytes, 'application/pdf');
-  };
-
-  const handleExportWord = async (id: string, name: string) => {
-    const bytes = await exportWordMutation.mutateAsync(id);
-    downloadBlob(`${name}.docx`, bytes, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  };
-
-  const handleExportEpub = async (id: string, name: string) => {
-    const bytes = await exportEpubMutation.mutateAsync(id);
-    downloadBlob(`${name}.epub`, bytes, 'application/epub+zip');
-  };
-
   const handleImport = async (file: File) => {
     const text = await file.text();
     try {
@@ -155,10 +170,22 @@ export function WorkspaceSelector() {
     }
   };
 
+  const handleCoverImageSelect = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        setEditForm((f) => ({ ...f, coverImage: result }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="min-h-screen w-screen flex flex-col bg-bg-base">
       <header
-        className="h-14 flex items-center justify-between px-6 border-b border-border bg-bg-surface"
+        className="h-14 flex items-center justify-between px-6 border-b border-border bg-bg-surface shrink-0"
         data-tauri-drag-region
       >
         <div className="flex items-center gap-2">
@@ -180,299 +207,166 @@ export function WorkspaceSelector() {
                 <span className="hidden sm:inline">{t('nav.settings')}</span>
               </Button>
             </DialogTrigger>
-            <DialogContent
-              title={t('settings.title')}
-              className="max-w-2xl"
-            >
+            <DialogContent title={t('settings.title')} className="max-w-2xl">
               <SettingsQuickPanel />
             </DialogContent>
           </Dialog>
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 p-6 overflow-auto">
-        <section className="flex flex-col gap-4 min-w-0">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <h2 className="text-xl font-bold text-text-primary">{t('workspace.title')}</h2>
-              <p className="text-sm text-text-secondary mt-0.5">{t('workspace.subtitle')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t('workspace.search')}
-                  className="pl-9 w-56"
-                />
-              </div>
-              <label className="inline-flex">
-                <Button variant="outline" size="md" className="gap-2 cursor-pointer">
-                  <Upload className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('workspace.import')}</span>
-                </Button>
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleImport(f);
-                    e.currentTarget.value = '';
-                  }}
-                />
-              </label>
-              <Button
-                onClick={() => setCreateOpen(true)}
-                className="gap-2"
-                data-testid="create-workspace-btn"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">{t('workspace.create')}</span>
-              </Button>
-            </div>
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 shrink-0 flex-wrap">
+          <div>
+            <h2 className="text-xl font-bold text-text-primary">{t('workspace.title')}</h2>
+            <p className="text-sm text-text-secondary mt-0.5">{t('workspace.subtitle')}</p>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('workspace.search')}
+                className="pl-9 w-56"
+              />
+            </div>
+            <label className="inline-flex">
+              <Button variant="outline" size="md" className="gap-2 cursor-pointer">
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">{t('workspace.import')}</span>
+              </Button>
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleImport(f);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </label>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="gap-2"
+              data-testid="create-workspace-btn"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('workspace.create')}</span>
+            </Button>
+          </div>
+        </div>
 
+        <div className="relative flex-1 min-h-0">
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="flex items-center gap-6 px-6 h-full overflow-hidden">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="skeleton h-44 rounded-[8px]" />
+                <div
+                  key={i}
+                  className="skeleton shrink-0 rounded-[8px]"
+                  style={{ width: CARD_WIDTH, height: 384 }}
+                />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState
-              icon={
-                <AppIcon size="lg" tone="accent">
-                  <BrandMark size={28} />
-                </AppIcon>
-              }
-              title={t('workspace.empty.title')}
-              description={t('workspace.empty.description')}
-              action={
-                <Button onClick={() => setCreateOpen(true)} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  {t('workspace.empty.cta')}
-                </Button>
-              }
-            />
-          ) : (
-            <motion.div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              <AnimatePresence>
-                {filtered.map((w) => (
-                  <motion.div
-                    key={w.id}
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    transition={TRANSITION}
-                  >
-                    <Card hover className="group cursor-pointer overflow-hidden" onClick={() => navigate(`/workspaces/${w.id}/timeline`)}>
-                      <div
-                        className="h-16 w-full"
-                        style={{
-                          background: `linear-gradient(135deg, ${w.coverColor} 0%, ${w.coverColor}80 100%)`,
-                        }}
-                      />
-                      <CardContent className="pt-4">
-                        <h3 className="text-base font-semibold text-text-primary truncate">
-                          {w.name}
-                        </h3>
-                        <p className="text-xs text-text-secondary mt-1 min-h-[2.5em] line-clamp-2">
-                          {truncate(w.description || t('workspace.subtitle'), 60)}
-                        </p>
-                        <div className="flex items-center gap-3 mt-3 text-[11px] text-text-secondary">
-                          <span className="flex items-center gap-1">
-                            <Clock4 className="h-3 w-3" />
-                            {relativeTime(w.updatedAt)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-[11px] text-text-secondary">
-                            {t('workspace.createdAt', { date: relativeTime(w.createdAt) })}
-                          </span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditTarget(w);
-                                setEditForm({
-                                  name: w.name,
-                                  description: w.description,
-                                  coverColor: w.coverColor,
-                                });
-                              }}
-                              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
-                              title={t('workspace.edit')}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleExportMarkdown(w.id, w.name);
-                              }}
-                              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
-                              title="导出 Markdown"
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleExport(w.id);
-                              }}
-                              className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
-                              title={t('workspace.export')}
-                            >
-                              <Upload className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTarget(w.id);
-                              }}
-                              className="text-text-secondary hover:text-red-500 p-1 rounded transition-colors"
-                              title={t('workspace.delete')}
-                            >
-                              <Plus className="h-3.5 w-3.5 rotate-45" />
-                            </button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </section>
-
-        <aside className="hidden lg:flex flex-col gap-3">
-          <Card>
-            <CardContent>
-              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <BrandMark size={16} className="text-accent" />
-                {t('workspace.quickActions')}
-              </h3>
-                <div className="flex flex-col gap-2 mt-3">
-                  <Button
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => setCreateOpen(true)}
-                  >
+            <div className="flex items-center justify-center h-full">
+              <EmptyState
+                icon={
+                  <AppIcon size="lg" tone="accent">
+                    <BrandMark size={28} />
+                  </AppIcon>
+                }
+                title={t('workspace.empty.title')}
+                description={t('workspace.empty.description')}
+                action={
+                  <Button onClick={() => setCreateOpen(true)} className="gap-2">
                     <Plus className="h-4 w-4" />
-                    {t('workspace.create')}
+                    {t('workspace.empty.cta')}
                   </Button>
-                  <label className="inline-flex">
-                    <Button variant="secondary" className="justify-start cursor-pointer w-full">
-                      <Upload className="h-4 w-4" />
-                      {t('workspace.import')}
-                    </Button>
-                    <input
-                      type="file"
-                      accept=".json,application/json"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void handleImport(f);
-                        e.currentTarget.value = '';
-                      }}
-                    />
-                  </label>
-                  <Button
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => {
-                      const ws = (workspaces ?? [])[0];
-                      if (ws) void handleExportMarkdown(ws.id, ws.name);
-                    }}
-                    disabled={(workspaces ?? []).length === 0}
-                  >
-                    <FileText className="h-4 w-4" />
-                    {t('workspace.exportMarkdown')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => {
-                      const ws = (workspaces ?? [])[0];
-                      if (ws) void handleExportPdf(ws.id, ws.name);
-                    }}
-                    disabled={(workspaces ?? []).length === 0}
-                  >
-                    <FileText className="h-4 w-4" />
-                    {t('workspace.exportPdf')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => {
-                      const ws = (workspaces ?? [])[0];
-                      if (ws) void handleExportWord(ws.id, ws.name);
-                    }}
-                    disabled={(workspaces ?? []).length === 0}
-                  >
-                    <FileText className="h-4 w-4" />
-                    {t('workspace.exportWord')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="justify-start"
-                    onClick={() => {
-                      const ws = (workspaces ?? [])[0];
-                      if (ws) void handleExportEpub(ws.id, ws.name);
-                    }}
-                    disabled={(workspaces ?? []).length === 0}
-                  >
-                    <FileText className="h-4 w-4" />
-                    {t('workspace.exportEpub')}
-                  </Button>
-                </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent>
-              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <Layers className="h-4 w-4 text-accent" />
-                {t('nav.workspaces')}
-              </h3>
-              <div className="flex flex-col gap-1 mt-3">
-                {(workspaces ?? []).slice(0, 5).map((w) => (
+                }
+              />
+            </div>
+          ) : (
+            <>
+              <div
+                ref={scrollRef}
+                onScroll={updateScrollability}
+                onWheel={handleWheel}
+                className="flex items-center h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth px-6 py-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent"
+              >
+                <AnimatePresence>
+                  {filtered.map((w) => (
+                    <motion.div
+                      key={w.id}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 16 }}
+                      transition={TRANSITION}
+                      className="snap-center shrink-0 first:pl-0 last:pr-0 px-3"
+                    >
+                      <WorkspaceCard
+                        workspace={w}
+                        onOpen={() => navigate(`/workspaces/${w.id}/timeline`)}
+                        onEdit={() => {
+                          setEditTarget(w);
+                          setEditForm({
+                            name: w.name,
+                            description: w.description,
+                            coverColor: w.coverColor,
+                            coverImage: w.coverImage ?? '',
+                          });
+                        }}
+                        onExport={() => void handleExport(w.id)}
+                        onExportMarkdown={() => void handleExportMarkdown(w.id, w.name)}
+                        onDelete={() => setDeleteTarget(w.id)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={TRANSITION}
+                  className="snap-center shrink-0 px-3"
+                >
                   <button
-                    key={w.id}
-                    onClick={() => navigate(`/workspaces/${w.id}/timeline`)}
-                    className="text-left text-xs text-text-secondary hover:text-text-primary hover:bg-bg-elevated rounded px-2 py-1.5 transition-colors truncate"
+                    onClick={() => setCreateOpen(true)}
+                    className="flex flex-col items-center justify-center gap-3 shrink-0 rounded-[8px] border-2 border-dashed border-border bg-bg-surface/50 text-text-secondary hover:border-accent hover:text-accent hover:bg-bg-elevated transition-colors"
+                    style={{ width: CARD_WIDTH, height: 384 }}
                   >
-                    {w.name}
+                    <Plus className="h-10 w-10" />
+                    <span className="text-sm font-medium">{t('workspace.create')}</span>
                   </button>
-                ))}
-                {(workspaces ?? []).length === 0 && (
-                  <p className="text-xs text-text-secondary/60 px-2 py-1.5">
-                    {t('workspace.empty.title')}
-                  </p>
-                )}
+                </motion.div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent>
-              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <Users className="h-4 w-4 text-accent" />
-                {t('workspace.coreFeatures')}
-              </h3>
-              <ul className="text-xs text-text-secondary mt-3 space-y-1.5">
-                <li>• 时间轴、轨道、事件</li>
-                <li>• 角色档案与关系</li>
-                <li>• 大纲、统计、笔记</li>
-                <li>• 三套暖色主题</li>
-                <li>• JSON / Markdown 导入/导出</li>
-              </ul>
-            </CardContent>
-          </Card>
-        </aside>
+              <button
+                type="button"
+                onClick={() => scrollBy('left')}
+                disabled={!canScrollLeft}
+                className={cn(
+                  'absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-bg-surface border border-border shadow-[var(--shadow-card)] flex items-center justify-center text-text-secondary hover:text-text-primary hover:border-accent transition-all',
+                  !canScrollLeft && 'opacity-0 pointer-events-none',
+                )}
+                aria-label="向左滚动"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollBy('right')}
+                disabled={!canScrollRight}
+                className={cn(
+                  'absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-bg-surface border border-border shadow-[var(--shadow-card)] flex items-center justify-center text-text-secondary hover:text-text-primary hover:border-accent transition-all',
+                  !canScrollRight && 'opacity-0 pointer-events-none',
+                )}
+                aria-label="向右滚动"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>
+          )}
+        </div>
       </main>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -608,6 +502,51 @@ export function WorkspaceSelector() {
                 ))}
               </div>
             </div>
+            <div>
+              <label className="text-sm font-medium text-text-primary">
+                封面图片 {/* TODO i18n */}
+              </label>
+              <div className="mt-2 flex items-center gap-3">
+                <label className="inline-flex cursor-pointer">
+                  <Button variant="outline" size="sm" className="gap-2 cursor-pointer" asChild>
+                    <span>
+                      <ImageIcon className="h-4 w-4" />
+                      选择图片 {/* TODO i18n */}
+                    </span>
+                  </Button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleCoverImageSelect(f);
+                      e.currentTarget.value = '';
+                    }}
+                  />
+                </label>
+                {editForm.coverImage && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 text-text-secondary"
+                    onClick={() => setEditForm((f) => ({ ...f, coverImage: '' }))}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    清除 {/* TODO i18n */}
+                  </Button>
+                )}
+              </div>
+              {editForm.coverImage && (
+                <div className="mt-2 h-24 w-full rounded-[6px] bg-bg-elevated border border-border overflow-hidden">
+                  <img
+                    src={editForm.coverImage}
+                    alt="封面预览"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setEditTarget(null)}>
                 {t('common.cancel')}
@@ -624,6 +563,108 @@ export function WorkspaceSelector() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+interface WorkspaceCardProps {
+  workspace: Workspace;
+  onOpen: () => void;
+  onEdit: () => void;
+  onExport: () => void;
+  onExportMarkdown: () => void;
+  onDelete: () => void;
+}
+
+function WorkspaceCard({
+  workspace,
+  onOpen,
+  onEdit,
+  onExport,
+  onExportMarkdown,
+  onDelete,
+}: WorkspaceCardProps) {
+  const { t } = useI18n();
+
+  const coverStyle: React.CSSProperties = workspace.coverImage
+    ? { backgroundImage: `url(${workspace.coverImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: `linear-gradient(135deg, ${workspace.coverColor} 0%, ${workspace.coverColor}80 100%)` };
+
+  return (
+    <Card
+      hover
+      className="group relative overflow-hidden cursor-pointer"
+      style={{ width: CARD_WIDTH, height: 384 }}
+      onClick={onOpen}
+    >
+      <div className="h-[45%] w-full relative" style={coverStyle}>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/20" />
+      </div>
+      <CardContent className="pt-4 h-[55%] flex flex-col">
+        <h3 className="text-base font-semibold text-text-primary truncate">
+          {workspace.name}
+        </h3>
+        <p className="text-xs text-text-secondary mt-1.5 line-clamp-3 flex-1">
+          {truncate(workspace.description || t('workspace.subtitle'), 120)}
+        </p>
+        <div className="mt-auto pt-4 border-t border-border">
+          <div className="flex items-center justify-between text-[11px] text-text-secondary">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-[4px] bg-bg-elevated border border-border text-text-primary font-medium">
+                {workspace.eventCount}
+              </span>
+              {t('workspace.stats.events')}
+            </span>
+            <span className="flex items-center gap-1" title={t('workspace.updatedAt', { date: workspace.updatedAt })}>
+              <Clock4 className="h-3 w-3" />
+              {relativeTime(workspace.updatedAt)}
+            </span>
+          </div>
+        </div>
+      </CardContent>
+
+      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <ActionButton onClick={(e) => { e.stopPropagation(); onEdit(); }} title={t('workspace.edit')}>
+          <Pencil className="h-3.5 w-3.5" />
+        </ActionButton>
+        <ActionButton onClick={(e) => { e.stopPropagation(); onExportMarkdown(); }} title={t('workspace.exportMarkdown')}>
+          <FileText className="h-3.5 w-3.5" />
+        </ActionButton>
+        <ActionButton onClick={(e) => { e.stopPropagation(); onExport(); }} title={t('workspace.export')}>
+          <Upload className="h-3.5 w-3.5" />
+        </ActionButton>
+        <ActionButton onClick={(e) => { e.stopPropagation(); onDelete(); }} title={t('workspace.delete')} danger>
+          <Trash2 className="h-3.5 w-3.5" />
+        </ActionButton>
+      </div>
+    </Card>
+  );
+}
+
+function ActionButton({
+  children,
+  onClick,
+  title,
+  danger = false,
+}: {
+  children: React.ReactNode;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  title: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={cn(
+        'h-8 w-8 rounded-full bg-bg-surface/90 border border-border shadow-sm flex items-center justify-center transition-colors',
+        danger
+          ? 'text-text-secondary hover:text-red-500 hover:border-red-200'
+          : 'text-text-secondary hover:text-accent hover:border-accent/30',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

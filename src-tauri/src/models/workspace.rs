@@ -9,6 +9,8 @@ pub struct Workspace {
     pub description: String,
     pub template: String,
     pub cover_color: String,
+    pub cover_image: Option<String>,
+    pub event_count: i64,
     pub settings: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -21,6 +23,7 @@ pub struct CreateWorkspaceInput {
     pub description: Option<String>,
     pub template: Option<String>,
     pub cover_color: Option<String>,
+    pub cover_image: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -30,6 +33,7 @@ pub struct UpdateWorkspaceInput {
     pub name: Option<String>,
     pub description: Option<String>,
     pub cover_color: Option<String>,
+    pub cover_image: Option<String>,
     pub settings: Option<serde_json::Value>,
 }
 

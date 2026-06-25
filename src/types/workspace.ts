@@ -6,6 +6,8 @@ export interface Workspace {
   description: string;
   template: WorkspaceTemplate;
   coverColor: string;
+  coverImage?: string | null;
+  eventCount: number;
   settings: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -16,6 +18,7 @@ export interface CreateWorkspaceInput {
   description?: string;
   template?: WorkspaceTemplate;
   coverColor?: string;
+  coverImage?: string;
 }
 
 export interface UpdateWorkspaceInput {
@@ -23,6 +26,7 @@ export interface UpdateWorkspaceInput {
   name?: string;
   description?: string;
   coverColor?: string;
+  coverImage?: string | null;
   settings?: Record<string, unknown>;
 }
 

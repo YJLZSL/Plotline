@@ -163,6 +163,10 @@ function forbidden(msg: string): never {
   throw { code: 'FORBIDDEN', message: msg };
 }
 
+function eventCountForWorkspace(db: MockDB, workspaceId: string): number {
+  return db.events.filter((e) => e.workspaceId === workspaceId).length;
+}
+
 function seedTemplate(db: MockDB, workspaceId: string, template: string): void {
   const now = nowISO();
   const mk = (name: string, color: string, order: number): Track => ({
@@ -203,11 +207,13 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
   switch (command) {
     // ===== workspace =====
     case 'list_workspaces':
-      return [...db.workspaces].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return [...db.workspaces]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map((w) => ({ ...w, eventCount: eventCountForWorkspace(db, w.id) }));
     case 'get_workspace': {
       const ws = db.workspaces.find((w) => w.id === args.id);
       if (!ws) notFound(`工作区 ${args.id} 不存在`);
-      return ws;
+      return { ...ws, eventCount: eventCountForWorkspace(db, ws.id) };
     }
     case 'create_workspace': {
       const input = args.input as CreateWorkspaceInput;
@@ -219,13 +225,15 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         description: input.description ?? '',
         template: input.template ?? 'blank',
         coverColor: input.coverColor ?? '#C68A3E',
+        coverImage: input.coverImage ?? null,
+        eventCount: 0,
         settings: {},
         createdAt: now,
         updatedAt: now,
       };
       db.workspaces.push(ws);
       seedTemplate(db, ws.id, ws.template);
-      return ws;
+      return { ...ws, eventCount: eventCountForWorkspace(db, ws.id) };
     }
     case 'update_workspace': {
       const input = args.input as UpdateWorkspaceInput;
@@ -234,9 +242,10 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       if (input.name !== undefined) ws.name = input.name;
       if (input.description !== undefined) ws.description = input.description;
       if (input.coverColor !== undefined) ws.coverColor = input.coverColor;
+      if (input.coverImage !== undefined) ws.coverImage = input.coverImage;
       if (input.settings !== undefined) ws.settings = input.settings;
       ws.updatedAt = nowISO();
-      return ws;
+      return { ...ws, eventCount: eventCountForWorkspace(db, ws.id) };
     }
     case 'delete_workspace': {
       const id = args.id as string;
@@ -373,6 +382,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         ...deepClone(bundle.workspace),
         id: newWsId,
         name: `${bundle.workspace.name}（导入）`,
+        eventCount: 0,
         createdAt: now,
         updatedAt: now,
       };
@@ -390,6 +400,11 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         db.characters.push({ ...deepClone(c), id: newId, workspaceId: newWsId });
       }
       const eventMap = new Map<string, string>();
+      const locationMap = new Map<string, string>();
+      for (const loc of bundle.locations) {
+        const newId = uuid();
+        locationMap.set(loc.id, newId);
+      }
       for (const e of bundle.events) {
         const newId = uuid();
         eventMap.set(e.id, newId);
@@ -398,6 +413,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
           id: newId,
           workspaceId: newWsId,
           trackId: trackMap.get(e.trackId) ?? e.trackId,
+          locationId: e.locationId ? locationMap.get(e.locationId) ?? null : null,
           characterIds: e.characterIds.map((cid) => charMap.get(cid) ?? cid),
         });
       }
@@ -438,13 +454,10 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
           folderId: null,
         });
       }
-      const locationMap = new Map<string, string>();
       for (const loc of bundle.locations) {
-        const newId = uuid();
-        locationMap.set(loc.id, newId);
         db.locations.push({
           ...deepClone(loc),
-          id: newId,
+          id: locationMap.get(loc.id) ?? uuid(),
           workspaceId: newWsId,
           linkedEventId: loc.linkedEventId ? eventMap.get(loc.linkedEventId) ?? null : null,
           characterIds: loc.characterIds.map((cid) => charMap.get(cid) ?? cid),
@@ -555,6 +568,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         sortOrder: input.sortOrder ?? 0,
         status: input.status ?? 'draft',
         color: input.color ?? null,
+        locationId: input.locationId ?? null,
         characterIds: input.characterIds ?? [],
         connectedEventIds: [],
         createdAt: now,
@@ -580,6 +594,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       if (input.sortOrder !== undefined) ev.sortOrder = input.sortOrder;
       if (input.status !== undefined) ev.status = input.status;
       if (input.color !== undefined) ev.color = input.color;
+      if (input.locationId !== undefined) ev.locationId = input.locationId;
       if (input.characterIds !== undefined) {
         // 重建反向关系
         for (const c of db.characters) {

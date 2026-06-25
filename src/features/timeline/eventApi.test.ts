@@ -42,6 +42,16 @@ describe('eventApi', () => {
     expect(ev.title).toBe('Updated');
   });
 
+  it('creates event with locationId', async () => {
+    const ev = await createEvent({
+      workspaceId: 'ws',
+      trackId: 't1',
+      title: 'Located',
+      locationId: 'l1',
+    });
+    expect(ev.locationId).toBe('l1');
+  });
+
   it('deletes event', async () => {
     await expect(deleteEvent('e1')).resolves.toBeUndefined();
   });

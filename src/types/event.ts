@@ -12,6 +12,7 @@ export interface Event {
   sortOrder: number;
   status: EventStatus;
   color: string | null;
+  locationId: string | null;
   characterIds: string[];
   connectedEventIds: string[];
   createdAt: string;
@@ -36,6 +37,7 @@ export interface CreateEventInput {
   sortOrder?: number;
   status?: EventStatus;
   color?: string | null;
+  locationId?: string | null;
   characterIds?: string[];
 }
 
@@ -49,6 +51,7 @@ export interface UpdateEventInput {
   sortOrder?: number;
   status?: EventStatus;
   color?: string | null;
+  locationId?: string | null;
   characterIds?: string[];
 }
 

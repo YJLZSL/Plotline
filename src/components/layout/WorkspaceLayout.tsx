@@ -14,12 +14,16 @@ import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
 import { MOTION_BASE } from '@/lib/motion';
 
+import { useWorkspacesQuery } from '@/features/workspace/hooks';
+
 export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const location = useLocation();
   const [pomoOpen, setPomoOpen] = useState(false);
   const { aiPanelOpen, setAiPanelOpen } = useUIStore();
   const reduced = useReducedMotion();
+  const { data: workspaces = [] } = useWorkspacesQuery();
+  const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
   if (!workspaceId) return null;
 
   return (
@@ -62,7 +66,7 @@ export function WorkspaceLayout() {
             </div>
           }
         />
-        <PomodoroTimer open={pomoOpen} onClose={() => setPomoOpen(false)} />
+        <PomodoroTimer open={pomoOpen} onClose={() => setPomoOpen(false)} workspaceName={currentWorkspace?.name} />
         <AiAssistantPanel
           open={aiPanelOpen}
           onClose={() => setAiPanelOpen(false)}

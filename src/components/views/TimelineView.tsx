@@ -13,8 +13,12 @@ import {
   ShieldCheck,
   GanttChart as GanttIcon,
   CalendarRange,
+  Network,
+  List,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
+import { TreeTimeline } from './TreeTimeline';
+import { TextTimeline } from './TextTimeline';
 import { createTimeScale, type ZoomLevel, type TimeScale } from '@/features/timeline/timeScale';
 
 import {
@@ -106,11 +110,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [showConnections, setShowConnections] = useState(true);
   const [checkingConsistency, setCheckingConsistency] = useState(false);
   const [conflictEventIds, setConflictEventIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'timeline' | 'gantt'>('timeline');
+  const [viewMode, setViewMode] = useState<'timeline' | 'gantt' | 'tree' | 'text'>('timeline');
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const eventElementRegistry = useRef(new Map<string, HTMLElement>());
+  const [draggingEvent, setDraggingEvent] = useState<{ id: string; offsetX: number } | null>(null);
   const connectEvents = useConnectEvents(workspaceId);
   const disconnectEvents = useDisconnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
@@ -355,6 +361,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 title={t('timeline.title')}
               >
                 <CalendarRange className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('timeline.title')}</span>
               </button>
               <button
                 onClick={() => setViewMode('gantt')}
@@ -367,6 +374,33 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 title={t('gantt.title')}
               >
                 <GanttIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('gantt.title')}</span>
+              </button>
+              <button
+                onClick={() => setViewMode('tree')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'tree'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('timeline.treeMode')}
+              >
+                <Network className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('timeline.treeMode')}</span>
+              </button>
+              <button
+                onClick={() => setViewMode('text')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'text'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('timeline.textMode')}
+              >
+                <List className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('timeline.textMode')}</span>
               </button>
             </div>
             <Button variant="ghost" size="sm" onClick={() => cycleZoom(-1)} title={t('timeline.zoom')}>
@@ -447,6 +481,39 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
             setEventDialogOpen(true);
           }}
           onAddEvent={(trackId) => void handleAddEvent(trackId)}
+        />
+      ) : viewMode === 'tree' ? (
+        <TreeTimeline
+          tracks={tracks}
+          events={events}
+          eventConnections={eventConnections}
+          selectedEventId={selectedEventId}
+          onSelectEvent={(id) => {
+            setSelectedEventId(id);
+            const ev = events.find((e) => e.id === id) ?? null;
+            setEditingEvent(ev);
+          }}
+          onEditEvent={(ev) => {
+            setEditingEvent(ev);
+            setEventDialogOpen(true);
+          }}
+        />
+      ) : viewMode === 'text' ? (
+        <TextTimeline
+          tracks={tracks}
+          events={events}
+          selectedEventId={selectedEventId}
+          onSelectEvent={(id) => {
+            setSelectedEventId(id);
+            const ev = events.find((e) => e.id === id) ?? null;
+            setEditingEvent(ev);
+          }}
+          onEditEvent={(ev) => {
+            setEditingEvent(ev);
+            setEventDialogOpen(true);
+          }}
+          onAddEvent={(trackId) => void handleAddEvent(trackId)}
+          onUpdateEvent={(id, patch) => void updateEvent.mutateAsync({ id, ...patch })}
         />
       ) : (
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -554,6 +621,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 pendingConnection={pendingConnection}
                 selectedEventId={selectedEventId}
                 eventConnections={eventConnections}
+                eventElements={eventElementRegistry.current}
+                draggingEvent={draggingEvent}
                 onDisconnect={(sourceId, targetId) => void disconnectEvents.mutateAsync({ sourceId, targetId })}
               />
               )}
@@ -574,6 +643,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   selectedEventId={selectedEventId}
                   pendingConnection={pendingConnection}
                   conflictEventIds={conflictEventIds}
+                  eventElementRegistry={eventElementRegistry}
                   onSelectEvent={(id) => {
                     if (pendingConnection && pendingConnection !== id) {
                       void connectEvents.mutateAsync({
@@ -596,6 +666,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   onCanvasDoubleClick={(x) => void handleCanvasDoubleClick(tr.id, x)}
                   onEventDragEnd={handleEventDragEnd}
                   onStartConnection={(id) => setPendingConnection(id)}
+                  onDragStart={(id) => setDraggingEvent({ id, offsetX: 0 })}
+                  onDrag={(id, offsetX) => setDraggingEvent({ id, offsetX })}
+                  onDragEndNotify={() => setDraggingEvent(null)}
                 />
               ))}
             </div>
@@ -762,7 +835,29 @@ function DateRuler({
   );
 }
 
-// ===== 连线层（SVG） =====
+interface MeasuredRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  midY: number;
+}
+
+function measureEventRect(el: HTMLElement, container: HTMLElement): MeasuredRect | null {
+  const rect = el.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const left = rect.left - containerRect.left;
+  const top = rect.top - containerRect.top;
+  return {
+    left,
+    right: left + rect.width,
+    top,
+    bottom: top + rect.height,
+    midY: top + rect.height / 2,
+  };
+}
+
+// ===== 连线层（SVG，基于 DOM 测量） =====
 function ConnectionLayer({
   events,
   tracks,
@@ -773,6 +868,8 @@ function ConnectionLayer({
   pendingConnection,
   selectedEventId,
   eventConnections,
+  eventElements,
+  draggingEvent,
   onDisconnect,
 }: {
   events: Event[];
@@ -784,48 +881,109 @@ function ConnectionLayer({
   pendingConnection: string | null;
   selectedEventId: string | null;
   eventConnections: EventConnection[];
+  eventElements: Map<string, HTMLElement>;
+  draggingEvent: { id: string; offsetX: number } | null;
   onDisconnect: (sourceId: string, targetId: string) => void;
 }) {
-  const trackIndex = (id: string) => tracks.findIndex((t) => t.id === id);
-  const eventY = (ev: Event) => {
-    const ti = trackIndex(ev.trackId);
-    if (ti < 0) return 0;
-    return RULER_HEIGHT + ti * (TRACK_HEIGHT + TRACK_GAP) + TRACK_HEIGHT / 2;
-  };
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const [measuredRects, setMeasuredRects] = useState<Map<string, MeasuredRect>>(new Map());
+
+  // Find the scrolling canvas container from the SVG root parent
+  const svgRef = useRef<SVGSVGElement>(null);
+  useEffect(() => {
+    if (svgRef.current) {
+      canvasRef.current = svgRef.current.closest('.overflow-auto') as HTMLDivElement | null;
+    }
+  }, []);
+
+  // Re-measure on scroll, resize, data or dragging changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const measure = () => {
+      const next = new Map<string, MeasuredRect>();
+      for (const [id, el] of eventElements.entries()) {
+        const rect = measureEventRect(el, canvas);
+        if (rect) next.set(id, rect);
+      }
+      setMeasuredRects(next);
+    };
+
+    measure();
+    const rafId = requestAnimationFrame(measure);
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(canvas);
+    canvas.addEventListener('scroll', measure, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+      canvas.removeEventListener('scroll', measure);
+    };
+  }, [eventElements, events, tracks, scrollLeft, viewportWidth, draggingEvent]);
 
   const buffer = EVENT_MIN_WIDTH * 2;
   const visibleMin = scrollLeft - buffer;
   const visibleMax = scrollLeft + viewportWidth + buffer;
 
+  const eventPoints = useMemo(() => {
+    const map = new Map<string, { source: { x: number; y: number }; target: { x: number; y: number } }>();
+    for (const ev of events) {
+      const rect = measuredRects.get(ev.id);
+      const trackIndex = tracks.findIndex((t) => t.id === ev.trackId);
+      let sourceX: number;
+      let targetX: number;
+      let y: number;
+
+      if (rect) {
+        sourceX = rect.right;
+        targetX = rect.left;
+        y = rect.midY;
+        if (draggingEvent?.id === ev.id) {
+          sourceX += draggingEvent.offsetX;
+          targetX += draggingEvent.offsetX;
+        }
+      } else {
+        // Fallback to timeScale-based approximation while measuring
+        const cx = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
+        sourceX = cx + EVENT_MIN_WIDTH / 2;
+        targetX = cx - EVENT_MIN_WIDTH / 2;
+        y = RULER_HEIGHT + Math.max(0, trackIndex) * (TRACK_HEIGHT + TRACK_GAP) + TRACK_HEIGHT / 2;
+      }
+      map.set(ev.id, { source: { x: sourceX, y }, target: { x: targetX, y } });
+    }
+    return map;
+  }, [events, measuredRects, draggingEvent, tracks, timeScale, eventPositions]);
+
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
-      const sx = timeScale.timeToX(eventPositions.get(conn.sourceId) ?? 0);
-      const tx = timeScale.timeToX(eventPositions.get(conn.targetId) ?? 0);
-      return sx >= visibleMin && sx <= visibleMax && tx >= visibleMin && tx <= visibleMax;
+      const sp = eventPoints.get(conn.sourceId)?.source;
+      const tp = eventPoints.get(conn.targetId)?.target;
+      if (!sp || !tp) return false;
+      return sp.x >= visibleMin && sp.x <= visibleMax && tp.x >= visibleMin && tp.x <= visibleMax;
     });
-  }, [eventConnections, eventPositions, timeScale, visibleMin, visibleMax]);
+  }, [eventConnections, eventPoints, visibleMin, visibleMax]);
 
   return (
     <svg
+      ref={svgRef}
       className="absolute top-0 left-0"
       style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
     >
       {visibleConnections.map((conn) => {
-        const source = events.find((e) => e.id === conn.sourceId);
-        const target = events.find((e) => e.id === conn.targetId);
-        if (!source || !target) return null;
-        const sx = timeScale.timeToX(eventPositions.get(conn.sourceId) ?? 0);
-        const sy = eventY(source);
-        const tx = timeScale.timeToX(eventPositions.get(conn.targetId) ?? 0);
-        const ty = eventY(target);
-        const midX = (sx + tx) / 2;
+        const sp = eventPoints.get(conn.sourceId)?.source;
+        const tp = eventPoints.get(conn.targetId)?.target;
+        if (!sp || !tp) return null;
+        const midX = (sp.x + tp.x) / 2;
         const isActive =
           pendingConnection === conn.sourceId ||
           pendingConnection === conn.targetId ||
           selectedEventId === conn.sourceId ||
           selectedEventId === conn.targetId;
         const isForeshadow = conn.connectionType === 'foreshadow';
-        const path = `M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ty}, ${tx} ${ty}`;
+        const path = `M ${sp.x} ${sp.y} C ${midX} ${sp.y}, ${midX} ${tp.y}, ${tp.x} ${tp.y}`;
         return (
           <g key={`${conn.sourceId}-${conn.targetId}`}>
             <path
@@ -846,7 +1004,7 @@ function ConnectionLayer({
                 e.currentTarget.setAttribute('opacity', isActive ? '0.9' : '0.4');
               }}
             />
-            <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} style={{ pointerEvents: 'none' }} />
+            <circle cx={tp.x} cy={tp.y} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} style={{ pointerEvents: 'none' }} />
           </g>
         );
       })}
@@ -868,12 +1026,16 @@ function TrackLane({
   selectedEventId,
   pendingConnection,
   conflictEventIds,
+  eventElementRegistry,
   onSelectEvent,
   onEditEvent,
   onAddEvent,
   onCanvasDoubleClick,
   onEventDragEnd,
   onStartConnection,
+  onDragStart,
+  onDrag,
+  onDragEndNotify,
 }: {
   index: number;
   track: Track;
@@ -887,12 +1049,16 @@ function TrackLane({
   selectedEventId: string | null;
   pendingConnection: string | null;
   conflictEventIds: Set<string>;
+  eventElementRegistry: React.MutableRefObject<Map<string, HTMLElement>>;
   onSelectEvent: (id: string) => void;
   onEditEvent: (ev: Event) => void;
   onAddEvent: () => void;
   onCanvasDoubleClick: (x: number) => void;
   onEventDragEnd: (ev: Event, track: Track, info: PanInfo, finalX: number) => void;
   onStartConnection: (id: string) => void;
+  onDragStart: (id: string) => void;
+  onDrag: (id: string, offsetX: number) => void;
+  onDragEndNotify: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -959,10 +1125,14 @@ function TrackLane({
                 selected={ev.id === selectedEventId}
                 pendingConnection={pendingConnection === ev.id}
                 isConflict={conflictEventIds.has(ev.id)}
+                eventElementRegistry={eventElementRegistry}
                 onClick={() => onSelectEvent(ev.id)}
                 onDoubleClick={() => onEditEvent(ev)}
                 onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
                 onStartConnection={() => onStartConnection(ev.id)}
+                onDragStart={() => onDragStart(ev.id)}
+                onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
+                onDragEndNotify={() => onDragEndNotify()}
               />
             );
           })}
@@ -996,10 +1166,14 @@ function EventCard({
   selected,
   pendingConnection,
   isConflict,
+  eventElementRegistry,
   onClick,
   onDoubleClick,
   onDragEnd,
   onStartConnection,
+  onDragStart,
+  onDrag,
+  onDragEndNotify,
 }: {
   event: Event;
   track: Track;
@@ -1008,10 +1182,14 @@ function EventCard({
   selected: boolean;
   pendingConnection: boolean;
   isConflict: boolean;
+  eventElementRegistry: React.MutableRefObject<Map<string, HTMLElement>>;
   onClick: () => void;
   onDoubleClick: () => void;
   onDragEnd: (info: PanInfo, finalX: number) => void;
   onStartConnection: () => void;
+  onDragStart: () => void;
+  onDrag: (info: PanInfo, offsetX: number) => void;
+  onDragEndNotify: () => void;
 }) {
   const { t } = useI18n();
   const color = event.color ?? track.color;
@@ -1028,6 +1206,11 @@ function EventCard({
 
   return (
     <motion.div
+      ref={(el) => {
+        if (el) eventElementRegistry.current.set(event.id, el as unknown as HTMLElement);
+        else eventElementRegistry.current.delete(event.id);
+      }}
+      data-event-id={event.id}
       initial={{ opacity: 0, scale: 0.9, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
@@ -1035,7 +1218,12 @@ function EventCard({
       drag="x"
       dragMomentum={false}
       dragElastic={0}
-      onDragEnd={(_, info) => onDragEnd(info, x + info.offset.x)}
+      onDragStart={onDragStart}
+      onDrag={(_, info) => onDrag(info, info.offset.x)}
+      onDragEnd={(_, info) => {
+        onDragEnd(info, x + info.offset.x);
+        onDragEndNotify();
+      }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       whileHover={{ y: -2 }}

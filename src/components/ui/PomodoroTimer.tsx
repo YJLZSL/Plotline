@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import { useI18n } from '@/hooks/useI18n';
 import { playSoundIfEnabled } from '@/lib/sound';
+import { toastInfo, toastSuccess } from '@/stores/toast';
 import {
   usePomodoroStore,
   formatPomodoroTime,
@@ -20,12 +21,15 @@ const THEMES: Array<{ value: PomodoroTheme; labelKey: string }> = [
   { value: 'minimal', labelKey: 'pomodoro.themeMinimal' },
 ];
 
+const BLOCK_COUNT = 10;
+
 interface PomodoroTimerProps {
   open: boolean;
   onClose: () => void;
+  workspaceName?: string;
 }
 
-export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
+export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerProps) {
   const { t } = useI18n();
   const {
     phase,
@@ -64,13 +68,19 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
   useEffect(() => {
     if (prevSecondsRef.current === 1 && secondsLeft === 0) {
       playSoundIfEnabled(theme === 'mc' ? 'explosion' : 'complete');
+      if (phase === 'focus') {
+        toastSuccess(t('pomodoro.focusComplete'));
+      } else {
+        toastInfo(t('pomodoro.breakComplete'));
+      }
     }
     prevSecondsRef.current = secondsLeft;
-  }, [secondsLeft, theme]);
+  }, [secondsLeft, theme, phase, t]);
 
   useEffect(() => {
     if (prevPhaseRef.current !== phase) {
-      playSoundIfEnabled(theme === 'mc' ? 'switch' : 'click');
+      // MC 主题用“放置方块”音效，其余主题用普通切换音
+      playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
       prevPhaseRef.current = phase;
     }
   }, [phase, theme]);
@@ -98,7 +108,12 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
           <div className="flex items-center justify-between px-4 h-12 border-b border-black/5">
             <div className="flex items-center gap-2">
               <Timer className="h-4 w-4" />
-              <span className="text-sm font-semibold">{t('pomodoro.title')}</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold">{t('pomodoro.title')}</span>
+                {workspaceName && (
+                  <span className="text-[10px] opacity-60 truncate max-w-[120px]">{workspaceName}</span>
+                )}
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -120,8 +135,8 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
                     theme === th.value
                       ? 'bg-bg-surface text-text-primary shadow-sm'
                       : 'text-current/70 hover:text-current',
+                    th.value === 'mc' && 'font-pixel',
                   )}
-                  style={{ fontFamily: th.value === 'mc' ? 'var(--font-pixel)' : undefined }}
                 >
                   {t(th.labelKey)}
                 </button>
@@ -164,7 +179,7 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
             {/* 进度条 */}
             <div className="w-full mt-4 h-2 rounded-full bg-black/10 overflow-hidden">
               <motion.div
-                className={cn('h-full', theme === 'mc' ? 'bg-emerald-600' : 'bg-current')}
+                className={cn('h-full', theme === 'mc' ? 'bg-accent' : 'bg-current')}
                 initial={{ width: '0%' }}
                 animate={{ width: `${progress * 100}%` }}
                 transition={MOTION_FAST}
@@ -172,11 +187,14 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
               />
             </div>
 
-            {/* MC 主题方块进度 */}
+            {/* MC 主题方块进度：填满为草方块，空为泥土方块 */}
             {theme === 'mc' && (
-              <div className="w-full mt-3 flex items-center justify-between gap-1">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <PixelHeart key={i} filled={i / 10 < progress} />
+              <div
+                data-testid="mc-block-progress"
+                className="w-full mt-3 flex items-center justify-between gap-1"
+              >
+                {Array.from({ length: BLOCK_COUNT }).map((_, i) => (
+                  <PixelBlock key={i} filled={i / BLOCK_COUNT < progress} />
                 ))}
               </div>
             )}
@@ -201,7 +219,7 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
             <Button
               size="sm"
               onClick={() => {
-                playSoundIfEnabled('click');
+                playSoundIfEnabled(theme === 'mc' ? 'mine' : 'click');
                 if (isRunning) {
                   pause();
                 } else {
@@ -216,8 +234,9 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
             <Button
               variant="outline"
               size="sm"
+              aria-label={t('pomodoro.reset')}
               onClick={() => {
-                playSoundIfEnabled(theme === 'mc' ? 'switch' : 'switch');
+                playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
                 reset();
               }}
               className="gap-1.5 px-2.5"
@@ -227,8 +246,9 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
             <Button
               variant="outline"
               size="sm"
+              aria-label={t('pomodoro.skip')}
               onClick={() => {
-                playSoundIfEnabled(theme === 'mc' ? 'switch' : 'switch');
+                playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
                 skip();
               }}
               className="gap-1.5 px-2.5"
@@ -242,22 +262,31 @@ export function PomodoroTimer({ open, onClose }: PomodoroTimerProps) {
   );
 }
 
-function PixelHeart({ filled }: { filled: boolean }) {
+function PixelBlock({ filled }: { filled: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 8 8" className="block">
+    <svg width="20" height="20" viewBox="0 0 10 10" className="block">
       {filled ? (
-        <path
-          d="M1 2 h1 v-1 h1 v1 h1 v1 h1 v1 h-1 v1 h-1 v1 h-1 v-1 h-1 v-1 h-1 v-1 h1 z"
-          fill="#e03e3e"
-        />
+        <>
+          {/* 草方块：绿色顶部 + 泥土侧面，带 3D 内阴影 */}
+          <rect x="0" y="0" width="10" height="10" fill="#5C4030" />
+          <rect x="0" y="0" width="10" height="4" fill="#6BA04A" />
+          <rect x="0" y="4" width="10" height="6" fill="#6D4C33" />
+          <rect x="1" y="1" width="2" height="2" fill="#5B8C39" opacity="0.7" />
+          <rect x="6" y="2" width="2" height="1" fill="#5B8C39" opacity="0.7" />
+          <rect x="2" y="5" width="2" height="2" fill="#5D4037" opacity="0.5" />
+          <rect x="7" y="6" width="2" height="2" fill="#5D4037" opacity="0.5" />
+          <rect x="0" y="0" width="10" height="10" fill="none" stroke="#2F2418" strokeWidth="0.5" opacity="0.25" />
+        </>
       ) : (
-        <path
-          d="M1 2 h1 v-1 h1 v1 h1 v1 h1 v1 h-1 v1 h-1 v1 h-1 v-1 h-1 v-1 h-1 v-1 h1 z"
-          fill="none"
-          stroke="#3b4a2b"
-          strokeWidth="0.5"
-          opacity="0.3"
-        />
+        <>
+          {/* 泥土方块 */}
+          <rect x="0" y="0" width="10" height="10" fill="#6D4C33" />
+          <rect x="1" y="2" width="2" height="2" fill="#5D4037" opacity="0.5" />
+          <rect x="6" y="1" width="2" height="2" fill="#5D4037" opacity="0.5" />
+          <rect x="3" y="6" width="2" height="2" fill="#5D4037" opacity="0.5" />
+          <rect x="7" y="7" width="2" height="1" fill="#5D4037" opacity="0.5" />
+          <rect x="0" y="0" width="10" height="10" fill="none" stroke="#2F2418" strokeWidth="0.5" opacity="0.25" />
+        </>
       )}
     </svg>
   );
@@ -266,12 +295,12 @@ function PixelHeart({ filled }: { filled: boolean }) {
 function CreeperFace() {
   return (
     <svg width="48" height="48" viewBox="0 0 8 8" className="block">
-      <rect width="8" height="8" fill="#5b8c39" />
-      <rect x="1" y="2" width="2" height="2" fill="#2f2418" />
-      <rect x="5" y="2" width="2" height="2" fill="#2f2418" />
-      <rect x="2" y="4" width="1" height="2" fill="#2f2418" />
-      <rect x="5" y="4" width="1" height="2" fill="#2f2418" />
-      <rect x="3" y="5" width="2" height="1" fill="#2f2418" />
+      <rect width="8" height="8" fill="#6BA04A" />
+      <rect x="1" y="2" width="2" height="2" fill="#2F2418" />
+      <rect x="5" y="2" width="2" height="2" fill="#2F2418" />
+      <rect x="2" y="4" width="1" height="2" fill="#2F2418" />
+      <rect x="5" y="4" width="1" height="2" fill="#2F2418" />
+      <rect x="3" y="5" width="2" height="1" fill="#2F2418" />
     </svg>
   );
 }
@@ -286,8 +315,9 @@ const THEME_CLASSES: Record<
     button: 'bg-amber-600 hover:bg-amber-700 text-white',
   },
   mc: {
-    container: 'bg-bg-surface text-text-primary border-border font-pixel',
-    button: 'bg-accent hover:brightness-110 text-white',
+    container:
+      'bg-bg-surface text-text-primary border-border font-pixel mc-plank mc-block mc-shadow',
+    button: 'bg-accent hover:brightness-110 text-white mc-block',
   },
   minimal: {
     container: 'bg-bg-surface text-text-primary border-border',

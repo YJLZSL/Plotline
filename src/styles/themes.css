@@ -38,37 +38,78 @@
 }
 
 [data-theme="mc"] {
-  /* v2.2.0 MC 主题再设计：避免单一绿油油，使用泥土棕/草绿/红石红/圆石灰/木板褐 */
-  --bg-base: #6b4c2e;           /* 泥土棕 */
-  --bg-surface: #7d8b74;        /* 草绿 */
-  --bg-elevated: #8f6a4a;       /* 木板褐 */
-  --text-primary: #f5efe3;
-  --text-secondary: #d4c4b0;
-  --accent: #5b8c39;            /* 草绿 */
-  --accent-soft: #7d96a0;       /* 圆石灰 */
-  --border: #5c4d3c;
-  --shadow-color: rgba(0, 0, 0, 0.45);
+  /* v2.3.0 MC 主题重构：更舒适、可读的泥土/草方块/圆石/木板配色 */
+  --bg-base: #7A5C4A;           /* 泥土棕 - 提高亮度，减少压抑感 */
+  --bg-surface: #D4B896;        /* 沙/木板 - 作为卡片表面，更明亮 */
+  --bg-elevated: #A68B6F;       /* 深木板 - 中等亮度 */
+  --bg-cobble: #9BAAB3;         /* 圆石灰 - 稍亮 */
+  --text-primary: #FFF5E6;      /* 米白 - 在深色背景上可读 */
+  --text-secondary: #E8D5C0;     /* 浅沙色 */
+  --accent: #6BA84E;            /* 草绿 - 更鲜艳 */
+  --accent-soft: #8CA8B0;       /* 圆石灰 */
+  --accent-hot: #D4655A;        /* 红石红 */
+  --accent-cool: #5CC5C5;       /* 钻石青 */
+  --border: #8A7A65;
+  --shadow-color: rgba(0, 0, 0, 0.35);
   --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
+
+  /* CSS/SVG 像素纹理（不使用受版权保护的 Minecraft 素材） */
+  --mc-pattern-dirt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%236D4C33'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3Crect x='10' y='6' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3C/svg%3E");
+  --mc-pattern-grass-side: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%235C4030'/%3E%3Crect y='0' width='16' height='5' fill='%236BA04A'/%3E%3Crect x='2' y='1' width='2' height='2' fill='%235B8C39' opacity='0.6'/%3E%3Crect x='10' y='2' width='2' height='2' fill='%235B8C39' opacity='0.6'/%3E%3Crect x='6' y='0' width='2' height='1' fill='%235B8C39' opacity='0.6'/%3E%3Crect x='14' y='3' width='1' height='1' fill='%235B8C39' opacity='0.6'/%3E%3C/svg%3E");
+  --mc-pattern-cobble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%238A9BA5'/%3E%3Crect x='2' y='2' width='4' height='3' fill='%237D8B93' opacity='0.7'/%3E%3Crect x='8' y='6' width='5' height='4' fill='%237D8B93' opacity='0.7'/%3E%3Crect x='1' y='10' width='5' height='3' fill='%237D8B93' opacity='0.7'/%3E%3Crect x='10' y='12' width='4' height='2' fill='%237D8B93' opacity='0.7'/%3E%3C/svg%3E");
+  --mc-pattern-planks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23A17E5A'/%3E%3Crect y='4' width='16' height='1' fill='%238F6A4A'/%3E%3Crect y='8' width='16' height='1' fill='%238F6A4A'/%3E%3Crect y='12' width='16' height='1' fill='%238F6A4A'/%3E%3C/svg%3E");
+  --mc-pattern-stone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%237D8B93'/%3E%3Crect x='2' y='1' width='3' height='2' fill='%236B777E' opacity='0.7'/%3E%3Crect x='9' y='3' width='4' height='3' fill='%236B777E' opacity='0.7'/%3E%3Crect x='4' y='8' width='5' height='3' fill='%236B777E' opacity='0.7'/%3E%3Crect x='11' y='11' width='3' height='3' fill='%236B777E' opacity='0.7'/%3E%3C/svg%3E");
 }
 
 [data-theme="mc"] body {
   font-family: var(--font-pixel);
+  background-color: var(--bg-base);
+  background-image: var(--mc-pattern-dirt);
 }
 
-/* MC 主题控件方块化 */
+/* MC 主题控件方块化：3D 内阴影模拟方块 */
 [data-theme="mc"] button,
 [data-theme="mc"] [role="button"],
 [data-theme="mc"] input,
 [data-theme="mc"] textarea,
 [data-theme="mc"] select {
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 [data-theme="mc"] .mc-block {
   border-radius: 0;
   border-width: 3px;
   border-style: solid;
-  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.2), inset 3px 3px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.25), inset 3px 3px 0 rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="mc"] .mc-plank {
+  background-color: var(--bg-surface);
+  background-image: var(--mc-pattern-planks);
+}
+
+[data-theme="mc"] .mc-cobble {
+  background-color: var(--bg-cobble);
+  background-image: var(--mc-pattern-cobble);
+}
+
+[data-theme="mc"] .mc-stone {
+  background-color: #7d8b93;
+  background-image: var(--mc-pattern-stone);
+}
+
+[data-theme="mc"] .mc-grass-side {
+  background-color: var(--bg-base);
+  background-image: var(--mc-pattern-grass-side);
+}
+
+[data-theme="mc"] .mc-grass-top {
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%236BA04A'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%235B8C39' opacity='0.6'/%3E%3Crect x='10' y='6' width='2' height='2' fill='%235B8C39' opacity='0.6'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%235B8C39' opacity='0.6'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%235B8C39' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+[data-theme="mc"] .mc-shadow {
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
 }
 
 * {
