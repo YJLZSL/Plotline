@@ -50,6 +50,7 @@ import {
   useEventConnectionsQuery,
 } from '@/features/timeline/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
+import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency } from '@/features/timeline/eventApi';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
@@ -92,6 +93,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const { data: tracks = [] } = useTracksQuery(workspaceId);
   const { data: events = [] } = useEventsQuery(workspaceId);
   const { data: characters = [] } = useCharactersQuery(workspaceId);
+  const { data: locations = [] } = useLocationsQuery(workspaceId);
   const createTrack = useCreateTrack(workspaceId);
   const updateTrack = useUpdateTrack(workspaceId);
   const deleteTrack = useDeleteTrack(workspaceId);
@@ -701,6 +703,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         isConflict={!!editingEvent && conflictEventIds.has(editingEvent.id)}
         tracks={tracks}
         characters={characters}
+        locations={locations}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
       />
@@ -1385,6 +1388,7 @@ function EventEditDialog({
   isConflict,
   tracks,
   characters,
+  locations,
   onSave,
   onDelete,
 }: {
@@ -1394,6 +1398,7 @@ function EventEditDialog({
   isConflict: boolean;
   tracks: Track[];
   characters: Character[];
+  locations: { id: string; name: string; color?: string }[];
   onSave: (data: Partial<Event> & { title: string; characterIds: string[] }) => void;
   onDelete: (id: string) => void;
 }) {
@@ -1406,6 +1411,7 @@ function EventEditDialog({
   const [trackId, setTrackId] = useState('');
   const [color, setColor] = useState<string | null>(null);
   const [characterIds, setCharacterIds] = useState<string[]>([]);
+  const [locationId, setLocationId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -1418,6 +1424,7 @@ function EventEditDialog({
       setTrackId(event.trackId);
       setColor(event.color);
       setCharacterIds(event.characterIds);
+      setLocationId(event.locationId);
     }
   }, [event]);
 
@@ -1595,6 +1602,42 @@ function EventEditDialog({
             </div>
           </div>
 
+          {/* 地点选择器 */}
+          <div>
+            <Label>{t('timeline.event.location')}</Label>
+            <div className="mt-1.5 border border-border rounded-[6px] p-3 max-h-40 overflow-y-auto bg-bg-elevated/40">
+              {locations.length === 0 ? (
+                <p className="text-xs text-text-secondary/60 text-center py-2">
+                  暂无地点，请先到地图视图创建
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {locations.map((loc) => {
+                    const selected = locationId === loc.id;
+                    return (
+                      <button
+                        key={loc.id}
+                        onClick={() => setLocationId(selected ? null : loc.id)}
+                        className={cn(
+                          'flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all',
+                          selected
+                            ? 'border-accent bg-accent/15 text-accent'
+                            : 'border-border text-text-secondary hover:bg-bg-surface',
+                        )}
+                      >
+                        <span
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: loc.color || '#999' }}
+                        />
+                        {loc.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex justify-between gap-2 pt-2 border-t border-border">
             <Button
               variant="danger"
@@ -1611,7 +1654,7 @@ function EventEditDialog({
               </Button>
               <Button
                 onClick={() =>
-                  onSave({ title, description, dateType, dateValue, status, trackId, color, characterIds })
+                  onSave({ title, description, dateType, dateValue, status, trackId, color, characterIds, locationId })
                 }
                 disabled={!title.trim()}
                 data-testid="event-save-btn"

@@ -10,7 +10,7 @@ use crate::models::{
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<OutlineNode>> {
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, type, title, content, parent_id, sort_order,
-                event_id, status, created_at, updated_at
+                event_id, status, cover_image, created_at, updated_at
          FROM outline_nodes WHERE workspace_id=?1 ORDER BY sort_order ASC",
     )?;
     let rows = stmt.query_map(params![workspace_id], |row| {
@@ -24,8 +24,9 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<OutlineNode>
             sort_order: row.get(6)?,
             event_id: row.get(7)?,
             status: row.get(8)?,
-            created_at: row.get(9)?,
-            updated_at: row.get(10)?,
+            cover_image: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         })
     })?;
     rows.collect::<Result<_, _>>().map_err(Into::into)
@@ -34,7 +35,7 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<OutlineNode>
 fn get(conn: &Connection, id: &str) -> AppResult<OutlineNode> {
     conn.query_row(
         "SELECT id, workspace_id, type, title, content, parent_id, sort_order,
-                event_id, status, created_at, updated_at
+                event_id, status, cover_image, created_at, updated_at
          FROM outline_nodes WHERE id=?1",
         params![id],
         |row| {
@@ -48,8 +49,9 @@ fn get(conn: &Connection, id: &str) -> AppResult<OutlineNode> {
                 sort_order: row.get(6)?,
                 event_id: row.get(7)?,
                 status: row.get(8)?,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                cover_image: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         },
     )
@@ -67,8 +69,8 @@ pub fn create(conn: &Connection, input: CreateOutlineNodeInput) -> AppResult<Out
     )?;
     conn.execute(
         "INSERT INTO outline_nodes
-         (id, workspace_id, type, title, content, parent_id, sort_order, event_id, status, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'draft', ?9, ?10)",
+         (id, workspace_id, type, title, content, parent_id, sort_order, event_id, status, cover_image, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'draft', ?9, ?10, ?11)",
         params![
             id,
             input.workspace_id,
@@ -78,6 +80,7 @@ pub fn create(conn: &Connection, input: CreateOutlineNodeInput) -> AppResult<Out
             input.parent_id,
             count,
             input.event_id,
+            input.cover_image,
             now_str,
             now_str,
         ],
@@ -91,11 +94,12 @@ pub fn update(conn: &Connection, input: UpdateOutlineNodeInput) -> AppResult<Out
     let content = input.content.unwrap_or(existing.content);
     let event_id = input.event_id.unwrap_or(existing.event_id);
     let status = input.status.unwrap_or(existing.status);
+    let cover_image = input.cover_image.unwrap_or(existing.cover_image);
     let now_str = Utc::now().to_rfc3339();
     conn.execute(
-        "UPDATE outline_nodes SET title=?1, content=?2, event_id=?3, status=?4, updated_at=?5
-         WHERE id=?6",
-        params![title, content, event_id, status, now_str, input.id],
+        "UPDATE outline_nodes SET title=?1, content=?2, event_id=?3, status=?4, cover_image=?5, updated_at=?6
+         WHERE id=?7",
+        params![title, content, event_id, status, cover_image, now_str, input.id],
     )?;
     get(conn, &input.id)
 }

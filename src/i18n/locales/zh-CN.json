@@ -101,6 +101,7 @@
       "dateRelative": "相对日期",
       "status": "状态",
       "characters": "关联角色",
+      "location": "地点",
       "track": "轨道",
       "color": "事件颜色",
       "colorDefault": "默认（跟随轨道）",
@@ -179,7 +180,17 @@
     },
     "statusDraft": "草稿",
     "statusDone": "完成",
-    "statusRevise": "待修改"
+    "statusRevise": "待修改",
+    "cardView": "卡片视图",
+    "chapter": "章",
+    "scene": "场景",
+    "event": "事件",
+    "volume": "卷",
+    "emptyCardRow": "暂无子节点",
+    "selectCoverImage": "选择封面图片",
+    "coverImage": "封面图片",
+    "noCoverImage": "暂无封面图片",
+    "desktopOnlyImage": "图片选择仅在桌面端可用"
   },
   "notebook": {
     "title": "资料库",

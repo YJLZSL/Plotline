@@ -13,6 +13,7 @@ pub struct OutlineNode {
     pub sort_order: i64,
     pub event_id: Option<String>,
     pub status: String,
+    pub cover_image: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -26,6 +27,7 @@ pub struct CreateOutlineNodeInput {
     pub content: Option<String>,
     pub parent_id: Option<String>,
     pub event_id: Option<String>,
+    pub cover_image: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -36,6 +38,7 @@ pub struct UpdateOutlineNodeInput {
     pub content: Option<String>,
     pub event_id: Option<Option<String>>,
     pub status: Option<String>,
+    pub cover_image: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

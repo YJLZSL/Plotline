@@ -13,7 +13,7 @@ function mkNode(
 ): OutlineNode {
   return {
     id, workspaceId: 'ws', type, title, content: '', parentId, sortOrder: order,
-    eventId: null, status: 'draft', createdAt: '', updatedAt: '',
+    eventId: null, status: 'draft', coverImage: null, createdAt: '', updatedAt: '',
   };
 }
 

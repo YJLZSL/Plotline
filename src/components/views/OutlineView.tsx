@@ -14,7 +14,12 @@ import {
   Download,
   Share2,
   CalendarDays,
+  Image as ImageIcon,
+  LayoutGrid,
+  X,
 } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 import {
   AppIcon,
@@ -34,6 +39,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn, downloadText } from '@/lib/utils';
 import { MOTION_FAST } from '@/lib/motion';
 import { toastError } from '@/stores/toast';
+import { isTauri } from '@/lib/ipc';
 import type { OutlineNode, OutlineNodeType } from '@/types';
 import {
   useCreateOutlineNode,
@@ -76,7 +82,7 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState<OutlineNode | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'chart'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'card' | 'chart'>('list');
 
   // 构建树
   const tree = useMemo(() => buildTree(nodes), [nodes]);
@@ -125,13 +131,14 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
     setEditDialogOpen(true);
   };
 
-  const handleSave = async (data: { title: string; content: string; status: OutlineNode['status'] }) => {
+  const handleSave = async (data: { title: string; content: string; status: OutlineNode['status']; coverImage?: string | null }) => {
     if (!editing) return;
     await updateMutation.mutateAsync({
       id: editing.id,
       title: data.title,
       content: data.content,
       status: data.status,
+      coverImage: data.coverImage,
     });
     setEditDialogOpen(false);
     setEditing(null);
@@ -174,6 +181,18 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
                 title={t('outline.title')}
               >
                 <ListTree className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('card')}
+                className={cn(
+                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+                  viewMode === 'card'
+                    ? 'bg-bg-surface text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary',
+                )}
+                title={t('outline.cardView')}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => setViewMode('chart')}
@@ -230,6 +249,18 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
           nodes={nodes}
           selectedId={selectedId}
           onSelect={setSelectedId}
+        />
+      ) : viewMode === 'card' ? (
+        <OutlineCardView
+          nodes={nodes}
+          tree={tree}
+          isLoading={isLoading}
+          onSelect={(node) => {
+            setSelectedId(node.id);
+            setEditing(node);
+            setEditDialogOpen(true);
+          }}
+          onAddVolume={() => void handleAdd('volume', null)}
         />
       ) : (
       <div className="flex flex-1 min-h-0">
@@ -532,8 +563,151 @@ function TreeView({
   );
 }
 
+function OutlineCardView({
+  nodes,
+  tree,
+  isLoading,
+  onSelect,
+  onAddVolume,
+}: {
+  nodes: OutlineNode[];
+  tree: TreeNode[];
+  isLoading: boolean;
+  onSelect: (node: OutlineNode) => void;
+  onAddVolume: () => void;
+}) {
+  const { t } = useI18n();
+
+  const flatVolumes = useMemo(() => {
+    const volumes = tree.filter((n) => n.type === 'volume');
+    if (volumes.length === 0) {
+      // 没有卷时，把所有顶层节点作为一组展示
+      return [{ id: 'root', title: t('outline.title'), children: tree }];
+    }
+    return volumes.map((v) => ({ id: v.id, title: v.title, children: v.children }));
+  }, [tree, t]);
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 overflow-auto p-6 space-y-6">
+        {[0, 1].map((i) => (
+          <div key={i} className="space-y-3">
+            <div className="skeleton h-6 w-32 rounded-[6px]" />
+            <div className="flex gap-3">
+              {[0, 1, 2].map((j) => (
+                <div key={j} className="skeleton w-40 h-52 rounded-[8px] flex-shrink-0" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (nodes.length === 0) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <EmptyState
+          icon={<AppIcon size="lg" tone="accent"><LayoutGrid /></AppIcon>}
+          title={t('outline.empty.title')}
+          description={t('outline.empty.description')}
+          action={
+            <Button size="sm" onClick={onAddVolume} className="gap-2">
+              <Plus className="h-4 w-4" />
+              {t('outline.addVolume')}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-auto p-6 space-y-8">
+      {flatVolumes.map((volume) => (
+        <div key={volume.id}>
+          <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+            <Book className="h-4 w-4 text-accent" />
+            {volume.title}
+          </h3>
+          <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory scrollbar-thin">
+            {volume.children.length === 0 ? (
+              <span className="text-sm text-text-secondary/60 italic">{t('outline.emptyCardRow')}</span>
+            ) : (
+              volume.children.map((node) => (
+                <OutlineCard key={node.id} node={node} onSelect={onSelect} />
+              ))
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OutlineCard({
+  node,
+  onSelect,
+}: {
+  node: TreeNode;
+  onSelect: (node: OutlineNode) => void;
+}) {
+  const { t } = useI18n();
+  const Icon = TYPE_ICONS[node.type] ?? Circle;
+
+  const imageUrl = useMemo(() => {
+    if (!node.coverImage) return null;
+    if (isTauri()) {
+      try {
+        return convertFileSrc(node.coverImage);
+      } catch {
+        return node.coverImage;
+      }
+    }
+    return node.coverImage;
+  }, [node.coverImage]);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={MOTION_FAST}
+      onClick={() => onSelect(node)}
+      className={cn(
+        'snap-start flex-shrink-0 w-40 rounded-[8px] bg-bg-surface border border-border cursor-pointer',
+        'hover:border-accent/50 hover:shadow-md transition-all overflow-hidden',
+      )}
+    >
+      <div className="h-28 w-full bg-bg-elevated flex items-center justify-center relative overflow-hidden">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={node.title}
+            className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <Icon className="h-8 w-8 text-text-secondary/30" />
+        )}
+        <div className="absolute top-1.5 right-1.5">
+          <StatusDot status={node.status} />
+        </div>
+      </div>
+      <div className="p-2.5">
+        <span className="text-xs font-medium text-text-primary line-clamp-2 leading-tight">
+          {node.title}
+        </span>
+        <span className="text-[10px] text-text-secondary mt-1 block">
+          {node.type === 'chapter' ? t('outline.chapter') : node.type === 'scene' ? t('outline.scene') : node.type === 'event' ? t('outline.event') : t('outline.volume')}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
 function OutlineEditDialog({
-  open,
+  open: dialogOpen,
   onOpenChange,
   node,
   onSave,
@@ -541,25 +715,58 @@ function OutlineEditDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   node: OutlineNode | null;
-  onSave: (data: { title: string; content: string; status: OutlineNode['status'] }) => void;
+  onSave: (data: { title: string; content: string; status: OutlineNode['status']; coverImage?: string | null }) => void;
 }) {
   const { t } = useI18n();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [status, setStatus] = useState<OutlineNode['status']>('draft');
+  const [coverImage, setCoverImage] = useState<string | null>(null);
 
   useMemo(() => {
     if (node) {
       setTitle(node.title);
       setContent(node.content);
       setStatus(node.status);
+      setCoverImage(node.coverImage);
     }
   }, [node]);
+
+  const pickCoverImage = async () => {
+    if (!isTauri()) {
+      toastError(new Error(t('outline.desktopOnlyImage')));
+      return;
+    }
+    try {
+      const path = await open({
+        title: t('outline.selectCoverImage'),
+        multiple: false,
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+      });
+      if (path && typeof path === 'string') {
+        setCoverImage(path);
+      }
+    } catch (e) {
+      toastError(e instanceof Error ? e : new Error(String(e)));
+    }
+  };
+
+  const imageUrl = useMemo(() => {
+    if (!coverImage) return null;
+    if (isTauri()) {
+      try {
+        return convertFileSrc(coverImage);
+      } catch {
+        return coverImage;
+      }
+    }
+    return coverImage;
+  }, [coverImage]);
 
   if (!node) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
       <DialogContent title={t('common.edit')} className="max-w-xl">
         <div className="flex flex-col gap-4">
           <div>
@@ -597,6 +804,44 @@ function OutlineEditDialog({
             </div>
           </div>
           <div>
+            <Label className="flex items-center justify-between">
+              <span>封面图片</span>
+              <div className="flex items-center gap-2">
+                {coverImage && (
+                  <button
+                    onClick={() => setCoverImage(null)}
+                    className="text-text-secondary hover:text-red-500 text-xs flex items-center gap-1"
+                  >
+                    <X className="h-3 w-3" />
+                    清除
+                  </button>
+                )}
+                <button
+                  onClick={pickCoverImage}
+                  className="text-xs text-accent hover:text-accent/80 flex items-center gap-1"
+                >
+                  <ImageIcon className="h-3 w-3" />
+                  {coverImage ? '更换' : '选择图片'}
+                </button>
+              </div>
+            </Label>
+            <div className="mt-1.5 h-32 rounded-[8px] border border-border bg-bg-elevated flex items-center justify-center overflow-hidden relative">
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={t('outline.coverImage')}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-text-secondary/40">
+                  <ImageIcon className="h-8 w-8" />
+                  <span className="text-xs">{t('outline.noCoverImage')}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
             <Label>内容</Label>
             <Textarea
               value={content}
@@ -608,7 +853,7 @@ function OutlineEditDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => onSave({ title, content, status })} disabled={!title.trim()} data-testid="outline-save-btn">
+            <Button onClick={() => onSave({ title, content, status, coverImage })} disabled={!title.trim()} data-testid="outline-save-btn">
               {t('common.save')}
             </Button>
           </div>

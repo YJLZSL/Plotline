@@ -1,0 +1,11 @@
+{
+  "version": "2.3.0",
+  "notes": "Plotline v2.3.0：修复时间轴连线偏移问题，增强文本模式可发现性，重构 MC 主题配色提升可读性，设置界面新增时间轴/大纲/番茄钟教程，番茄钟与创作功能联动增强（显示工作区名称、专注/休息结束提示）。",
+  "pub_date": "2026-06-25T09:13:13Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "<PLACEHOLDER: 构建后填入签名>",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v2.3.0/Plotline_2.3.0_x64-setup.exe"
+    }
+  }
+}

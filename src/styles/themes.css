@@ -59,6 +59,11 @@
   --mc-pattern-cobble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%238A9BA5'/%3E%3Crect x='2' y='2' width='4' height='3' fill='%237D8B93' opacity='0.7'/%3E%3Crect x='8' y='6' width='5' height='4' fill='%237D8B93' opacity='0.7'/%3E%3Crect x='1' y='10' width='5' height='3' fill='%237D8B93' opacity='0.7'/%3E%3Crect x='10' y='12' width='4' height='2' fill='%237D8B93' opacity='0.7'/%3E%3C/svg%3E");
   --mc-pattern-planks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23A17E5A'/%3E%3Crect y='4' width='16' height='1' fill='%238F6A4A'/%3E%3Crect y='8' width='16' height='1' fill='%238F6A4A'/%3E%3Crect y='12' width='16' height='1' fill='%238F6A4A'/%3E%3C/svg%3E");
   --mc-pattern-stone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%237D8B93'/%3E%3Crect x='2' y='1' width='3' height='2' fill='%236B777E' opacity='0.7'/%3E%3Crect x='9' y='3' width='4' height='3' fill='%236B777E' opacity='0.7'/%3E%3Crect x='4' y='8' width='5' height='3' fill='%236B777E' opacity='0.7'/%3E%3Crect x='11' y='11' width='3' height='3' fill='%236B777E' opacity='0.7'/%3E%3C/svg%3E");
+  --mc-pattern-crafting: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23C49A6C'/%3E%3Crect x='0' y='0' width='5' height='5' fill='%23B0905A'/%3E%3Crect x='11' y='0' width='5' height='5' fill='%23B0905A'/%3E%3Crect x='0' y='11' width='5' height='5' fill='%23B0905A'/%3E%3Crect x='11' y='11' width='5' height='5' fill='%23B0905A'/%3E%3Crect x='5' y='5' width='6' height='6' fill='%238B7355'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%236B5A45'/%3E%3Crect x='9' y='6' width='1' height='2' fill='%236B5A45'/%3E%3Crect x='6' y='9' width='2' height='1' fill='%236B5A45'/%3E%3C/svg%3E");
+  --mc-pattern-furnace: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%236B777E'/%3E%3Crect x='4' y='4' width='8' height='8' fill='%234A545A'/%3E%3Crect x='6' y='6' width='4' height='2' fill='%23E8A838'/%3E%3Crect x='6' y='9' width='4' height='2' fill='%23C48A28'/%3E%3C/svg%3E");
+  --mc-pattern-brick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23B5654C'/%3E%3Crect y='0' width='16' height='1' fill='%239C5039'/%3E%3Crect y='8' width='16' height='1' fill='%239C5039'/%3E%3Crect x='8' y='4' width='1' height='4' fill='%239C5039'/%3E%3Crect x='0' y='12' width='1' height='4' fill='%239C5039'/%3E%3C/svg%3E");
+  --mc-pattern-diamond: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%2373A8B5'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%235CC5C5' opacity='0.7'/%3E%3Crect x='10' y='6' width='2' height='2' fill='%235CC5C5' opacity='0.7'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%235CC5C5' opacity='0.7'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%235CC5C5' opacity='0.7'/%3E%3C/svg%3E");
+  --mc-pattern-tnt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23D4655A'/%3E%3Crect y='0' width='16' height='4' fill='%23E8E8E8'/%3E%3Crect y='5' width='16' height='1' fill='%23E8E8E8'/%3E%3Crect x='2' y='1' width='2' height='2' fill='%23D4655A'/%3E%3Crect x='10' y='2' width='2' height='2' fill='%23D4655A'/%3E%3C/svg%3E");
 }
 
 [data-theme="mc"] body {
@@ -67,13 +72,57 @@
   background-image: var(--mc-pattern-dirt);
 }
 
-/* MC 主题控件方块化：3D 内阴影模拟方块 */
-[data-theme="mc"] button,
-[data-theme="mc"] [role="button"],
+/* MC 主题通用控件纹理增强：给主要 UI 元素自动添加素材 */
+[data-theme="mc"] header,
+[data-theme="mc"] [data-tauri-drag-region] {
+  background-color: var(--bg-cobble);
+  background-image: var(--mc-pattern-cobble);
+  border-bottom: 3px solid #5A6A72;
+  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.25), inset 3px 3px 0 rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="mc"] button:not(.rounded-full):not([class*="rounded-full"]) {
+  background-image: var(--mc-pattern-planks);
+  border: 3px solid #7D5A3A;
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.2), inset 2px 2px 0 rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="mc"] button[data-variant="danger"],
+[data-theme="mc"] [class*="bg-red-"] {
+  background-image: var(--mc-pattern-tnt);
+  border-color: #B05045;
+}
+
+[data-theme="mc"] [class*="bg-bg-surface"] {
+  background-image: var(--mc-pattern-planks);
+  background-blend-mode: overlay;
+}
+
+[data-theme="mc"] [class*="bg-bg-elevated"] {
+  background-image: var(--mc-pattern-cobble);
+  background-blend-mode: overlay;
+}
+
+[data-theme="mc"] [role="dialog"] > div,
+[data-theme="mc"] [class*="dialog"] > div:first-child {
+  background-color: var(--bg-cobble);
+  background-image: var(--mc-pattern-stone);
+  border: 3px solid #5A6A72;
+  box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.25), inset 3px 3px 0 rgba(255, 255, 255, 0.12), 4px 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="mc"] .skeleton {
+  background-image: var(--mc-pattern-stone);
+  background-blend-mode: overlay;
+}
+
 [data-theme="mc"] input,
 [data-theme="mc"] textarea,
 [data-theme="mc"] select {
   border-radius: 0;
+  background-image: var(--mc-pattern-cobble);
+  background-blend-mode: overlay;
+  border: 2px solid #5A6A72;
 }
 
 [data-theme="mc"] .mc-block {
@@ -96,6 +145,31 @@
 [data-theme="mc"] .mc-stone {
   background-color: #7d8b93;
   background-image: var(--mc-pattern-stone);
+}
+
+[data-theme="mc"] .mc-crafting {
+  background-color: #C49A6C;
+  background-image: var(--mc-pattern-crafting);
+}
+
+[data-theme="mc"] .mc-furnace {
+  background-color: #6B777E;
+  background-image: var(--mc-pattern-furnace);
+}
+
+[data-theme="mc"] .mc-brick {
+  background-color: #B5654C;
+  background-image: var(--mc-pattern-brick);
+}
+
+[data-theme="mc"] .mc-diamond {
+  background-color: #73A8B5;
+  background-image: var(--mc-pattern-diamond);
+}
+
+[data-theme="mc"] .mc-tnt {
+  background-color: #D4655A;
+  background-image: var(--mc-pattern-tnt);
 }
 
 [data-theme="mc"] .mc-grass-side {

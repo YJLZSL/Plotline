@@ -19,6 +19,7 @@ function mkNode(
     sortOrder: order,
     eventId: null,
     status: 'draft',
+    coverImage: null,
     createdAt: '',
     updatedAt: '',
   };

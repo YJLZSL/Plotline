@@ -101,6 +101,7 @@
       "dateRelative": "Relative",
       "status": "Status",
       "characters": "Characters",
+      "location": "Location",
       "track": "Track",
       "color": "Event color",
       "colorDefault": "Default (track color)",
@@ -179,7 +180,17 @@
     },
     "statusDraft": "Draft",
     "statusDone": "Done",
-    "statusRevise": "Revise"
+    "statusRevise": "Revise",
+    "cardView": "Card View",
+    "chapter": "Chapter",
+    "scene": "Scene",
+    "event": "Event",
+    "volume": "Volume",
+    "emptyCardRow": "No child nodes",
+    "selectCoverImage": "Select Cover Image",
+    "coverImage": "Cover Image",
+    "noCoverImage": "No cover image",
+    "desktopOnlyImage": "Image selection is only available on desktop"
   },
   "notebook": {
     "title": "Notebook",

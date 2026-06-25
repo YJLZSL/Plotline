@@ -11,6 +11,7 @@ export interface OutlineNode {
   sortOrder: number;
   eventId: string | null;
   status: OutlineStatus;
+  coverImage: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +23,7 @@ export interface CreateOutlineNodeInput {
   content?: string;
   parentId?: string | null;
   eventId?: string | null;
+  coverImage?: string | null;
 }
 
 export interface UpdateOutlineNodeInput {
@@ -30,6 +32,7 @@ export interface UpdateOutlineNodeInput {
   content?: string;
   eventId?: string | null;
   status?: OutlineStatus;
+  coverImage?: string | null;
 }
 
 export interface MoveOutlineNodeInput {

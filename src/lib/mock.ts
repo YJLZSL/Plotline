@@ -803,6 +803,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         ).length,
         eventId: input.eventId ?? null,
         status: 'draft',
+        coverImage: input.coverImage ?? null,
         createdAt: now,
         updatedAt: now,
       };
@@ -817,6 +818,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       if (input.content !== undefined) n.content = input.content;
       if (input.eventId !== undefined) n.eventId = input.eventId;
       if (input.status !== undefined) n.status = input.status;
+      if (input.coverImage !== undefined) n.coverImage = input.coverImage;
       n.updatedAt = nowISO();
       return n;
     }
