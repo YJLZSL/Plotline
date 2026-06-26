@@ -172,7 +172,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(created.title, "第一章");
-        assert_eq!(created.word_count, 9); // 6 中文字 + 2 英文单词
+        assert_eq!(created.word_count, 11); // 9 非 ASCII 字符 + 2 英文单词
 
         let listed = list(&conn, "ws").unwrap();
         assert_eq!(listed.len(), 1);

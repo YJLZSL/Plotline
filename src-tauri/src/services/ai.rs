@@ -870,6 +870,7 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                     status: None,
                     color: None,
                     location_id: None,
+                    image_urls: None,
                     character_ids: None,
                 },
             )?;
@@ -984,6 +985,7 @@ mod tests {
                 status: None,
                 color: None,
                 location_id: None,
+                image_urls: None,
                 character_ids: None,
             },
         )
