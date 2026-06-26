@@ -44,14 +44,14 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.5.3 已发布：Release 签名与 latest.json 完全自动化）
-- **`animations_enabled` 设置**：后端新增 `app_settings.animations_enabled` 列与对应模型/服务逻辑，前端类型同步到 `src/types/settings.ts`。
-- **`--motion-enabled` CSS 变量**：`src/stores/ui.ts` 的 `applyToDOM` 根据设置将 `--motion-enabled` 设为 `1` 或 `0`，`src/styles/themes.css` 提供对应 CSS 辅助类。
-- **环境动画基础设施**：新增 `src/stores/motion.ts` 与 `src/hooks/useAmbientAnimation.ts`，为组件提供基于运动设置的门控动画参数。
-- **减少动画开关**：`SettingsView` 外观标签新增「启用动画」开关，i18n 键同步到 `zh-CN.json`/`en.json`。
-- **环境动画落地**：`WorkspaceSelector`、`Sidebar`、`TimelineView`、`PomodoroTimer`、`EmptyState`、`SettingsView` 主题卡片等组件均通过 `useAmbientAnimation` 或 `--motion-enabled` 启用/禁用动画。
-- **Release 签名自动化**：`.github/workflows/release.yml` 新增显式签名步骤，CI 自动为 `.exe` 生成 `.sig` 并创建 `latest.json` 上传 Release；v2.5.3 已验证全部产物由 CI 自动生成，无需手动签名。
-- **发布验证**：v2.5.3 已构建并发布；GitHub Release 包含 `.exe`、`.msi`、`.sig`、`latest.json`；自动更新端点已验证返回 v2.5.3 真实签名清单。
+### 当前迭代状态（v2.5.4 已发布：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强）
+- **番茄钟可拖动与最小化**：`src/stores/pomodoro.ts` 新增 `position` 与 `minimized` 状态并持久化；`PomodoroTimer` 支持拖拽、最小化为悬浮芯片，解决遮挡时间轴问题。
+- **时间轴右键菜单**：新增 `src/components/ui/ContextMenu.tsx`，在 `TimelineView` 中为事件卡片、轨道行、画布空白区提供右键菜单，支持编辑/删除/复制/改状态/起连接/问 AI、轨道改名/改色/隐藏/删除/添加事件、画布添加事件/粘贴/缩放/一致性检查。
+- **主题质感升级**：`src/styles/themes.css` 引入 `--shadow-card-soft`、`--shadow-elevated-soft`、`--bg-base-gradient`、`--surface-highlight` 等变量；light/sepia/dark 主题使用柔和渐变背景，MC 主题减少文字面纹理覆盖、提升可读性；`SettingsView` 主题卡片新增 live mini-preview。
+- **AI 面板两列布局**：`AiAssistantPanel.tsx` 重构为可调整左右宽度的两栏布局，左侧会话列表、右侧消息与输入；建议词改为横向滚动一键发送；上下文标签可移除。
+- **AI 跨功能上下文**：新增 `src/features/ai/contextCollector.ts`，汇总工作区摘要、时间轴、角色、地点、大纲、笔记与当前选中实体；前后端 `AiChatInput` 同步 `context` 字段，Rust 服务端按 Token 预算截断并组装 Prompt；AI 面板新增来源开关，`useApplyAiOutput` 扩展支持角色/地点/大纲/笔记目标。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.5.4`；`AGENTS.md`、`更新日志.md`、`交接文档.md` 更新至 v2.5.4 状态。
+- **发布说明**：v2.5.4 的 Release 签名继续由 CI 自动完成（自 v2.5.3 起已自动化），发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
 
 ### 上一版本（v2.3.0 / v2.2.0 已发布）
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
@@ -329,5 +329,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.5  
-> 最后更新：2026-06-26（v2.5.3 已发布：Release 签名与 latest.json 完全自动化）
+> 文档版本：v0.5.6  
+> 最后更新：2026-06-26（v2.5.4 已发布：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强）

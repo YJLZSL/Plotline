@@ -1,6 +1,6 @@
 [package]
 name = "plotline"
-version = "2.5.3"
+version = "2.5.4"
 description = "本地优先的叙事创作工作台"
 authors = ["Plotline Contributors"]
 license = "MIT"
