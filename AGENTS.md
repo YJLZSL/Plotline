@@ -44,13 +44,18 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.5.0 已构建，Release 修复中）
+### 当前迭代状态（v2.5.0 已发布）
 - **时间轴图片插入**：事件编辑对话框新增图片上传区域，支持本地图片选择、缩略图展示与删除；后端 `events` 表新增 `image_urls` JSON 字段；迁移 `011_event_images.sql`。
 - **小说写作模块**：全新「小说」视图，左侧章节列表 + 右侧 TipTap 编辑器；支持章节关联大纲节点、实时字数统计、自动保存；数据库迁移 `012_novel_chapters.sql`。
 - **VN 增强**：台词新增「立绘位置」选择器（左/中/右）；预览面板根据位置渲染立绘；新增「完整预览」对话框支持分支选择与场景跳转；迁移 `013_vn_sprites.sql`。
 - **MC 主题真正 Minecraft 元素**：新增 7 种像素纹理（苦力怕脸、钻石矿石、红石块、黑曜石、金块、铁块、绿宝石）；番茄钟进度条使用分层方块类型；100% 完成触发 Creeper 爆炸动画；成就指示器用方块图标展示。
-- **CI 编译错误修复**：main 分支已推送修复（a0b2181），修复 Event image_urls、VnLine sprite_position、ai.rs CreateEventInput image_urls、novel.rs word_count 断言等编译/测试错误。
-- **Release 状态**：工作流 #22 运行中，待验证 `.sig` 签名文件是否生成。
+- **CI 编译错误修复**：main 分支已推送修复，修复 Event image_urls、VnLine sprite_position、ai.rs CreateEventInput image_urls、novel.rs word_count 断言等编译/测试错误。
+- **Release 状态**：✅ 已完成
+  - tag `v2.5.0` 指向 `e774a39`。
+  - Release Workflow `28225874664` 与 CI Workflow `28225743083` 均成功。
+  - Release assets 包含 `.exe`、`.msi`、`.sig`、`latest.json`。
+  - 自动更新端点 `https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 返回 v2.5.0 真实签名清单。
+  - 注意：`.sig` 与 `latest.json` 本次由本地手动签名上传；CI 自动签名仍未生效，下一版本需继续排查。
 
 ### 上一版本（v2.3.0 / v2.2.0 已发布）
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
@@ -235,12 +240,12 @@ docs(agents): 补充 IPC 调用规范
 - [ ] UI 改动截图/录屏附在提交说明或相关 issue 中
 
 ### 4.4 发布检查清单（Release）
-- [ ] 版本号已统一（`package.json`、`Cargo.toml`、`tauri.conf.json`）
-- [ ] `更新日志.md` 已更新
-- [ ] `releases/vX.Y.Z/latest.json` 已创建（signature 字段已填入真实签名，不是 `<PLACEHOLDER>`）
-- [ ] **签名密钥检查**：GitHub Secrets 中已配置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（如果私钥有密码）
-- [ ] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
-- [ ] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
+- [x] 版本号已统一（`package.json`、`Cargo.toml`、`tauri.conf.json`）
+- [x] `更新日志.md` 已更新
+- [x] `releases/vX.Y.Z/latest.json` 已创建（signature 字段已填入真实签名，不是 `<PLACEHOLDER>`）
+- [x] **签名密钥检查**：本地 `keys/plotline.key` 存在，GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 已配置
+- [x] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
+- [x] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
 
 > **⚠️ 签名密钥问题**：如果 CI 构建成功但 Release 缺少 `.sig` 和 `latest.json`，说明 `TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 未配置或已失效。详见 `交接文档.md` 中的 "签名密钥问题" 部分。
 
@@ -326,5 +331,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.2  
-> 最后更新：2026-06-27（v2.5.0 CI 编译错误修复后，待 Release 构建验证）
+> 文档版本：v0.5.3  
+> 最后更新：2026-06-26（v2.5.0 已发布，Release 与自动更新验证完成）
