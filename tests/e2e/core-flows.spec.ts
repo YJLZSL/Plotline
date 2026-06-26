@@ -60,4 +60,10 @@ test.describe('核心用户流程', () => {
 
     await expect(page.getByTestId('lore-title-input').first()).toHaveValue(/新历史条目|New History entry/);
   });
+
+  test('小说：导航到小说视图显示章节列表', async ({ page }) => {
+    await page.getByRole('link', { name: '小说', exact: true }).click();
+    await expect(page).toHaveURL(/\/workspaces\/.+\/novel/);
+    await expect(page.getByText('章节', { exact: true })).toBeVisible();
+  });
 });
