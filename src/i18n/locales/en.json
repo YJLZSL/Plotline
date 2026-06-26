@@ -353,6 +353,8 @@
       "longBreak": "Take a good rest and relax"
     },
     "completedSessions": "{{count}} pomodoros completed",
+    "boom": "Boom!",
+    "sessionHealth": "Focus Health",
     "start": "Start",
     "pause": "Pause",
     "focusComplete": "Focus session complete, take a break!",

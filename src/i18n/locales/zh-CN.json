@@ -357,6 +357,8 @@
       "longBreak": "好好休息，放松一下"
     },
     "completedSessions": "已完成 {{count}} 个番茄",
+    "boom": "Boom!",
+    "sessionHealth": "专注值",
     "start": "开始",
     "pause": "暂停",
     "focusComplete": "专注时间结束，休息一下！",
