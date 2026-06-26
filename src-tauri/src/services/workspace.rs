@@ -594,6 +594,7 @@ mod tests {
             status: "draft".into(),
             color: None,
             location_id: None,
+            image_urls: vec![],
             character_ids: vec![],
             connected_event_ids: vec![],
             created_at: t,
@@ -855,6 +856,7 @@ mod tests {
             choice_label: "".into(),
             choice_target_scene_id: None,
             sprite_asset_path: Some("assets/old-ws/sprite.png".into()),
+            sprite_position: "center".into(),
             voice_path: None,
             created_at: t,
         });
