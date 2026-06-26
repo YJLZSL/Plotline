@@ -169,7 +169,7 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
             <div
               className={cn(
                 'text-5xl font-bold tracking-tight tabular-nums',
-                isPixel && 'font-pixel',
+                isPixel && 'font-pixel tracking-widest',
               )}
             >
               {formatPomodoroTime(secondsLeft)}
@@ -187,19 +187,36 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
               />
             </div>
 
-            {/* MC 主题方块进度：填满为草方块，空为泥土方块 */}
+            {/* MC 主题方块进度 */}
             {theme === 'mc' && (
               <div
                 data-testid="mc-block-progress"
                 className="w-full mt-3 flex items-center justify-between gap-1"
               >
                 {Array.from({ length: BLOCK_COUNT }).map((_, i) => (
-                  <PixelBlock key={i} filled={i / BLOCK_COUNT < progress} />
+                  <PixelBlock
+                    key={i}
+                    blockType={getBlockType(i, BLOCK_COUNT, progress)}
+                  />
                 ))}
               </div>
             )}
 
-            {theme === 'mc' && progress >= 0.9 && (
+            {/* 100% 爆炸动画 */}
+            {theme === 'mc' && progress >= 1 && (
+              <motion.div
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="mt-3 relative"
+              >
+                <div className="mc-explosion">
+                  <CreeperFace />
+                </div>
+              </motion.div>
+            )}
+
+            {/* 90%-99% 显示 CreeperFace */}
+            {theme === 'mc' && progress >= 0.9 && progress < 1 && (
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -207,6 +224,21 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
               >
                 <CreeperFace />
               </motion.div>
+            )}
+
+            {/* 成就指示器 */}
+            {theme === 'mc' && completedFocusSessions > 0 && (
+              <div className="mt-3 flex items-center gap-1.5">
+                <span className="text-[10px] opacity-60 font-pixel">成就:</span>
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: Math.min(completedFocusSessions, 10) }).map((_, i) => (
+                    <AchievementBlock key={i} index={i} />
+                  ))}
+                  {completedFocusSessions > 10 && (
+                    <span className="text-[10px] font-pixel opacity-80">+{completedFocusSessions - 10}</span>
+                  )}
+                </div>
+              </div>
             )}
 
             <p className="mt-3 text-[11px] opacity-60">
@@ -262,32 +294,52 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
   );
 }
 
-function PixelBlock({ filled }: { filled: boolean }) {
+type BlockType = 'dirt' | 'cobble' | 'iron' | 'gold' | 'diamond';
+
+function getBlockType(index: number, total: number, progress: number): BlockType | null {
+  const filledThreshold = Math.floor(progress * total);
+  if (index >= filledThreshold) return null;
+
+  const ratio = index / total;
+  if (ratio < 0.3) return 'dirt';
+  if (ratio < 0.6) return 'cobble';
+  if (ratio < 0.8) return 'iron';
+  if (ratio < 0.9) return 'gold';
+  return 'diamond';
+}
+
+function PixelBlock({ blockType }: { blockType: BlockType | null }) {
+  if (!blockType) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 10 10" className="block opacity-50">
+        <rect x="0" y="0" width="10" height="10" fill="#4A3728" />
+        <rect x="1" y="2" width="2" height="2" fill="#3A2A1E" opacity="0.5" />
+        <rect x="6" y="1" width="2" height="2" fill="#3A2A1E" opacity="0.5" />
+        <rect x="3" y="6" width="2" height="2" fill="#3A2A1E" opacity="0.5" />
+        <rect x="7" y="7" width="2" height="1" fill="#3A2A1E" opacity="0.5" />
+        <rect x="0" y="0" width="10" height="10" fill="none" stroke="#2F2418" strokeWidth="0.5" opacity="0.25" />
+      </svg>
+    );
+  }
+
+  const colors: Record<BlockType, { bg: string; accent: string }> = {
+    dirt: { bg: '#6D4C33', accent: '#5D4037' },
+    cobble: { bg: '#8A9BA5', accent: '#7D8B93' },
+    iron: { bg: '#D0D0D0', accent: '#B0B0B0' },
+    gold: { bg: '#F0C840', accent: '#D4A820' },
+    diamond: { bg: '#73A8B5', accent: '#5CC5C5' },
+  };
+
+  const { bg, accent } = colors[blockType];
+
   return (
     <svg width="20" height="20" viewBox="0 0 10 10" className="block">
-      {filled ? (
-        <>
-          {/* 草方块：绿色顶部 + 泥土侧面，带 3D 内阴影 */}
-          <rect x="0" y="0" width="10" height="10" fill="#5C4030" />
-          <rect x="0" y="0" width="10" height="4" fill="#6BA04A" />
-          <rect x="0" y="4" width="10" height="6" fill="#6D4C33" />
-          <rect x="1" y="1" width="2" height="2" fill="#5B8C39" opacity="0.7" />
-          <rect x="6" y="2" width="2" height="1" fill="#5B8C39" opacity="0.7" />
-          <rect x="2" y="5" width="2" height="2" fill="#5D4037" opacity="0.5" />
-          <rect x="7" y="6" width="2" height="2" fill="#5D4037" opacity="0.5" />
-          <rect x="0" y="0" width="10" height="10" fill="none" stroke="#2F2418" strokeWidth="0.5" opacity="0.25" />
-        </>
-      ) : (
-        <>
-          {/* 泥土方块 */}
-          <rect x="0" y="0" width="10" height="10" fill="#6D4C33" />
-          <rect x="1" y="2" width="2" height="2" fill="#5D4037" opacity="0.5" />
-          <rect x="6" y="1" width="2" height="2" fill="#5D4037" opacity="0.5" />
-          <rect x="3" y="6" width="2" height="2" fill="#5D4037" opacity="0.5" />
-          <rect x="7" y="7" width="2" height="1" fill="#5D4037" opacity="0.5" />
-          <rect x="0" y="0" width="10" height="10" fill="none" stroke="#2F2418" strokeWidth="0.5" opacity="0.25" />
-        </>
-      )}
+      <rect x="0" y="0" width="10" height="10" fill={bg} />
+      <rect x="1" y="2" width="2" height="2" fill={accent} opacity="0.7" />
+      <rect x="6" y="1" width="2" height="2" fill={accent} opacity="0.7" />
+      <rect x="3" y="6" width="2" height="2" fill={accent} opacity="0.7" />
+      <rect x="7" y="7" width="2" height="1" fill={accent} opacity="0.7" />
+      <rect x="0" y="0" width="10" height="10" fill="none" stroke="#2F2418" strokeWidth="0.5" opacity="0.25" />
     </svg>
   );
 }
@@ -301,6 +353,29 @@ function CreeperFace() {
       <rect x="2" y="4" width="1" height="2" fill="#2F2418" />
       <rect x="5" y="4" width="1" height="2" fill="#2F2418" />
       <rect x="3" y="5" width="2" height="1" fill="#2F2418" />
+    </svg>
+  );
+}
+
+function AchievementBlock({ index }: { index: number }) {
+  const type: BlockType =
+    index < 3 ? 'dirt' : index < 6 ? 'cobble' : index < 8 ? 'iron' : index < 9 ? 'gold' : 'diamond';
+
+  const colors: Record<BlockType, { bg: string; accent: string }> = {
+    dirt: { bg: '#6D4C33', accent: '#5D4037' },
+    cobble: { bg: '#8A9BA5', accent: '#7D8B93' },
+    iron: { bg: '#D0D0D0', accent: '#B0B0B0' },
+    gold: { bg: '#F0C840', accent: '#D4A820' },
+    diamond: { bg: '#73A8B5', accent: '#5CC5C5' },
+  };
+
+  const { bg, accent } = colors[type];
+
+  return (
+    <svg width="12" height="12" viewBox="0 0 10 10" className="block">
+      <rect x="0" y="0" width="10" height="10" fill={bg} />
+      <rect x="2" y="2" width="2" height="2" fill={accent} opacity="0.7" />
+      <rect x="6" y="6" width="2" height="2" fill={accent} opacity="0.7" />
     </svg>
   );
 }

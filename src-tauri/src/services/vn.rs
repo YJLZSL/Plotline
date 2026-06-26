@@ -118,8 +118,8 @@ pub fn delete_scene(conn: &Connection, id: &str) -> AppResult<()> {
 pub fn list_lines(conn: &Connection, scene_id: &str) -> AppResult<Vec<VnLine>> {
     let mut stmt = conn.prepare(
         "SELECT id, scene_id, sort_order, line_type, character_id, speaker_name, text,
-                emotion, choice_label, choice_target_scene_id, sprite_asset_path, voice_path,
-                created_at
+                emotion, choice_label, choice_target_scene_id, sprite_asset_path, sprite_position,
+                voice_path, created_at
          FROM vn_lines WHERE scene_id=?1 ORDER BY sort_order ASC, created_at ASC",
     )?;
     let rows = stmt.query_map(params![scene_id], |row| {
@@ -135,8 +135,9 @@ pub fn list_lines(conn: &Connection, scene_id: &str) -> AppResult<Vec<VnLine>> {
             choice_label: row.get(8)?,
             choice_target_scene_id: row.get(9)?,
             sprite_asset_path: row.get(10)?,
-            voice_path: row.get(11)?,
-            created_at: row.get(12)?,
+            sprite_position: row.get(11)?,
+            voice_path: row.get(12)?,
+            created_at: row.get(13)?,
         })
     })?;
     rows.collect::<Result<_, _>>().map_err(Into::into)
@@ -146,7 +147,7 @@ pub fn list_all_lines(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Vn
     let mut stmt = conn.prepare(
         "SELECT l.id, l.scene_id, l.sort_order, l.line_type, l.character_id, l.speaker_name,
                 l.text, l.emotion, l.choice_label, l.choice_target_scene_id,
-                l.sprite_asset_path, l.voice_path, l.created_at
+                l.sprite_asset_path, l.sprite_position, l.voice_path, l.created_at
          FROM vn_lines l
          JOIN vn_scenes s ON l.scene_id = s.id
          WHERE s.workspace_id = ?1
@@ -165,8 +166,9 @@ pub fn list_all_lines(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Vn
             choice_label: row.get(8)?,
             choice_target_scene_id: row.get(9)?,
             sprite_asset_path: row.get(10)?,
-            voice_path: row.get(11)?,
-            created_at: row.get(12)?,
+            sprite_position: row.get(11)?,
+            voice_path: row.get(12)?,
+            created_at: row.get(13)?,
         })
     })?;
     rows.collect::<Result<_, _>>().map_err(Into::into)
@@ -175,8 +177,8 @@ pub fn list_all_lines(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Vn
 fn get_line(conn: &Connection, id: &str) -> AppResult<VnLine> {
     conn.query_row(
         "SELECT id, scene_id, sort_order, line_type, character_id, speaker_name, text,
-                emotion, choice_label, choice_target_scene_id, sprite_asset_path, voice_path,
-                created_at
+                emotion, choice_label, choice_target_scene_id, sprite_asset_path, sprite_position,
+                voice_path, created_at
          FROM vn_lines WHERE id=?1",
         params![id],
         |row| {
@@ -192,8 +194,9 @@ fn get_line(conn: &Connection, id: &str) -> AppResult<VnLine> {
                 choice_label: row.get(8)?,
                 choice_target_scene_id: row.get(9)?,
                 sprite_asset_path: row.get(10)?,
-                voice_path: row.get(11)?,
-                created_at: row.get(12)?,
+                sprite_position: row.get(11)?,
+                voice_path: row.get(12)?,
+                created_at: row.get(13)?,
             })
         },
     )
@@ -211,8 +214,9 @@ pub fn create_line(conn: &Connection, input: CreateVnLineInput) -> AppResult<VnL
     conn.execute(
         "INSERT INTO vn_lines
          (id, scene_id, sort_order, line_type, character_id, speaker_name, text,
-          emotion, choice_label, choice_target_scene_id, sprite_asset_path, voice_path, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+          emotion, choice_label, choice_target_scene_id, sprite_asset_path, sprite_position,
+          voice_path, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             id,
             input.scene_id,
@@ -225,6 +229,7 @@ pub fn create_line(conn: &Connection, input: CreateVnLineInput) -> AppResult<VnL
             input.choice_label.unwrap_or_default(),
             input.choice_target_scene_id,
             input.sprite_asset_path,
+            input.sprite_position.unwrap_or_else(|| "center".into()),
             input.voice_path,
             now_str,
         ],
@@ -237,8 +242,8 @@ pub fn update_line(conn: &Connection, input: UpdateVnLineInput) -> AppResult<VnL
     conn.execute(
         "UPDATE vn_lines SET line_type=?1, character_id=?2, speaker_name=?3, text=?4,
              emotion=?5, choice_label=?6, choice_target_scene_id=?7,
-             sprite_asset_path=?8, voice_path=?9, sort_order=?10
-         WHERE id=?11",
+             sprite_asset_path=?8, sprite_position=?9, voice_path=?10, sort_order=?11
+         WHERE id=?12",
         params![
             input.line_type.unwrap_or(existing.line_type),
             input.character_id.unwrap_or(existing.character_id),
@@ -252,6 +257,7 @@ pub fn update_line(conn: &Connection, input: UpdateVnLineInput) -> AppResult<VnL
             input
                 .sprite_asset_path
                 .unwrap_or(existing.sprite_asset_path),
+            input.sprite_position.unwrap_or(existing.sprite_position),
             input.voice_path.unwrap_or(existing.voice_path),
             input.sort_order.unwrap_or(existing.sort_order),
             input.id,
@@ -564,6 +570,7 @@ mod tests {
                 choice_label: None,
                 choice_target_scene_id: None,
                 sprite_asset_path: None,
+                sprite_position: None,
                 voice_path: None,
             },
         )
@@ -660,6 +667,7 @@ mod tests {
                 choice_label: None,
                 choice_target_scene_id: None,
                 sprite_asset_path: None,
+                sprite_position: None,
                 voice_path: None,
             },
         )
@@ -696,6 +704,7 @@ mod tests {
                 choice_label: None,
                 choice_target_scene_id: None,
                 sprite_asset_path: None,
+                sprite_position: None,
                 voice_path: None,
             },
         )
@@ -713,6 +722,7 @@ mod tests {
                 choice_target_scene_id: None,
                 sort_order: None,
                 sprite_asset_path: None,
+                sprite_position: None,
                 voice_path: None,
             },
         )
@@ -749,6 +759,7 @@ mod tests {
                 choice_label: None,
                 choice_target_scene_id: None,
                 sprite_asset_path: None,
+                sprite_position: None,
                 voice_path: None,
             },
         )
@@ -785,6 +796,7 @@ mod tests {
                 choice_label: None,
                 choice_target_scene_id: None,
                 sprite_asset_path: Some("assets/w1/sprite.png".into()),
+                sprite_position: None,
                 voice_path: Some("assets/w1/voice.ogg".into()),
             },
         )

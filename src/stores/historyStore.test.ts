@@ -15,6 +15,7 @@ const dummyEvent: Event = {
   status: 'draft',
   color: null,
   locationId: null,
+  imageUrls: [],
   characterIds: [],
   connectedEventIds: [],
   createdAt: '2024-01-01T00:00:00Z',

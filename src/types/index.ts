@@ -8,3 +8,4 @@ export * from './settings';
 export * from './location';
 export * from './vn';
 export * from './ai';
+export * from './novel';

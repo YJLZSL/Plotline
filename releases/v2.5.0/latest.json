@@ -1,0 +1,11 @@
+{
+  "version": "2.5.0",
+  "notes": "见更新日志.md 获取 v2.5.0 发布说明。新增时间轴图片插入、小说写作模块、VN 立绘位置与完整预览、MC 主题真正 Minecraft 元素。",
+  "pub_date": "2026-06-27T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE1NDIwNDk4N0NBRTAxQzcKUldUSEFhNThtQVJDRlF0dk1EOGRRdzhUQkxKOWdCREpqdUpYMEVmMXF2bG1acTFSU3lodjVBNGoK",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v2.5.0/Plotline_2.5.0_x64-setup.exe"
+    }
+  }
+}

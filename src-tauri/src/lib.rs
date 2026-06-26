@@ -92,6 +92,7 @@ pub fn run() {
             commands::event::disconnect_events,
             commands::event::list_event_connections,
             commands::event::check_consistency,
+            commands::event::upload_event_image,
             // export
             commands::export::export_workspace_markdown,
             commands::export::export_outline_markdown,
@@ -140,6 +141,12 @@ pub fn run() {
             commands::vn::export_vn_renpy,
             commands::vn::check_vn_consistency,
             commands::vn::upload_vn_asset,
+            // novel
+            commands::novel::list_novel_chapters,
+            commands::novel::create_novel_chapter,
+            commands::novel::update_novel_chapter,
+            commands::novel::delete_novel_chapter,
+            commands::novel::reorder_novel_chapters,
             // statistics
             commands::statistics::get_statistics,
             // settings

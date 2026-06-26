@@ -7,13 +7,18 @@ use crate::models::{
     ConnectEventsInput, CreateEventInput, Event, EventConnection, UpdateEventInput,
 };
 
+fn parse_image_urls(json_str: &str) -> Vec<String> {
+    serde_json::from_str(json_str).unwrap_or_default()
+}
+
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, track_id, title, description, date_type, date_value,
-                sort_order, status, color, location_id, created_at, updated_at
+                sort_order, status, color, location_id, image_urls, created_at, updated_at
          FROM events WHERE workspace_id = ?1 ORDER BY track_id, sort_order, created_at",
     )?;
     let rows = stmt.query_map(params![workspace_id], |row| {
+        let image_urls: String = row.get(11)?;
         Ok(Event {
             id: row.get(0)?,
             workspace_id: row.get(1)?,
@@ -26,10 +31,11 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Event>> {
             status: row.get(8)?,
             color: row.get(9)?,
             location_id: row.get(10)?,
+            image_urls: parse_image_urls(&image_urls),
             character_ids: Vec::new(),
             connected_event_ids: Vec::new(),
-            created_at: row.get(11)?,
-            updated_at: row.get(12)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
         })
     })?;
     let mut events: Vec<Event> = rows.collect::<Result<_, _>>()?;
@@ -55,11 +61,12 @@ fn list_connected_event_ids(conn: &Connection, event_id: &str) -> AppResult<Vec<
 fn get(conn: &Connection, id: &str) -> AppResult<Event> {
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, track_id, title, description, date_type, date_value,
-                sort_order, status, color, location_id, created_at, updated_at
+                sort_order, status, color, location_id, image_urls, created_at, updated_at
          FROM events WHERE id = ?1",
     )?;
     let mut event = stmt
         .query_row(params![id], |row| {
+            let image_urls: String = row.get(11)?;
             Ok(Event {
                 id: row.get(0)?,
                 workspace_id: row.get(1)?,
@@ -72,10 +79,11 @@ fn get(conn: &Connection, id: &str) -> AppResult<Event> {
                 status: row.get(8)?,
                 color: row.get(9)?,
                 location_id: row.get(10)?,
+                image_urls: parse_image_urls(&image_urls),
                 character_ids: Vec::new(),
                 connected_event_ids: Vec::new(),
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
             })
         })
         .map_err(|e| crate::error::map_not_found(e, format!("事件 {} 不存在", id)))?;
@@ -91,12 +99,13 @@ pub fn create(conn: &Connection, input: CreateEventInput) -> AppResult<Event> {
     let date_type = input.date_type.unwrap_or_else(|| "relative".into());
     let status = input.status.unwrap_or_else(|| "draft".into());
     let sort_order = input.sort_order.unwrap_or(0);
+    let image_urls = serde_json::to_string(&input.image_urls.unwrap_or_default())?;
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "INSERT INTO events
          (id, workspace_id, track_id, title, description, date_type, date_value,
-          sort_order, status, color, location_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+          sort_order, status, color, location_id, image_urls, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             id,
             input.workspace_id,
@@ -109,6 +118,7 @@ pub fn create(conn: &Connection, input: CreateEventInput) -> AppResult<Event> {
             status,
             input.color,
             input.location_id,
+            image_urls,
             now_str,
             now_str,
         ],
@@ -136,12 +146,13 @@ pub fn update(conn: &Connection, input: UpdateEventInput) -> AppResult<Event> {
     let status = input.status.unwrap_or(existing.status);
     let color = input.color.unwrap_or(existing.color);
     let location_id = input.location_id.unwrap_or(existing.location_id);
+    let image_urls = input.image_urls.map(|v| serde_json::to_string(&v).unwrap_or_default()).unwrap_or(serde_json::to_string(&existing.image_urls).unwrap_or_default());
     let now_str = Utc::now().to_rfc3339();
 
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "UPDATE events SET title=?1, description=?2, track_id=?3, date_type=?4,
-            date_value=?5, sort_order=?6, status=?7, color=?8, location_id=?9, updated_at=?10 WHERE id=?11",
+            date_value=?5, sort_order=?6, status=?7, color=?8, location_id=?9, image_urls=?10, updated_at=?11 WHERE id=?12",
         params![
             title,
             description,
@@ -152,6 +163,7 @@ pub fn update(conn: &Connection, input: UpdateEventInput) -> AppResult<Event> {
             status,
             color,
             location_id,
+            image_urls,
             now_str,
             input.id,
         ],
@@ -252,13 +264,13 @@ mod tests {
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
-             VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, image_urls, created_at, updated_at)
+             VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '[]', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
             [],
         ).unwrap();
         conn.execute(
-            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
-             VALUES ('e2', 'ws', 't1', 'Target', '', 'relative', '', 1, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, image_urls, created_at, updated_at)
+             VALUES ('e2', 'ws', 't1', 'Target', '', 'relative', '', 1, 'draft', '[]', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
             [],
         ).unwrap();
         connect(
@@ -291,13 +303,13 @@ mod tests {
         )
         .unwrap();
         conn.execute(
-            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
-             VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, image_urls, created_at, updated_at)
+             VALUES ('e1', 'ws', 't1', 'Source', '', 'relative', '', 0, 'draft', '[]', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
             [],
         ).unwrap();
         conn.execute(
-            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, created_at, updated_at)
-             VALUES ('e2', 'ws', 't1', 'Target', '', 'relative', '', 1, 'draft', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
+            "INSERT INTO events (id, workspace_id, track_id, title, description, date_type, date_value, sort_order, status, image_urls, created_at, updated_at)
+             VALUES ('e2', 'ws', 't1', 'Target', '', 'relative', '', 1, 'draft', '[]', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')",
             [],
         ).unwrap();
         connect(
@@ -351,6 +363,7 @@ mod tests {
                 status: None,
                 color: None,
                 location_id: Some("l1".into()),
+                image_urls: None,
                 character_ids: None,
             },
         )
@@ -370,6 +383,7 @@ mod tests {
                 status: None,
                 color: None,
                 location_id: Some(None),
+                image_urls: None,
                 character_ids: None,
             },
         )

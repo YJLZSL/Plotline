@@ -24,6 +24,10 @@ import {
   ScanLine,
   Bold,
   Italic,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Maximize2,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/plugin-fs';
@@ -38,6 +42,8 @@ import {
   Input,
   Textarea,
   ConfirmDialog,
+  Dialog,
+  DialogContent,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
@@ -329,6 +335,7 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<VnViewMode>('edit');
   const [confirmDeleteScene, setConfirmDeleteScene] = useState<string | null>(null);
+  const [fullPreviewOpen, setFullPreviewOpen] = useState(false);
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
@@ -551,6 +558,7 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
                   onUpdateBackground={(background) =>
                     updateScene.mutateAsync({ id: selectedScene.id, background })
                   }
+                  onFullPreview={() => setFullPreviewOpen(true)}
                   t={t}
                 />
               )}
@@ -576,6 +584,15 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
           </div>
         )}
       </div>
+
+      <VnFullPreviewDialog
+        open={fullPreviewOpen}
+        onOpenChange={setFullPreviewOpen}
+        scenes={scenes}
+        characters={characters}
+        startSceneId={selectedSceneId ?? ''}
+        t={t}
+      />
 
       <ConfirmDialog
         open={confirmDeleteScene !== null}
@@ -603,6 +620,7 @@ function VnScriptEditor({
   workspaceId,
   onRename,
   onUpdateBackground,
+  onFullPreview,
   t,
 }: {
   scene: VnScene;
@@ -611,6 +629,7 @@ function VnScriptEditor({
   workspaceId: string;
   onRename: (title: string) => void;
   onUpdateBackground: (background: string) => void;
+  onFullPreview: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const { data: lines = [], isLoading } = useVnLinesQuery(scene.id);
@@ -662,6 +681,7 @@ function VnScriptEditor({
       lineType: type,
       text: type === 'choice' ? t('vn.newChoice') : '',
       speakerName: type === 'narration' ? '' : '',
+      spritePosition: 'center',
     });
   };
 
@@ -719,6 +739,15 @@ function VnScriptEditor({
           title={t('vn.uploadBgm')}
         >
           <Music className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onFullPreview}
+          className="gap-1.5"
+        >
+          <Maximize2 className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{t('vn.fullPreview')}</span>
         </Button>
         <div className="flex gap-1.5">
           <Button variant="outline" size="sm" onClick={() => handleAddLine('dialog')} className="gap-1.5" data-testid="add-line-dialog-btn">
@@ -981,6 +1010,32 @@ export function VnLineRow({
                 <ImageIcon className="h-3 w-3" />
                 {line.spriteAssetPath ? t('vn.spriteUploaded') : t('vn.uploadSprite')}
               </button>
+              {/* 立绘位置选择器 */}
+              <div className="flex items-center gap-0.5 rounded-[5px] border border-border overflow-hidden">
+                <span className="px-1.5 py-1 text-[10px] text-text-secondary border-r border-border bg-bg-elevated">
+                  {t('vn.spritePosition')}
+                </span>
+                {([
+                  { value: 'left', icon: AlignLeft, label: t('vn.spritePositionLeft') },
+                  { value: 'center', icon: AlignCenter, label: t('vn.spritePositionCenter') },
+                  { value: 'right', icon: AlignRight, label: t('vn.spritePositionRight') },
+                ] as const).map(({ value, icon: Icon, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onChange({ spritePosition: value })}
+                    className={cn(
+                      'flex items-center justify-center p-1 transition-colors',
+                      (line.spritePosition || 'center') === value
+                        ? 'bg-accent/10 text-accent'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                    )}
+                    title={label}
+                  >
+                    <Icon className="h-3 w-3" />
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={() => void handleUploadVoice()}
                 disabled={uploadAsset.isPending}
@@ -1404,7 +1459,12 @@ function VnPreview({
         <img
           src={spriteUrl}
           alt=""
-          className="absolute bottom-28 left-1/2 z-10 h-56 -translate-x-1/2 object-contain drop-shadow-lg"
+          className={cn(
+            'absolute bottom-28 z-10 h-56 object-contain drop-shadow-lg',
+            (currentLine?.spritePosition || 'center') === 'center' && 'left-1/2 -translate-x-1/2',
+            (currentLine?.spritePosition || 'center') === 'left' && 'left-8',
+            (currentLine?.spritePosition || 'center') === 'right' && 'right-8',
+          )}
         />
       )}
 
@@ -1508,5 +1568,52 @@ function VnPreview({
         )}
       </div>
     </div>
+  );
+}
+
+// ===== 完整预览对话框 =====
+function VnFullPreviewDialog({
+  open,
+  onOpenChange,
+  scenes,
+  characters,
+  startSceneId,
+  t,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  scenes: VnScene[];
+  characters: Character[];
+  startSceneId: string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const [currentSceneId, setCurrentSceneId] = useState(startSceneId);
+
+  useEffect(() => {
+    if (open) setCurrentSceneId(startSceneId);
+  }, [open, startSceneId]);
+
+  const currentScene = scenes.find((s) => s.id === currentSceneId) ?? null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[90vh] p-0 overflow-hidden flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
+          {currentScene ? (
+            <VnPreview
+              scene={currentScene}
+              characters={characters}
+              onExit={() => onOpenChange(false)}
+              onJumpScene={(id) => setCurrentSceneId(id)}
+              t={t}
+            />
+          ) : (
+            <div className="flex-1 grid place-items-center">
+              <p className="text-sm text-text-secondary">{t('vn.emptyScenes')}</p>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

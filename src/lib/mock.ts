@@ -569,6 +569,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         status: input.status ?? 'draft',
         color: input.color ?? null,
         locationId: input.locationId ?? null,
+        imageUrls: input.imageUrls ?? [],
         characterIds: input.characterIds ?? [],
         connectedEventIds: [],
         createdAt: now,
@@ -595,6 +596,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       if (input.status !== undefined) ev.status = input.status;
       if (input.color !== undefined) ev.color = input.color;
       if (input.locationId !== undefined) ev.locationId = input.locationId;
+      if (input.imageUrls !== undefined) ev.imageUrls = input.imageUrls;
       if (input.characterIds !== undefined) {
         // 重建反向关系
         for (const c of db.characters) {
@@ -1077,6 +1079,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         choiceLabel: input.choiceLabel ?? '',
         choiceTargetSceneId: input.choiceTargetSceneId ?? null,
         spriteAssetPath: input.spriteAssetPath ?? null,
+        spritePosition: input.spritePosition ?? 'center',
         voicePath: input.voicePath ?? null,
         createdAt: now,
       };

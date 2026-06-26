@@ -30,6 +30,7 @@ pub struct VnLine {
     pub choice_label: String,
     pub choice_target_scene_id: Option<String>,
     pub sprite_asset_path: Option<String>,
+    pub sprite_position: String,
     pub voice_path: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -69,6 +70,7 @@ pub struct CreateVnLineInput {
     pub choice_label: Option<String>,
     pub choice_target_scene_id: Option<String>,
     pub sprite_asset_path: Option<String>,
+    pub sprite_position: Option<String>,
     pub voice_path: Option<String>,
 }
 
@@ -84,6 +86,7 @@ pub struct UpdateVnLineInput {
     pub choice_label: Option<String>,
     pub choice_target_scene_id: Option<Option<String>>,
     pub sprite_asset_path: Option<Option<String>>,
+    pub sprite_position: Option<String>,
     pub voice_path: Option<Option<String>>,
     pub sort_order: Option<i64>,
 }

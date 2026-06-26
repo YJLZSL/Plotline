@@ -13,6 +13,7 @@ export interface Event {
   status: EventStatus;
   color: string | null;
   locationId: string | null;
+  imageUrls: string[];
   characterIds: string[];
   connectedEventIds: string[];
   createdAt: string;
@@ -38,6 +39,7 @@ export interface CreateEventInput {
   status?: EventStatus;
   color?: string | null;
   locationId?: string | null;
+  imageUrls?: string[];
   characterIds?: string[];
 }
 
@@ -52,6 +54,7 @@ export interface UpdateEventInput {
   status?: EventStatus;
   color?: string | null;
   locationId?: string | null;
+  imageUrls?: string[];
   characterIds?: string[];
 }
 

@@ -12,7 +12,7 @@ vi.mock('@/features/timeline/hooks', () => ({
       {
         id: 'e1', workspaceId: 'ws', trackId: 't1', title: '事件A', description: '',
         dateType: 'absolute', dateValue: '2024-01-01', sortOrder: 0, status: 'draft',
-        color: null, locationId: null, characterIds: [], connectedEventIds: [], createdAt: '', updatedAt: '',
+        color: null, locationId: null, imageUrls: [], characterIds: [], connectedEventIds: [], createdAt: '', updatedAt: '',
       },
     ],
   }),
@@ -37,7 +37,7 @@ describe('GanttChart', () => {
         events={[{
           id: 'e1', workspaceId: 'ws', trackId: 't1', title: '事件A', description: '',
           dateType: 'absolute', dateValue: '2024-01-01', sortOrder: 0, status: 'draft',
-          color: null, locationId: null, characterIds: [], connectedEventIds: [], createdAt: '', updatedAt: '',
+          color: null, locationId: null, imageUrls: [], characterIds: [], connectedEventIds: [], createdAt: '', updatedAt: '',
         }]}
         timeScale={mockScale}
         selectedEventId={null}

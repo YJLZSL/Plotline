@@ -45,3 +45,11 @@ export interface ConsistencyConflict {
 export function checkConsistency(workspaceId: string): Promise<ConsistencyConflict[]> {
   return invoke<ConsistencyConflict[]>('check_consistency', { workspaceId });
 }
+
+export function uploadEventImage(
+  eventId: string,
+  workspaceId: string,
+  sourcePath: string
+): Promise<string> {
+  return invoke<string>('upload_event_image', { eventId, workspaceId, sourcePath });
+}

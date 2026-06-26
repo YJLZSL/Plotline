@@ -43,6 +43,7 @@ function mkEvent(
     status: 'draft',
     color: null,
     locationId: null,
+    imageUrls: [],
     characterIds: [],
     connectedEventIds: [],
     createdAt: '',

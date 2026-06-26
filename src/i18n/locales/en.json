@@ -10,6 +10,7 @@
     "outline": "Outline",
     "map": "Map",
     "vn": "Visual Novel",
+    "novel": "Novel",
     "worldbuilding": "Worldbuilding",
     "statistics": "Statistics",
     "notebook": "Notebook",
@@ -286,6 +287,11 @@
     "spriteUploaded": "Sprite uploaded",
     "voiceUploaded": "Voice uploaded",
     "checkBranches": "Check branches",
+    "fullPreview": "Full Preview",
+    "spritePosition": "Sprite Position",
+    "spritePositionLeft": "Left",
+    "spritePositionCenter": "Center",
+    "spritePositionRight": "Right",
     "issuesFound": "{{count}} issue(s) found",
     "noIssues": "No graph issues",
     "imported": "Ren'Py script imported",
@@ -299,6 +305,23 @@
       "title": "No scenes yet",
       "description": "Create your first VN scene with dialog, narration, and branching choices."
     }
+  },
+  "novel": {
+    "title": "Novel",
+    "chapters": "Chapters",
+    "newChapter": "New Chapter",
+    "wordCount": "Word Count",
+    "words": "words",
+    "chapterStatus": "Status",
+    "statusDraft": "Draft",
+    "statusDone": "Done",
+    "statusRevise": "Revise",
+    "linked": "Linked",
+    "noOutlineLink": "No outline link",
+    "editorPlaceholder": "Start writing your chapter… (rich text supported)",
+    "emptyChapters": "No chapters yet",
+    "emptyStateDesc": "Select a chapter from the sidebar or create a new chapter to start writing.",
+    "deleteConfirm": "Are you sure you want to delete this chapter? This cannot be undone."
   },
   "worldbuilding": {
     "title": "Worldbuilding",
@@ -540,6 +563,9 @@
     "locationDeleted": "Location deleted",
     "vnSceneCreated": "Scene created",
     "vnSceneDeleted": "Scene deleted",
-    "vnExported": "VN script exported"
+    "vnExported": "VN script exported",
+    "novelChapterCreated": "Chapter created",
+    "novelChapterUpdated": "Chapter updated",
+    "novelChapterDeleted": "Chapter deleted"
   }
 }

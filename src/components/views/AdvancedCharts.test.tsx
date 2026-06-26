@@ -8,7 +8,7 @@ import type { Character, Event } from '@/types';
 function mkEvent(id: string, title: string, date: string, order: number): Event {
   return {
     id, workspaceId: 'ws', trackId: 't1', title, description: '', dateType: 'absolute',
-    dateValue: date, sortOrder: order, status: 'draft', color: null, locationId: null, characterIds: [],
+    dateValue: date, sortOrder: order, status: 'draft', color: null, locationId: null, imageUrls: [], characterIds: [],
     connectedEventIds: [], createdAt: '', updatedAt: '',
   };
 }

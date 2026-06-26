@@ -26,6 +26,7 @@ export interface VnLine {
   choiceLabel: string;
   choiceTargetSceneId: string | null;
   spriteAssetPath: string | null;
+  spritePosition: string;
   voicePath: string | null;
   createdAt: string;
 }
@@ -59,6 +60,7 @@ export interface CreateVnLineInput {
   choiceLabel?: string;
   choiceTargetSceneId?: string | null;
   spriteAssetPath?: string | null;
+  spritePosition?: string;
   voicePath?: string | null;
 }
 
@@ -72,6 +74,7 @@ export interface UpdateVnLineInput {
   choiceLabel?: string;
   choiceTargetSceneId?: string | null;
   spriteAssetPath?: string | null;
+  spritePosition?: string;
   voicePath?: string | null;
   sortOrder?: number;
 }

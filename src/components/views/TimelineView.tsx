@@ -15,6 +15,8 @@ import {
   CalendarRange,
   Network,
   List,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
@@ -51,10 +53,13 @@ import {
 } from '@/features/timeline/hooks';
 import { useCharactersQuery } from '@/features/characters/hooks';
 import { useLocationsQuery } from '@/features/map/hooks';
-import { checkConsistency } from '@/features/timeline/eventApi';
+import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { toastError, toastInfo, toastWarning } from '@/stores/toast';
+import { isTauri } from '@/lib/ipc';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 // ===== 常量 =====
 const TRACK_HEIGHT = 92;
@@ -298,7 +303,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     }
   };
 
-  const handleSaveEvent = async (data: Partial<Event> & { title: string; characterIds: string[] }) => {
+  const handleSaveEvent = async (data: Partial<Event> & { title: string; characterIds: string[]; imageUrls: string[] }) => {
     if (!editingEvent) return;
     await updateEvent.mutateAsync({
       id: editingEvent.id,
@@ -310,6 +315,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       color: data.color,
       trackId: data.trackId,
       characterIds: data.characterIds,
+      imageUrls: data.imageUrls,
     });
     setEventDialogOpen(false);
     setEditingEvent(null);
@@ -704,6 +710,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         tracks={tracks}
         characters={characters}
         locations={locations}
+        workspaceId={workspaceId}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
       />
@@ -1389,6 +1396,7 @@ function EventEditDialog({
   tracks,
   characters,
   locations,
+  workspaceId,
   onSave,
   onDelete,
 }: {
@@ -1399,7 +1407,8 @@ function EventEditDialog({
   tracks: Track[];
   characters: Character[];
   locations: { id: string; name: string; color?: string }[];
-  onSave: (data: Partial<Event> & { title: string; characterIds: string[] }) => void;
+  workspaceId: string;
+  onSave: (data: Partial<Event> & { title: string; characterIds: string[]; imageUrls: string[] }) => void;
   onDelete: (id: string) => void;
 }) {
   const { t } = useI18n();
@@ -1412,6 +1421,8 @@ function EventEditDialog({
   const [color, setColor] = useState<string | null>(null);
   const [characterIds, setCharacterIds] = useState<string[]>([]);
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -1425,6 +1436,7 @@ function EventEditDialog({
       setColor(event.color);
       setCharacterIds(event.characterIds);
       setLocationId(event.locationId);
+      setImageUrls(event.imageUrls);
     }
   }, [event]);
 
@@ -1432,6 +1444,33 @@ function EventEditDialog({
 
   const toggleCharacter = (id: string) => {
     setCharacterIds((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
+  };
+
+  const handleUploadImage = async () => {
+    if (!isTauri()) {
+      toastError(new Error(t('outline.desktopOnlyImage')));
+      return;
+    }
+    try {
+      const path = await openDialog({
+        title: t('timeline.event.uploadImage'),
+        multiple: false,
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+      });
+      if (path && typeof path === 'string') {
+        setUploadingImage(true);
+        const uploadedPath = await uploadEventImage(event.id, workspaceId, path);
+        setImageUrls((prev) => [...prev, uploadedPath]);
+      }
+    } catch (e) {
+      toastError(e instanceof Error ? e : new Error(String(e)));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = (url: string) => {
+    setImageUrls((prev) => prev.filter((u) => u !== url));
   };
 
   return (
@@ -1566,6 +1605,37 @@ function EventEditDialog({
             />
           </div>
 
+          {/* 图片上传 */}
+          <div>
+            <Label className="flex items-center justify-between">
+              <span>{t('timeline.event.images')}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleUploadImage}
+                loading={uploadingImage}
+                disabled={uploadingImage}
+                className="gap-1.5 h-7 text-xs"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+                {t('timeline.event.uploadImage')}
+              </Button>
+            </Label>
+            <div className="mt-1.5 border border-border rounded-[6px] p-3 bg-bg-elevated/40">
+              {imageUrls.length === 0 ? (
+                <p className="text-xs text-text-secondary/60 text-center py-2">
+                  {t('timeline.event.noImages')}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {imageUrls.map((url) => (
+                    <ImageThumbnail key={url} url={url} onRemove={() => removeImage(url)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* 角色选择器 */}
           <div>
             <Label>{t('timeline.event.characters')}</Label>
@@ -1654,7 +1724,7 @@ function EventEditDialog({
               </Button>
               <Button
                 onClick={() =>
-                  onSave({ title, description, dateType, dateValue, status, trackId, color, characterIds, locationId })
+                  onSave({ title, description, dateType, dateValue, status, trackId, color, characterIds, locationId, imageUrls })
                 }
                 disabled={!title.trim()}
                 data-testid="event-save-btn"
@@ -1676,6 +1746,38 @@ function EventEditDialog({
         onConfirm={() => onDelete(event.id)}
       />
     </Dialog>
+  );
+}
+
+function ImageThumbnail({ url, onRemove }: { url: string; onRemove: () => void }) {
+  const { t } = useI18n();
+  const imageUrl = useMemo(() => {
+    if (isTauri()) {
+      try {
+        return convertFileSrc(url);
+      } catch {
+        return url;
+      }
+    }
+    return url;
+  }, [url]);
+
+  return (
+    <div className="relative group w-16 h-16 rounded-[6px] overflow-hidden border border-border bg-bg-surface flex-shrink-0">
+      <img
+        src={imageUrl}
+        alt=""
+        className="w-full h-full object-cover"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+      <button
+        onClick={onRemove}
+        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-red-500/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+        title={t('timeline.event.removeImage')}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
   );
 }
 

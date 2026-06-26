@@ -6,6 +6,7 @@ pub mod event;
 pub mod export;
 pub mod location;
 pub mod note;
+pub mod novel;
 pub mod outline;
 pub mod settings;
 pub mod statistics;

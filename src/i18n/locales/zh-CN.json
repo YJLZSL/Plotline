@@ -10,6 +10,7 @@
     "outline": "大纲",
     "map": "地图",
     "vn": "视觉小说",
+    "novel": "小说",
     "worldbuilding": "世界观",
     "statistics": "统计",
     "notebook": "资料库",
@@ -107,7 +108,11 @@
       "colorDefault": "默认（跟随轨道）",
       "statusDraft": "草稿",
       "statusDone": "完成",
-      "statusRevise": "待修改"
+      "statusRevise": "待修改",
+      "images": "图片",
+      "uploadImage": "上传图片",
+      "noImages": "暂无图片",
+      "removeImage": "移除图片"
     },
     "conflictBadge": "时间冲突",
     "conflictHint": "该事件与当前时间线存在角色/时间冲突，请检查关联角色是否在同一时间出现在多个轨道。"
@@ -286,6 +291,11 @@
     "spriteUploaded": "已上传立绘",
     "voiceUploaded": "已上传配音",
     "checkBranches": "检查分支",
+    "fullPreview": "完整预览",
+    "spritePosition": "立绘位置",
+    "spritePositionLeft": "左",
+    "spritePositionCenter": "中",
+    "spritePositionRight": "右",
     "issuesFound": "发现 {{count}} 个问题",
     "noIssues": "分支图暂无问题",
     "imported": "Ren'Py 脚本导入成功",
@@ -299,6 +309,23 @@
       "title": "还没有场景",
       "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。"
     }
+  },
+  "novel": {
+    "title": "小说",
+    "chapters": "章节",
+    "newChapter": "新章节",
+    "wordCount": "字数",
+    "words": "字",
+    "chapterStatus": "状态",
+    "statusDraft": "草稿",
+    "statusDone": "完成",
+    "statusRevise": "待修改",
+    "linked": "已关联",
+    "noOutlineLink": "未关联大纲",
+    "editorPlaceholder": "开始写作你的章节…（支持富文本）",
+    "emptyChapters": "暂无章节",
+    "emptyStateDesc": "从侧边栏选择章节开始编辑，或点击右上角创建新章节。",
+    "deleteConfirm": "确定删除该章节吗？此操作不可撤销。"
   },
   "worldbuilding": {
     "title": "世界观",
@@ -542,6 +569,9 @@
     "locationDeleted": "地点已删除",
     "vnSceneCreated": "场景已创建",
     "vnSceneDeleted": "场景已删除",
-    "vnExported": "VN 脚本已导出"
+    "vnExported": "VN 脚本已导出",
+    "novelChapterCreated": "章节已创建",
+    "novelChapterUpdated": "章节已更新",
+    "novelChapterDeleted": "章节已删除"
   }
 }

@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::commands::with_db;
 use crate::error::AppResult;
@@ -75,4 +75,29 @@ pub fn check_consistency(
         crate::services::event::list(conn, &workspace_id)
     })?;
     Ok(crate::services::consistency::check_event_conflicts(&events))
+}
+
+#[tauri::command]
+pub fn upload_event_image(
+    app: AppHandle,
+    event_id: String,
+    workspace_id: String,
+    source_path: String,
+) -> AppResult<String> {
+    let src = std::path::Path::new(&source_path);
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("png");
+    let file_name = format!("{}.{}.{}", event_id, uuid::Uuid::new_v4(), ext);
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| crate::error::AppError::Internal(format!("无法获取应用数据目录: {e}")))?;
+    let dest_dir = app_data_dir.join("images").join(&workspace_id).join("events").join(&event_id);
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| crate::error::AppError::Internal(format!("创建图片目录失败: {e}")))?;
+
+    let dest = dest_dir.join(&file_name);
+    std::fs::copy(src, &dest).map_err(|e| crate::error::AppError::Internal(format!("复制图片失败: {e}")))?;
+
+    Ok(format!("images/{}/{}/events/{}/{}", workspace_id, event_id, event_id, file_name))
 }
