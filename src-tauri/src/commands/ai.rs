@@ -119,8 +119,14 @@ pub async fn ai_chat(state: State<'_, AppState>, input: AiChatInput) -> AppResul
         (settings, session_id, history, chunks)
     };
 
-    let reply =
-        crate::services::ai::call_chat_api(&settings, &history, &user_message, &chunks).await?;
+    let reply = crate::services::ai::call_chat_api(
+        &settings,
+        &history,
+        &user_message,
+        &chunks,
+        input.context.as_ref(),
+    )
+    .await?;
 
     let messages = {
         let db = state
@@ -212,6 +218,7 @@ pub async fn ai_chat_stream(
         &history,
         &user_message,
         &chunks,
+        input.context.as_ref(),
         &on_event,
     )
     .await?;

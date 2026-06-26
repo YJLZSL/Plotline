@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    AiChunk, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRole,
-    AiSearchResult, AiSession, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput,
+    AiChatContext, AiChunk, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo,
+    AiRole, AiSearchResult, AiSession, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput,
 };
 
 const DEFAULT_SYSTEM_PROMPT: &str =
@@ -18,6 +18,7 @@ const DEFAULT_SYSTEM_PROMPT: &str =
 pub const MAX_HISTORY_MESSAGES: usize = 10;
 pub const MAX_RAG_CHUNKS: usize = 5;
 const MAX_CHUNK_TOKENS: usize = 800;
+const MAX_CONTEXT_DESC_LEN: usize = 200;
 
 pub fn create_session(conn: &Connection, input: CreateAiSessionInput) -> AppResult<AiSession> {
     let id = Uuid::new_v4().to_string();
@@ -375,6 +376,14 @@ fn truncate_text(text: &str, max_tokens: usize) -> String {
     }
 }
 
+fn truncate_string(text: &str, max_len: usize) -> String {
+    if text.chars().count() <= max_len {
+        text.to_string()
+    } else {
+        text.chars().take(max_len).collect::<String>() + "…"
+    }
+}
+
 fn extract_terms(text: &str) -> Vec<String> {
     let mut terms = Vec::new();
     let lowered = text.to_lowercase();
@@ -533,47 +542,150 @@ struct OpenAiModelList {
     data: Vec<OpenAiModel>,
 }
 
-pub async fn call_chat_api(
+fn build_context_block(context: &AiChatContext) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    if let Some(summary) = context.workspace_summary.as_ref().filter(|s| !s.is_empty()) {
+        parts.push(format!("【工作区摘要】\n{}", summary));
+    }
+
+    if let Some(timeline) = context.timeline.as_ref().filter(|t| !t.is_empty()) {
+        let lines: Vec<String> = timeline
+            .iter()
+            .map(|item| {
+                let desc = item
+                    .description
+                    .as_deref()
+                    .map(|d| format!(" — {}", truncate_string(d, MAX_CONTEXT_DESC_LEN)))
+                    .unwrap_or_default();
+                format!(
+                    "- [{}] {}（{}）{}",
+                    item.track_name,
+                    item.title,
+                    item.date_value.as_deref().unwrap_or("未设日期"),
+                    desc
+                )
+            })
+            .collect();
+        parts.push(format!("【时间轴】共 {} 条\n{}", timeline.len(), lines.join("\n")));
+    }
+
+    if let Some(characters) = context.characters.as_ref().filter(|c| !c.is_empty()) {
+        let lines: Vec<String> = characters
+            .iter()
+            .map(|item| {
+                let role = item
+                    .role
+                    .as_deref()
+                    .map(|r| format!(" [{}]", r))
+                    .unwrap_or_default();
+                let desc = item
+                    .description
+                    .as_deref()
+                    .map(|d| format!(" — {}", truncate_string(d, MAX_CONTEXT_DESC_LEN)))
+                    .unwrap_or_default();
+                format!("- {}{}{}", item.name, role, desc)
+            })
+            .collect();
+        parts.push(format!("【角色】共 {} 个\n{}", characters.len(), lines.join("\n")));
+    }
+
+    if let Some(locations) = context.locations.as_ref().filter(|l| !l.is_empty()) {
+        let lines: Vec<String> = locations
+            .iter()
+            .map(|item| {
+                let desc = item
+                    .description
+                    .as_deref()
+                    .map(|d| format!(" — {}", truncate_string(d, MAX_CONTEXT_DESC_LEN)))
+                    .unwrap_or_default();
+                format!("- {}{}", item.name, desc)
+            })
+            .collect();
+        parts.push(format!("【地点】共 {} 个\n{}", locations.len(), lines.join("\n")));
+    }
+
+    if let Some(outline) = context.outline.as_ref().filter(|o| !o.is_empty()) {
+        let lines: Vec<String> = outline
+            .iter()
+            .map(|item| {
+                let indent = "  ".repeat(item.level.max(0) as usize);
+                format!("{}{}", indent, item.title)
+            })
+            .collect();
+        parts.push(format!("【大纲】共 {} 个节点\n{}", outline.len(), lines.join("\n")));
+    }
+
+    if let Some(notes) = context.notes.as_ref().filter(|n| !n.is_empty()) {
+        let lines: Vec<String> = notes
+            .iter()
+            .map(|item| {
+                let summary = item
+                    .summary
+                    .as_deref()
+                    .map(|s| format!(" — {}", truncate_string(s, MAX_CONTEXT_DESC_LEN)))
+                    .unwrap_or_default();
+                format!("- {}{}", item.title, summary)
+            })
+            .collect();
+        parts.push(format!("【笔记】共 {} 条\n{}", notes.len(), lines.join("\n")));
+    }
+
+    if let Some(Some(entity)) = context.selected_entity.as_ref() {
+        let content = entity
+            .content
+            .as_deref()
+            .map(|c| format!("\n内容：{}", truncate_string(c, MAX_CONTEXT_DESC_LEN)))
+            .unwrap_or_default();
+        parts.push(format!(
+            "【选中对象】\n类型：{}\n名称：{}（ID：{}）{}",
+            entity.r#type, entity.label, entity.id, content
+        ));
+    }
+
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("当前工作区上下文：\n{}\n请基于以上背景作答。", parts.join("\n\n"))
+    }
+}
+
+fn build_messages(
     settings: &crate::models::AppSettings,
     history: &[AiMessage],
     user_message: &str,
     chunks: &[AiSearchResult],
-) -> AppResult<String> {
-    if settings.ai_base_url.trim().is_empty() {
-        return Err(AppError::InvalidInput("请先配置 API 基础地址".into()));
-    }
-    if settings.ai_model.trim().is_empty() {
-        return Err(AppError::InvalidInput("请先配置模型名称".into()));
-    }
-    if settings.ai_api_key.trim().is_empty() {
-        return Err(AppError::InvalidInput("请先配置 API Key".into()));
-    }
-
-    let base_url = settings.ai_base_url.trim().trim_end_matches('/');
-    let url = format!("{}/chat/completions", base_url);
-
+    context: Option<&AiChatContext>,
+) -> Vec<OpenAiMessage> {
     let mut messages: Vec<OpenAiMessage> = Vec::new();
     let system_prompt = if settings.ai_system_prompt.trim().is_empty() {
         DEFAULT_SYSTEM_PROMPT
     } else {
         settings.ai_system_prompt.trim()
     };
-    messages.push(OpenAiMessage {
-        role: "system",
-        content: system_prompt.to_string(),
-    });
+
+    let mut system_parts: Vec<String> = vec![system_prompt.to_string()];
+
+    if let Some(ctx) = context {
+        let block = build_context_block(ctx);
+        if !block.is_empty() {
+            system_parts.push(block);
+        }
+    }
 
     if !chunks.is_empty() {
-        let context = chunks
+        let rag_context = chunks
             .iter()
             .map(|c| format!("[{}] {}", c.chunk.source_type, c.chunk.content))
             .collect::<Vec<_>>()
             .join("\n---\n");
-        messages.push(OpenAiMessage {
-            role: "system",
-            content: format!("以下是与用户问题相关的工作区资料：\n{}", context),
-        });
+        system_parts.push(format!("以下是与用户问题相关的工作区资料：\n{}", rag_context));
     }
+
+    messages.push(OpenAiMessage {
+        role: "system",
+        content: system_parts.join("\n\n"),
+    });
 
     for msg in history {
         if msg.role == AiRole::System {
@@ -593,6 +705,31 @@ pub async fn call_chat_api(
         role: "user",
         content: user_message.to_string(),
     });
+
+    messages
+}
+
+pub async fn call_chat_api(
+    settings: &crate::models::AppSettings,
+    history: &[AiMessage],
+    user_message: &str,
+    chunks: &[AiSearchResult],
+    context: Option<&AiChatContext>,
+) -> AppResult<String> {
+    if settings.ai_base_url.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API 基础地址".into()));
+    }
+    if settings.ai_model.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置模型名称".into()));
+    }
+    if settings.ai_api_key.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API Key".into()));
+    }
+
+    let base_url = settings.ai_base_url.trim().trim_end_matches('/');
+    let url = format!("{}/chat/completions", base_url);
+
+    let messages = build_messages(settings, history, user_message, chunks, context);
 
     let client = reqwest::Client::new();
     let response = client
@@ -630,6 +767,7 @@ pub async fn call_chat_api_stream(
     history: &[AiMessage],
     user_message: &str,
     chunks: &[AiSearchResult],
+    context: Option<&AiChatContext>,
     on_event: &Channel<AiStreamEvent>,
 ) -> AppResult<String> {
     if settings.ai_base_url.trim().is_empty() {
@@ -645,47 +783,7 @@ pub async fn call_chat_api_stream(
     let base_url = settings.ai_base_url.trim().trim_end_matches('/');
     let url = format!("{}/chat/completions", base_url);
 
-    let mut messages: Vec<OpenAiMessage> = Vec::new();
-    let system_prompt = if settings.ai_system_prompt.trim().is_empty() {
-        DEFAULT_SYSTEM_PROMPT
-    } else {
-        settings.ai_system_prompt.trim()
-    };
-    messages.push(OpenAiMessage {
-        role: "system",
-        content: system_prompt.to_string(),
-    });
-
-    if !chunks.is_empty() {
-        let context = chunks
-            .iter()
-            .map(|c| format!("[{}] {}", c.chunk.source_type, c.chunk.content))
-            .collect::<Vec<_>>()
-            .join("\n---\n");
-        messages.push(OpenAiMessage {
-            role: "system",
-            content: format!("以下是与用户问题相关的工作区资料：\n{}", context),
-        });
-    }
-
-    for msg in history {
-        if msg.role == AiRole::System {
-            continue;
-        }
-        messages.push(OpenAiMessage {
-            role: match msg.role {
-                AiRole::User => "user",
-                AiRole::Assistant => "assistant",
-                AiRole::System => "system",
-            },
-            content: msg.content.clone(),
-        });
-    }
-
-    messages.push(OpenAiMessage {
-        role: "user",
-        content: user_message.to_string(),
-    });
+    let messages = build_messages(settings, history, user_message, chunks, context);
 
     let client = reqwest::Client::new();
     let response = client
@@ -828,7 +926,7 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                 title: note.title,
             })
         }
-        "outline" => {
+        "outline" | "outline_node" => {
             let node = crate::services::outline::create(
                 conn,
                 crate::models::CreateOutlineNodeInput {
@@ -842,7 +940,7 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                 },
             )?;
             Ok(AiInsertResult {
-                target: "outline".into(),
+                target: input.target.clone(),
                 id: node.id,
                 title: node.title,
             })
@@ -914,6 +1012,44 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                 target: "vn_scene".into(),
                 id: scene.id,
                 title: scene.title,
+            })
+        }
+        "character" => {
+            let character = crate::services::character::create(
+                conn,
+                crate::models::CreateCharacterInput {
+                    workspace_id: input.workspace_id.clone(),
+                    name: title.clone(),
+                    description: Some(body),
+                    tags: None,
+                    color: None,
+                },
+            )?;
+            Ok(AiInsertResult {
+                target: "character".into(),
+                id: character.id,
+                title: character.name,
+            })
+        }
+        "location" => {
+            let location = crate::services::location::create(
+                conn,
+                crate::models::CreateLocationInput {
+                    workspace_id: input.workspace_id.clone(),
+                    name: title.clone(),
+                    description: Some(body),
+                    pos_x: None,
+                    pos_y: None,
+                    color: None,
+                    icon: None,
+                    linked_event_id: None,
+                    character_ids: None,
+                },
+            )?;
+            Ok(AiInsertResult {
+                target: "location".into(),
+                id: location.id,
+                title: location.name,
             })
         }
         _ => Err(AppError::InvalidInput(format!(
@@ -1064,5 +1200,67 @@ mod tests {
         .unwrap();
         let entry = kv_get(&conn, "ws", "hello").unwrap().unwrap();
         assert_eq!(entry.value, "world");
+    }
+
+    #[test]
+    fn should_format_context_block() {
+        let context = AiChatContext {
+            workspace_summary: Some("角色 2 个，事件 1 个。".into()),
+            timeline: None,
+            characters: Some(vec![
+                crate::models::AiChatContextCharacterItem {
+                    id: "c1".into(),
+                    name: "艾莉丝".into(),
+                    description: Some("女主角".into()),
+                    role: Some("主角".into()),
+                },
+            ]),
+            locations: None,
+            outline: None,
+            notes: None,
+            selected_entity: Some(Some(crate::models::AiChatContextSelectedEntity {
+                r#type: "event".into(),
+                id: "e1".into(),
+                label: "开场".into(),
+                content: None,
+            })),
+        };
+        let block = build_context_block(&context);
+        assert!(block.contains("工作区上下文"));
+        assert!(block.contains("角色 2 个"));
+        assert!(block.contains("艾莉丝"));
+        assert!(block.contains("选中对象"));
+    }
+
+    #[test]
+    fn should_apply_output_to_character_and_location() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        let character_result = apply_output(
+            &conn,
+            &AiInsertInput {
+                workspace_id: ws_id.clone(),
+                target: "character".into(),
+                content: "新角色\n这是一个测试角色".into(),
+                track_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(character_result.target, "character");
+        assert_eq!(character_result.title, "新角色");
+
+        let location_result = apply_output(
+            &conn,
+            &AiInsertInput {
+                workspace_id: ws_id.clone(),
+                target: "location".into(),
+                content: "新地点\n这是一个测试地点".into(),
+                track_id: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(location_result.target, "location");
+        assert_eq!(location_result.title, "新地点");
     }
 }

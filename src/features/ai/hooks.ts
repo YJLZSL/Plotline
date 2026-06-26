@@ -1,4 +1,7 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createElement } from 'react';
+import type { ReactNode } from 'react';
 
 import type { AiInsertInput, AiKvEntry, AiMessage, AiSession } from '@/types';
 import { toastError, toastSuccess } from '@/stores/toast';
@@ -147,15 +150,29 @@ export function useApplyAiOutput(workspaceId: string) {
       toastSuccess(`已创建 ${result.title}`);
       if (result.target === 'note') {
         qc.invalidateQueries({ queryKey: ['notes', workspaceId] });
-      } else if (result.target === 'outline') {
+      } else if (result.target === 'outline' || result.target === 'outline_node') {
         qc.invalidateQueries({ queryKey: ['outlineNodes', workspaceId] });
       } else if (result.target === 'event') {
         qc.invalidateQueries({ queryKey: ['events', workspaceId] });
         qc.invalidateQueries({ queryKey: ['timeline', workspaceId] });
       } else if (result.target === 'vn_scene') {
         qc.invalidateQueries({ queryKey: ['vnScenes', workspaceId] });
+      } else if (result.target === 'character') {
+        qc.invalidateQueries({ queryKey: ['characters', workspaceId] });
+      } else if (result.target === 'location') {
+        qc.invalidateQueries({ queryKey: ['locations', workspaceId] });
       }
     },
     onError: toastError,
   });
+}
+
+export function createWrapper(qc: QueryClient) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return createElement(
+      QueryClientProvider,
+      { client: qc },
+      children,
+    );
+  };
 }

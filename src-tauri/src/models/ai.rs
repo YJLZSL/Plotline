@@ -55,6 +55,71 @@ pub struct CreateAiMessageInput {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContext {
+    pub workspace_summary: Option<String>,
+    pub timeline: Option<Vec<AiChatContextTimelineItem>>,
+    pub characters: Option<Vec<AiChatContextCharacterItem>>,
+    pub locations: Option<Vec<AiChatContextLocationItem>>,
+    pub outline: Option<Vec<AiChatContextOutlineItem>>,
+    pub notes: Option<Vec<AiChatContextNoteItem>>,
+    pub selected_entity: Option<Option<AiChatContextSelectedEntity>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContextTimelineItem {
+    pub id: String,
+    pub title: String,
+    pub date_value: Option<String>,
+    pub track_name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContextCharacterItem {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub role: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContextLocationItem {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContextOutlineItem {
+    pub id: String,
+    pub title: String,
+    pub level: i32,
+    pub parent_id: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContextNoteItem {
+    pub id: String,
+    pub title: String,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatContextSelectedEntity {
+    pub r#type: String,
+    pub id: String,
+    pub label: String,
+    pub content: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiChatInput {
@@ -62,6 +127,7 @@ pub struct AiChatInput {
     pub session_id: Option<String>,
     pub message: String,
     pub use_rag: Option<bool>,
+    pub context: Option<AiChatContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +169,7 @@ pub struct AiKvEntry {
 #[serde(rename_all = "camelCase")]
 pub struct AiInsertInput {
     pub workspace_id: String,
-    pub target: String, // note | outline | event | vn_scene
+    pub target: String, // note | outline | event | vn_scene | character | location | outline_node
     pub content: String,
     pub track_id: Option<String>,
 }

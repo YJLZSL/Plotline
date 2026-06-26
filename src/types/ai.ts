@@ -28,11 +28,63 @@ export interface CreateAiMessageInput {
   content: string;
 }
 
+export interface AiChatTimelineItem {
+  id: string;
+  title: string;
+  dateValue?: string;
+  trackName: string;
+  description?: string;
+}
+
+export interface AiChatCharacterItem {
+  id: string;
+  name: string;
+  description?: string;
+  role?: string;
+}
+
+export interface AiChatLocationItem {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface AiChatOutlineItem {
+  id: string;
+  title: string;
+  level: number;
+  parentId?: string | null;
+}
+
+export interface AiChatNoteItem {
+  id: string;
+  title: string;
+  summary?: string;
+}
+
+export interface AiChatContextSelectedEntity {
+  type: string;
+  id: string;
+  label: string;
+  content?: string;
+}
+
+export interface AiChatContext {
+  workspaceSummary?: string;
+  timeline?: AiChatTimelineItem[];
+  characters?: AiChatCharacterItem[];
+  locations?: AiChatLocationItem[];
+  outline?: AiChatOutlineItem[];
+  notes?: AiChatNoteItem[];
+  selectedEntity?: AiChatContextSelectedEntity | null;
+}
+
 export interface AiChatInput {
   workspaceId: string;
   sessionId?: string | null;
   message: string;
   useRag?: boolean;
+  context?: AiChatContext;
 }
 
 export interface AiChatResult {
@@ -62,9 +114,18 @@ export interface AiKvEntry {
   updatedAt: string;
 }
 
+export type AiInsertTarget =
+  | 'note'
+  | 'outline'
+  | 'event'
+  | 'vn_scene'
+  | 'character'
+  | 'location'
+  | 'outline_node';
+
 export interface AiInsertInput {
   workspaceId: string;
-  target: 'note' | 'outline' | 'event' | 'vn_scene';
+  target: AiInsertTarget;
   content: string;
   trackId?: string;
 }

@@ -6,11 +6,13 @@ import {
   Calendar,
   Clapperboard,
   ListTree,
+  MapPin,
   MessageSquarePlus,
   PanelRightClose,
   Send,
   Sparkles,
   StickyNote,
+  User,
   X,
 } from 'lucide-react';
 
@@ -24,6 +26,10 @@ import { useAiContextStore } from '@/stores/aiContext';
 import { getProviderPreset } from '@/features/ai/providers';
 import { aiChatStream } from '@/features/ai/api';
 import {
+  collectAiContext,
+  type AiContextSource,
+} from '@/features/ai/contextCollector';
+import {
   aiMessagesKey,
   aiSessionsKey,
   useAiIndexWorkspace,
@@ -34,13 +40,23 @@ import {
   useCreateAiSession,
   useDeleteAiSession,
 } from '@/features/ai/hooks';
-import type { AiMessage, AiSession } from '@/types';
+import type { AiChatContext, AiMessage, AiSession } from '@/types';
+import type { AiSelection } from '@/stores/aiContext';
 
 interface AiAssistantPanelProps {
   open: boolean;
   onClose: () => void;
   workspaceId: string;
 }
+
+const SOURCE_OPTIONS: { value: AiContextSource; labelKey: string }[] = [
+  { value: 'workspaceSummary', labelKey: 'ai.sourceWorkspaceSummary' },
+  { value: 'timeline', labelKey: 'ai.sourceTimeline' },
+  { value: 'characters', labelKey: 'ai.sourceCharacters' },
+  { value: 'locations', labelKey: 'ai.sourceLocations' },
+  { value: 'outline', labelKey: 'ai.sourceOutline' },
+  { value: 'notes', labelKey: 'ai.sourceNotes' },
+];
 
 export function AiAssistantPanel({
   open,
@@ -55,6 +71,7 @@ export function AiAssistantPanel({
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [isCollectingContext, setIsCollectingContext] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: messages = [] } = useAiMessagesQuery(currentSessionId);
@@ -83,36 +100,47 @@ export function AiAssistantPanel({
 
   const aiContext = useAiContextStore();
 
-  const buildContextPrefix = () => {
-    const parts: string[] = [];
-    if (aiContext.viewLabel) {
-      parts.push(`【当前视图：${aiContext.viewLabel}】`);
-    }
-    if (aiContext.selection) {
-      const sel = aiContext.selection;
-      parts.push(`【选中对象：${sel.label}（类型：${sel.type}，ID：${sel.id}）】`);
-      if (sel.content) {
-        const snippet = sel.content.length > 300 ? `${sel.content.slice(0, 300)}…` : sel.content;
-        parts.push(`【选中内容：\n${snippet}】`);
-      }
-    }
-    return parts.length > 0 ? `${parts.join('\n')}\n\n` : '';
+  const toggleSource = (source: AiContextSource) => {
+    const next = aiContext.enabledSources.includes(source)
+      ? aiContext.enabledSources.filter((s) => s !== source)
+      : [...aiContext.enabledSources, source];
+    aiContext.setEnabledSources(next);
   };
+
+  const enabled = settings?.aiEnabled ?? false;
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || isStreaming) return;
+    if (!text || isStreaming || isCollectingContext) return;
     setInput('');
     setIsStreaming(true);
+    setIsCollectingContext(true);
     setStreamingContent('');
-    const message = `${buildContextPrefix()}${text}`;
+
+    let context: AiChatContext | undefined;
+    try {
+      context = await collectAiContext(
+        workspaceId,
+        aiContext.enabledSources,
+        aiContext.selection,
+      );
+      if (summary?.value && aiContext.enabledSources.includes('workspaceSummary')) {
+        context = { ...context, workspaceSummary: summary.value };
+      }
+    } catch {
+      // 上下文收集失败时仍然发送消息，只是不带上下文
+    } finally {
+      setIsCollectingContext(false);
+    }
+
     try {
       const result = await aiChatStream(
         {
           workspaceId,
           sessionId: currentSessionId,
-          message,
+          message: text,
           useRag: true,
+          context,
         },
         (event) => {
           if (event.type === 'delta') {
@@ -139,8 +167,6 @@ export function AiAssistantPanel({
       void handleSend();
     }
   };
-
-  const enabled = settings?.aiEnabled ?? false;
 
   return (
     <AnimatePresence>
@@ -221,43 +247,28 @@ export function AiAssistantPanel({
                   }}
                 />
 
-                {summary && (
-                  <div className="mx-4 mt-3 px-3 py-2 rounded-[6px] bg-bg-elevated border border-border text-xs text-text-secondary">
-                    <span className="font-medium text-text-primary">
-                      {t('ai.context')}
-                    </span>
-                    ：{summary.value}
-                  </div>
-                )}
+                <ContextPanel
+                  summary={summary?.value}
+                  selection={aiContext.selection}
+                  enabledSources={aiContext.enabledSources}
+                  onToggleSource={toggleSource}
+                  onClearSelection={aiContext.clearSelection}
+                />
 
-                {(aiContext.viewLabel || aiContext.selection || aiContext.suggestions.length > 0) && (
+                {aiContext.suggestions.length > 0 && (
                   <div className="mx-4 mt-3 px-3 py-2 rounded-[6px] bg-bg-elevated border border-border text-xs">
-                    <div className="flex flex-wrap gap-1.5 items-center text-text-secondary">
-                      {aiContext.viewLabel && (
-                        <span className="px-1.5 py-0.5 rounded-[4px] bg-accent/10 text-accent">
-                          {t('ai.contextView', { view: aiContext.viewLabel })}
-                        </span>
-                      )}
-                      {aiContext.selection && (
-                        <span className="px-1.5 py-0.5 rounded-[4px] bg-bg-base border border-border truncate max-w-[200px]">
-                          {t('ai.contextSelection', { label: aiContext.selection.label })}
-                        </span>
-                      )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiContext.suggestions.map((s) => (
+                        <button
+                          key={s.label}
+                          data-testid={`ai-suggestion-${s.label}`}
+                          onClick={() => setInput(s.prompt)}
+                          className="px-2 py-1 rounded-[4px] bg-bg-base border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-colors"
+                        >
+                          {s.label}
+                        </button>
+                      ))}
                     </div>
-                    {aiContext.suggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {aiContext.suggestions.map((s) => (
-                          <button
-                            key={s.label}
-                            data-testid={`ai-suggestion-${s.label}`}
-                            onClick={() => setInput(s.prompt)}
-                            className="px-2 py-1 rounded-[4px] bg-bg-base border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-colors"
-                          >
-                            {s.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -287,7 +298,37 @@ export function AiAssistantPanel({
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="p-3 border-t border-border bg-bg-base flex-shrink-0">
+                <div className="p-3 border-t border-border bg-bg-base flex-shrink-0 space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {SOURCE_OPTIONS.map((source) => {
+                      const active = aiContext.enabledSources.includes(source.value);
+                      return (
+                        <button
+                          key={source.value}
+                          onClick={() => toggleSource(source.value)}
+                          className={cn(
+                            'flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] border transition-colors',
+                            active
+                              ? 'bg-accent/10 border-accent/40 text-accent'
+                              : 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary',
+                          )}
+                          title={t(source.labelKey)}
+                        >
+                          <span
+                            className={cn(
+                              'h-3 w-3 rounded-[2px] border flex items-center justify-center',
+                              active
+                                ? 'bg-accent border-accent'
+                                : 'border-text-secondary/40',
+                            )}
+                          >
+                            {active && <span className="h-2 w-2 bg-bg-base rounded-[1px]" />}
+                          </span>
+                          {t(source.labelKey)}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex items-end gap-2">
                     <Textarea
                       value={input}
@@ -299,7 +340,7 @@ export function AiAssistantPanel({
                     />
                     <Button
                       onClick={() => void handleSend()}
-                      loading={isStreaming}
+                      loading={isStreaming || isCollectingContext}
                       disabled={!input.trim()}
                       className="h-10 w-10 p-0 flex-shrink-0"
                     >
@@ -384,6 +425,73 @@ function SessionList({
   );
 }
 
+function ContextPanel({
+  summary,
+  selection,
+  enabledSources,
+  onToggleSource,
+  onClearSelection,
+}: {
+  summary?: string;
+  selection: AiSelection | null;
+  enabledSources: AiContextSource[];
+  onToggleSource: (source: AiContextSource) => void;
+  onClearSelection: () => void;
+}) {
+  const { t } = useI18n();
+  const hasSummary = summary && enabledSources.includes('workspaceSummary');
+  const hasTags = hasSummary || selection || enabledSources.length > 0;
+  if (!hasTags) return null;
+
+  return (
+    <div className="mx-4 mt-3 px-3 py-2 rounded-[6px] bg-bg-elevated border border-border text-xs">
+      <div className="flex flex-wrap gap-1.5 items-center text-text-secondary">
+        {hasSummary && (
+          <span className="px-1.5 py-0.5 rounded-[4px] bg-accent/10 text-accent">
+            {t('ai.context')}
+          </span>
+        )}
+        {enabledSources
+          .filter((s) => s !== 'workspaceSummary')
+          .map((source) => (
+            <button
+              key={source}
+              onClick={() => onToggleSource(source)}
+              className="px-1.5 py-0.5 rounded-[4px] bg-bg-base border border-border hover:border-accent/40 transition-colors"
+            >
+              {t(`ai.source${capitalize(source)}`)}
+            </button>
+          ))}
+        {selection && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-bg-base border border-border truncate max-w-[200px]">
+            {t('ai.contextSelection', { label: selection.label })}
+            <button
+              onClick={onClearSelection}
+              className="hover:text-red-500"
+              title={t('common.remove')}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function capitalize(value: AiContextSource): string {
+  const map: Record<AiContextSource, string> = {
+    workspaceSummary: 'WorkspaceSummary',
+    timeline: 'Timeline',
+    characters: 'Characters',
+    locations: 'Locations',
+    outline: 'Outline',
+    notes: 'Notes',
+    selectedEntity: 'SelectedEntity',
+  };
+  return map[value];
+}
+
 function MessageBubble({
   message,
   workspaceId,
@@ -395,11 +503,18 @@ function MessageBubble({
   const isUser = message.role === 'user';
   const apply = useApplyAiOutput(workspaceId);
 
-  const actions: Array<{ target: 'note' | 'outline' | 'event' | 'vn_scene'; icon: React.ReactNode; label: string }> = [
+  const actions: Array<{
+    target: 'note' | 'outline' | 'event' | 'vn_scene' | 'character' | 'location' | 'outline_node';
+    icon: React.ReactNode;
+    label: string;
+  }> = [
     { target: 'note', icon: <StickyNote className="h-3 w-3" />, label: t('ai.insertNote') },
     { target: 'outline', icon: <ListTree className="h-3 w-3" />, label: t('ai.insertOutline') },
+    { target: 'outline_node', icon: <ListTree className="h-3 w-3" />, label: t('ai.insertOutlineNode') },
     { target: 'event', icon: <Calendar className="h-3 w-3" />, label: t('ai.insertEvent') },
     { target: 'vn_scene', icon: <Clapperboard className="h-3 w-3" />, label: t('ai.insertVnScene') },
+    { target: 'character', icon: <User className="h-3 w-3" />, label: t('ai.insertCharacter') },
+    { target: 'location', icon: <MapPin className="h-3 w-3" />, label: t('ai.insertLocation') },
   ];
 
   return (
