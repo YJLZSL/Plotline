@@ -53,7 +53,7 @@ fn get(conn: &Connection, id: &str) -> AppResult<NovelChapter> {
 
 fn count_words(text: &str) -> i64 {
     // 中文字符计数 + 英文单词计数
-    let chinese_chars = text.chars().filter(|c| c.is_ascii() == false).count() as i64;
+    let chinese_chars = text.chars().filter(|c| !c.is_ascii()).count() as i64;
     let english_words = text
         .split_whitespace()
         .filter(|w| w.chars().any(|c| c.is_ascii_alphanumeric()))
