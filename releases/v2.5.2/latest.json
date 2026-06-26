@@ -1,0 +1,11 @@
+{
+  "version": "2.5.2",
+  "notes": "Plotline v2.5.2：环境动画与减少动画开关。",
+  "pub_date": "2026-06-26T11:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "untrusted comment: signature from tauri secret key\nRUTHAa58mARCFd14Vlvbr/perTzbqm1bzU7DOxZ9AfM8UPLwbQGJcd32+aVIPjDUuDM1df697p5lHei9LCIrG4xW9ZlX6iDDLAQ=\ntrusted comment: timestamp:1782473835\tfile:Plotline_2.5.2_x64-setup.exe\nJzuiU80wtC1NL3LEazKc53iJeRXw5i7vx1PQSEacZtj723BE3U8aFech3nP6cp8lGuXUgDFm8qb7W2KEkoydDw==\n",
+      "url": "https://github.com/YJLZSL/Plotline/releases/download/v2.5.2/Plotline_2.5.2_x64-setup.exe"
+    }
+  }
+}
