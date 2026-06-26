@@ -44,13 +44,14 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.5.2 已发布：环境动画与减少动画开关）
+### 当前迭代状态（v2.5.3 已发布：Release 签名与 latest.json 完全自动化）
 - **`animations_enabled` 设置**：后端新增 `app_settings.animations_enabled` 列与对应模型/服务逻辑，前端类型同步到 `src/types/settings.ts`。
 - **`--motion-enabled` CSS 变量**：`src/stores/ui.ts` 的 `applyToDOM` 根据设置将 `--motion-enabled` 设为 `1` 或 `0`，`src/styles/themes.css` 提供对应 CSS 辅助类。
 - **环境动画基础设施**：新增 `src/stores/motion.ts` 与 `src/hooks/useAmbientAnimation.ts`，为组件提供基于运动设置的门控动画参数。
 - **减少动画开关**：`SettingsView` 外观标签新增「启用动画」开关，i18n 键同步到 `zh-CN.json`/`en.json`。
 - **环境动画落地**：`WorkspaceSelector`、`Sidebar`、`TimelineView`、`PomodoroTimer`、`EmptyState`、`SettingsView` 主题卡片等组件均通过 `useAmbientAnimation` 或 `--motion-enabled` 启用/禁用动画。
-- **发布验证**：v2.5.2 已构建并发布；因 CI 未自动生成 `.sig` 与 `latest.json`，已使用本地 `keys/plotline.key` 手动签名并补传；自动更新端点已验证返回 v2.5.2 真实签名清单。
+- **Release 签名自动化**：`.github/workflows/release.yml` 新增显式签名步骤，CI 自动为 `.exe` 生成 `.sig` 并创建 `latest.json` 上传 Release；v2.5.3 已验证全部产物由 CI 自动生成，无需手动签名。
+- **发布验证**：v2.5.3 已构建并发布；GitHub Release 包含 `.exe`、`.msi`、`.sig`、`latest.json`；自动更新端点已验证返回 v2.5.3 真实签名清单。
 
 ### 上一版本（v2.3.0 / v2.2.0 已发布）
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
@@ -242,9 +243,9 @@ docs(agents): 补充 IPC 调用规范
 - [x] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
 - [x] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
 
-> **⚠️ 签名密钥问题**：如果 CI 构建成功但 Release 缺少 `.sig` 和 `latest.json`，说明 `TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 未配置或已失效。详见 `交接文档.md` 中的 "签名密钥问题" 部分。
+> **签名密钥说明**：`.github/workflows/release.yml` 已配置显式签名步骤，CI 会自动为 `.exe` 生成 `.sig` 并创建 `latest.json` 上传 Release。正常情况下无需手动干预；仅在 CI 失败或 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 失效等紧急情况下，才使用本地 `keys/plotline.key` 手动签名并上传作为 fallback。详见 `交接文档.md` 中的 "签名密钥状态" 部分。
 >
-> **v2.5.1 迭代说明**：v2.5.0 的 Release 检查清单已全部完成；当前 main 分支正在为 v2.5.1 开发 MC 主题增强与回归修复。v2.5.1 发布前需重新执行本清单并更新 `releases/v2.5.1/latest.json` 的签名与版本号。
+> **v2.5.3 迭代说明**：v2.5.3 的 Release 检查清单已全部完成；`.sig` 与 `latest.json` 首次由 CI 自动生成并验证通过。后续版本发布前仍需统一版本号、`更新日志.md`，但不再需要手动维护 `releases/vX.Y.Z/latest.json` 的签名。
 
 ---
 
@@ -328,5 +329,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.4  
-> 最后更新：2026-06-26（v2.5.1 迭代中：MC 主题增强与回归修复）
+> 文档版本：v0.5.5  
+> 最后更新：2026-06-26（v2.5.3 已发布：Release 签名与 latest.json 完全自动化）
