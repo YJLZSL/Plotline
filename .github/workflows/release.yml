@@ -54,5 +54,50 @@ jobs:
           releaseBody: '见 `更新日志.md` 获取发布说明。自动更新清单：latest.json'
           releaseDraft: false
           prerelease: false
-          includeUpdaterJson: true
+          includeUpdaterJson: false
           args: ''
+
+      - name: Validate signing key
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Error "TAURI_SIGNING_PRIVATE_KEY is empty. Aborting."
+            exit 1
+          }
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+      - name: Install Tauri CLI
+        run: pnpm add -g @tauri-apps/cli
+
+      - name: Sign installer and upload updater manifest
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $exePattern = "Plotline_*_x64-setup.exe"
+          gh release download $tag -p "$exePattern" --repo "YJLZSL/Plotline"
+          $exe = Get-ChildItem -Name $exePattern | Select-Object -First 1
+          if (-not $exe) { Write-Error "Installer .exe not found"; exit 1 }
+          pnpm exec tauri signer sign "$exe"
+          $sigFile = "$exe.sig"
+          $version = $tag -replace '^v',''
+          $signature = Get-Content $sigFile -Raw
+          $notes = "Plotline $tag：环境动画、减少动画开关、Release 签名完全自动化。"
+          $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+          $json = @{
+            version = $version
+            notes = $notes
+            pub_date = $pubDate
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = "https://github.com/YJLZSL/Plotline/releases/download/$tag/$exe"
+              }
+            }
+          } | ConvertTo-Json -Depth 4
+          $json | Out-File -Encoding utf8 latest.json
+          gh release upload $tag $sigFile latest.json --clobber --repo "YJLZSL/Plotline"
