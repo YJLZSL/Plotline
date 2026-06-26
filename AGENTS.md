@@ -44,17 +44,13 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.5.1 迭代中：MC 主题增强与回归修复）
-- **E2E 导航链接回归已修复**：新增「小说」视图后，侧边栏/顶部导航链接数由 9 变为 10；已更新 `tests/e2e/v1-ui-regression.spec.ts` 断言，真实浏览器测试通过。
-- **番茄钟 MC 主题增强**：进度条方块序列扩展为泥土→石头→煤矿→铁矿→金矿→钻石→黑曜石；新增心形/饥饿值像素图标；100% 完成时触发 "Boom!" 像素文字与 Creeper 爆炸抖动动画。
-- **全局 MC 主题纹理扩展**：`src/styles/themes.css` 新增心形、饥饿值、经验条、物品栏、镐、剑、附魔等 CSS 工具类与纹理变量；按钮/标签/卡片/输入框/滚动条选择器强化为更具辨识度的方块材质。
-- **MC 主题视觉回归测试**：新增 `tests/e2e/visual/mc-theme.spec.ts`，覆盖番茄钟默认/MC 主题/运行状态、设置页 MC 主题切换、时间轴 MC 主题渲染；并在 `tests/e2e/core-flows.spec.ts` 中补全小说视图导航测试。
-- **Release 状态**：v2.5.0 已发布，v2.5.1 开发中
-  - tag `v2.5.0` 指向 `e774a39`。
-  - Release Workflow `28225874664` 与 CI Workflow `28225743083` 均成功。
-  - Release assets 包含 `.exe`、`.msi`、`.sig`、`latest.json`。
-  - 自动更新端点 `https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 返回 v2.5.0 真实签名清单。
-  - 注意：`.sig` 与 `latest.json` 本次由本地手动签名上传；CI 自动签名仍未生效，下一版本需继续排查。
+### 当前迭代状态（v2.5.2 已发布：环境动画与减少动画开关）
+- **`animations_enabled` 设置**：后端新增 `app_settings.animations_enabled` 列与对应模型/服务逻辑，前端类型同步到 `src/types/settings.ts`。
+- **`--motion-enabled` CSS 变量**：`src/stores/ui.ts` 的 `applyToDOM` 根据设置将 `--motion-enabled` 设为 `1` 或 `0`，`src/styles/themes.css` 提供对应 CSS 辅助类。
+- **环境动画基础设施**：新增 `src/stores/motion.ts` 与 `src/hooks/useAmbientAnimation.ts`，为组件提供基于运动设置的门控动画参数。
+- **减少动画开关**：`SettingsView` 外观标签新增「启用动画」开关，i18n 键同步到 `zh-CN.json`/`en.json`。
+- **环境动画落地**：`WorkspaceSelector`、`Sidebar`、`TimelineView`、`PomodoroTimer`、`EmptyState`、`SettingsView` 主题卡片等组件均通过 `useAmbientAnimation` 或 `--motion-enabled` 启用/禁用动画。
+- **发布验证**：v2.5.2 已构建并发布；因 CI 未自动生成 `.sig` 与 `latest.json`，已使用本地 `keys/plotline.key` 手动签名并补传；自动更新端点已验证返回 v2.5.2 真实签名清单。
 
 ### 上一版本（v2.3.0 / v2.2.0 已发布）
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
