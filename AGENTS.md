@@ -44,13 +44,12 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.5.0 已发布）
-- **时间轴图片插入**：事件编辑对话框新增图片上传区域，支持本地图片选择、缩略图展示与删除；后端 `events` 表新增 `image_urls` JSON 字段；迁移 `011_event_images.sql`。
-- **小说写作模块**：全新「小说」视图，左侧章节列表 + 右侧 TipTap 编辑器；支持章节关联大纲节点、实时字数统计、自动保存；数据库迁移 `012_novel_chapters.sql`。
-- **VN 增强**：台词新增「立绘位置」选择器（左/中/右）；预览面板根据位置渲染立绘；新增「完整预览」对话框支持分支选择与场景跳转；迁移 `013_vn_sprites.sql`。
-- **MC 主题真正 Minecraft 元素**：新增 7 种像素纹理（苦力怕脸、钻石矿石、红石块、黑曜石、金块、铁块、绿宝石）；番茄钟进度条使用分层方块类型；100% 完成触发 Creeper 爆炸动画；成就指示器用方块图标展示。
-- **CI 编译错误修复**：main 分支已推送修复，修复 Event image_urls、VnLine sprite_position、ai.rs CreateEventInput image_urls、novel.rs word_count 断言等编译/测试错误。
-- **Release 状态**：✅ 已完成
+### 当前迭代状态（v2.5.1 迭代中：MC 主题增强与回归修复）
+- **E2E 导航链接回归已修复**：新增「小说」视图后，侧边栏/顶部导航链接数由 9 变为 10；已更新 `tests/e2e/v1-ui-regression.spec.ts` 断言，真实浏览器测试通过。
+- **番茄钟 MC 主题增强**：进度条方块序列扩展为泥土→石头→煤矿→铁矿→金矿→钻石→黑曜石；新增心形/饥饿值像素图标；100% 完成时触发 "Boom!" 像素文字与 Creeper 爆炸抖动动画。
+- **全局 MC 主题纹理扩展**：`src/styles/themes.css` 新增心形、饥饿值、经验条、物品栏、镐、剑、附魔等 CSS 工具类与纹理变量；按钮/标签/卡片/输入框/滚动条选择器强化为更具辨识度的方块材质。
+- **MC 主题视觉回归测试**：新增 `tests/e2e/visual/mc-theme.spec.ts`，覆盖番茄钟默认/MC 主题/运行状态、设置页 MC 主题切换、时间轴 MC 主题渲染；并在 `tests/e2e/core-flows.spec.ts` 中补全小说视图导航测试。
+- **Release 状态**：v2.5.0 已发布，v2.5.1 开发中
   - tag `v2.5.0` 指向 `e774a39`。
   - Release Workflow `28225874664` 与 CI Workflow `28225743083` 均成功。
   - Release assets 包含 `.exe`、`.msi`、`.sig`、`latest.json`。
@@ -248,6 +247,8 @@ docs(agents): 补充 IPC 调用规范
 - [x] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
 
 > **⚠️ 签名密钥问题**：如果 CI 构建成功但 Release 缺少 `.sig` 和 `latest.json`，说明 `TAURI_SIGNING_PRIVATE_KEY` GitHub Secret 未配置或已失效。详见 `交接文档.md` 中的 "签名密钥问题" 部分。
+>
+> **v2.5.1 迭代说明**：v2.5.0 的 Release 检查清单已全部完成；当前 main 分支正在为 v2.5.1 开发 MC 主题增强与回归修复。v2.5.1 发布前需重新执行本清单并更新 `releases/v2.5.1/latest.json` 的签名与版本号。
 
 ---
 
@@ -331,5 +332,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.3  
-> 最后更新：2026-06-26（v2.5.0 已发布，Release 与自动更新验证完成）
+> 文档版本：v0.5.4  
+> 最后更新：2026-06-26（v2.5.1 迭代中：MC 主题增强与回归修复）
