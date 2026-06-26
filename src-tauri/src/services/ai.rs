@@ -1284,6 +1284,7 @@ mod tests {
                 source_id: "e1".into(),
                 source_type: "event".into(),
                 content: "艾莉丝醒来".into(),
+                updated_at: Utc::now(),
             },
             score: 1,
         }];
