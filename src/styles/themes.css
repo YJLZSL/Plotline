@@ -10,6 +10,8 @@
   --accent-soft: #e8c988;
   --border: #e5ddc9;
   --shadow-color: rgba(58, 46, 38, 0.08);
+  --shadow-card-soft: 0 2px 8px var(--shadow-color);
+  --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
   --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
   --motion-enabled: 1;
   --motion-duration: calc(var(--motion-enabled) * 0.25s);
@@ -55,6 +57,8 @@
   --accent-soft: #8a5e2c;
   --border: #3d352e;
   --shadow-color: rgba(0, 0, 0, 0.4);
+  --shadow-card-soft: 0 2px 8px var(--shadow-color);
+  --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
 }
 
 [data-theme="sepia"] {
@@ -67,6 +71,8 @@
   --accent-soft: #d4b47c;
   --border: #d6c29c;
   --shadow-color: rgba(74, 57, 39, 0.1);
+  --shadow-card-soft: 0 2px 8px var(--shadow-color);
+  --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
 }
 
 [data-theme="mc"] {

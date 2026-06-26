@@ -4,11 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bot,
   Calendar,
+  ChevronDown,
   Clapperboard,
   ListTree,
   MapPin,
   MessageSquarePlus,
+  PanelLeft,
   PanelRightClose,
+  Search,
   Send,
   Sparkles,
   StickyNote,
@@ -16,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 
-import { Button, EmptyState, Textarea } from '@/components/ui';
+import { Button, EmptyState, Input, Textarea } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
@@ -40,7 +43,7 @@ import {
   useCreateAiSession,
   useDeleteAiSession,
 } from '@/features/ai/hooks';
-import type { AiChatContext, AiMessage, AiSession } from '@/types';
+import type { AiChatContext, AiInsertTarget, AiMessage, AiSession } from '@/types';
 import type { AiSelection } from '@/stores/aiContext';
 
 interface AiAssistantPanelProps {
@@ -48,15 +51,6 @@ interface AiAssistantPanelProps {
   onClose: () => void;
   workspaceId: string;
 }
-
-const SOURCE_OPTIONS: { value: AiContextSource; labelKey: string }[] = [
-  { value: 'workspaceSummary', labelKey: 'ai.sourceWorkspaceSummary' },
-  { value: 'timeline', labelKey: 'ai.sourceTimeline' },
-  { value: 'characters', labelKey: 'ai.sourceCharacters' },
-  { value: 'locations', labelKey: 'ai.sourceLocations' },
-  { value: 'outline', labelKey: 'ai.sourceOutline' },
-  { value: 'notes', labelKey: 'ai.sourceNotes' },
-];
 
 export function AiAssistantPanel({
   open,
@@ -72,6 +66,8 @@ export function AiAssistantPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [isCollectingContext, setIsCollectingContext] = useState(false);
+  const [sessionSearch, setSessionSearch] = useState('');
+  const [showSessionsMobile, setShowSessionsMobile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: messages = [] } = useAiMessagesQuery(currentSessionId);
@@ -109,9 +105,9 @@ export function AiAssistantPanel({
 
   const enabled = settings?.aiEnabled ?? false;
 
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isStreaming || isCollectingContext) return;
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming || isCollectingContext) return;
     setInput('');
     setIsStreaming(true);
     setIsCollectingContext(true);
@@ -138,7 +134,7 @@ export function AiAssistantPanel({
         {
           workspaceId,
           sessionId: currentSessionId,
-          message: text,
+          message: trimmed,
           useRag: true,
           context,
         },
@@ -161,12 +157,24 @@ export function AiAssistantPanel({
     }
   };
 
+  const handleSend = () => {
+    void sendMessage(input);
+  };
+
+  const handleSuggestionClick = (prompt: string) => {
+    void sendMessage(prompt);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void handleSend();
+      handleSend();
     }
   };
+
+  const filteredSessions = sessions.filter((session) =>
+    session.title.toLowerCase().includes(sessionSearch.toLowerCase()),
+  );
 
   return (
     <AnimatePresence>
@@ -186,7 +194,7 @@ export function AiAssistantPanel({
             exit={{ x: '100%' }}
             transition={MOTION_BASE}
             data-testid="ai-assistant-panel"
-            className="fixed right-0 top-12 bottom-0 w-full max-w-md border-l border-border bg-bg-surface shadow-[var(--shadow-elevated)] z-40 flex flex-col"
+            className="fixed right-0 top-12 bottom-0 w-full max-w-lg border-l border-border bg-bg-surface shadow-[var(--shadow-elevated-soft)] z-40 flex flex-col"
           >
             <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-bg-base flex-shrink-0">
               <div className="flex items-center gap-2 text-text-primary">
@@ -225,6 +233,15 @@ export function AiAssistantPanel({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="sm:hidden"
+                  onClick={() => setShowSessionsMobile((v) => !v)}
+                  title={t('ai.sessions')}
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={onClose}
                   title={t('common.close')}
                 >
@@ -236,119 +253,142 @@ export function AiAssistantPanel({
             {!enabled ? (
               <DisabledState />
             ) : (
-              <>
-                <SessionList
-                  sessions={sessions}
-                  currentId={currentSessionId}
-                  onSelect={setCurrentSessionId}
-                  onDelete={(id) => {
-                    void deleteSession.mutateAsync(id);
-                    if (currentSessionId === id) setCurrentSessionId(null);
-                  }}
-                />
-
-                <ContextPanel
-                  summary={summary?.value}
-                  selection={aiContext.selection}
-                  enabledSources={aiContext.enabledSources}
-                  onToggleSource={toggleSource}
-                  onClearSelection={aiContext.clearSelection}
-                />
-
-                {aiContext.suggestions.length > 0 && (
-                  <div className="mx-4 mt-3 px-3 py-2 rounded-[6px] bg-bg-elevated border border-border text-xs">
-                    <div className="flex flex-wrap gap-1.5">
-                      {aiContext.suggestions.map((s) => (
-                        <button
-                          key={s.label}
-                          data-testid={`ai-suggestion-${s.label}`}
-                          onClick={() => setInput(s.prompt)}
-                          className="px-2 py-1 rounded-[4px] bg-bg-base border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-colors"
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-                  {messages.length === 0 && !isStreaming && (
-                    <EmptyState
-                      icon={<Bot className="h-8 w-8" />}
-                      title={t('ai.empty')}
-                      description={t('ai.emptyEnabled')}
-                    />
+              <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
+                <div
+                  data-testid="ai-session-list"
+                  className={cn(
+                    'w-full sm:w-40 border-b sm:border-b-0 sm:border-r border-border bg-bg-base flex flex-col flex-shrink-0',
+                    !showSessionsMobile && 'hidden sm:flex',
                   )}
-                  {messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} workspaceId={workspaceId} />
-                  ))}
-                  {isStreaming && streamingContent && (
-                    <MessageBubble
-                      message={{ id: 'streaming', role: 'assistant', content: streamingContent }}
-                      workspaceId={workspaceId}
-                    />
-                  )}
-                  {isStreaming && !streamingContent && (
-                    <div className="flex items-center gap-2 text-xs text-text-secondary">
-                      <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                      {t('ai.thinking')}
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                <div className="p-3 border-t border-border bg-bg-base flex-shrink-0 space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {SOURCE_OPTIONS.map((source) => {
-                      const active = aiContext.enabledSources.includes(source.value);
-                      return (
-                        <button
-                          key={source.value}
-                          onClick={() => toggleSource(source.value)}
-                          className={cn(
-                            'flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] border transition-colors',
-                            active
-                              ? 'bg-accent/10 border-accent/40 text-accent'
-                              : 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary',
-                          )}
-                          title={t(source.labelKey)}
-                        >
-                          <span
-                            className={cn(
-                              'h-3 w-3 rounded-[2px] border flex items-center justify-center',
-                              active
-                                ? 'bg-accent border-accent'
-                                : 'border-text-secondary/40',
-                            )}
-                          >
-                            {active && <span className="h-2 w-2 bg-bg-base rounded-[1px]" />}
-                          </span>
-                          {t(source.labelKey)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <Textarea
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder={t('ai.placeholder')}
-                      rows={1}
-                      className="min-h-[40px] max-h-32 resize-none py-2.5"
+                >
+                  <div className="p-2 border-b border-border flex items-center gap-2">
+                    <Search className="h-3.5 w-3.5 text-text-secondary flex-shrink-0 ml-1" />
+                    <Input
+                      value={sessionSearch}
+                      onChange={(e) => setSessionSearch(e.target.value)}
+                      placeholder={t('ai.searchSessions')}
+                      className="h-8 text-xs px-2 py-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
                     <Button
-                      onClick={() => void handleSend()}
-                      loading={isStreaming || isCollectingContext}
-                      disabled={!input.trim()}
-                      className="h-10 w-10 p-0 flex-shrink-0"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 flex-shrink-0"
+                      onClick={handleNewSession}
+                      loading={createSession.isPending}
+                      title={t('ai.newSession')}
                     >
-                      <Send className="h-4 w-4" />
+                      <MessageSquarePlus className="h-4 w-4" />
                     </Button>
                   </div>
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                    {filteredSessions.length === 0 && (
+                      <div className="px-2 py-1 text-xs text-text-secondary">
+                        {t('ai.empty')}
+                      </div>
+                    )}
+                    {filteredSessions.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        active={currentSessionId === session.id}
+                        onSelect={() => {
+                          setCurrentSessionId(session.id);
+                          setShowSessionsMobile(false);
+                        }}
+                        onDelete={(id) => {
+                          void deleteSession.mutateAsync(id);
+                          if (currentSessionId === id) setCurrentSessionId(null);
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </>
+
+                <section className="flex-1 min-w-0 flex flex-col">
+                  <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3" data-testid="ai-message-area">
+                    {messages.length === 0 && !isStreaming && (
+                      <EmptyState
+                        icon={<Bot className="h-8 w-8" />}
+                        title={t('ai.empty')}
+                        description={t('ai.emptyEnabled')}
+                      />
+                    )}
+                    {messages.map((msg) => (
+                      <MessageBubble
+                        key={msg.id}
+                        message={msg}
+                        workspaceId={workspaceId}
+                        currentView={aiContext.view}
+                      />
+                    ))}
+                    {isStreaming && streamingContent && (
+                      <MessageBubble
+                        message={{ id: 'streaming', role: 'assistant', content: streamingContent }}
+                        workspaceId={workspaceId}
+                        currentView={aiContext.view}
+                      />
+                    )}
+                    {isStreaming && !streamingContent && (
+                      <div className="flex items-center gap-2 text-xs text-text-secondary">
+                        <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                        {t('ai.thinking')}
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  <div className="flex-shrink-0 border-t border-border bg-bg-base">
+                    {aiContext.suggestions.length > 0 && (
+                      <div
+                        data-testid="ai-suggestions-row"
+                        className="px-3 pt-3 overflow-x-auto scrollbar-thin"
+                      >
+                        <div className="flex items-center gap-2 min-w-min pb-1">
+                          {aiContext.suggestions.map((s) => (
+                            <button
+                              key={s.label}
+                              data-testid={`ai-suggestion-${s.label}`}
+                              onClick={() => handleSuggestionClick(s.prompt)}
+                              disabled={isStreaming || isCollectingContext}
+                              className="flex-shrink-0 px-3 py-1.5 rounded-full bg-bg-elevated border border-border text-xs text-text-secondary hover:text-text-primary hover:border-accent/40 hover:bg-bg-surface transition-colors disabled:opacity-50"
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <ContextTagBar
+                      view={aiContext.view}
+                      viewLabel={aiContext.viewLabel}
+                      selection={aiContext.selection}
+                      enabledSources={aiContext.enabledSources}
+                      onToggleSource={toggleSource}
+                      onClearSelection={aiContext.clearSelection}
+                    />
+
+                    <div className="p-3 flex items-end gap-2">
+                      <Textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder={t('ai.placeholder')}
+                        rows={1}
+                        className="min-h-[40px] max-h-32 resize-none py-2.5"
+                      />
+                      <Button
+                        onClick={handleSend}
+                        loading={isStreaming || isCollectingContext}
+                        disabled={!input.trim()}
+                        className="h-10 w-10 p-0 flex-shrink-0"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              </div>
             )}
           </motion.aside>
         </>
@@ -372,109 +412,111 @@ function DisabledState() {
   );
 }
 
-function SessionList({
-  sessions,
-  currentId,
+function SessionRow({
+  session,
+  active,
   onSelect,
   onDelete,
 }: {
-  sessions: AiSession[];
-  currentId: string | null;
-  onSelect: (id: string) => void;
+  session: AiSession;
+  active: boolean;
+  onSelect: () => void;
   onDelete: (id: string) => void;
 }) {
-  const { t } = useI18n();
-  if (sessions.length === 0) {
-    return (
-      <div className="px-4 py-2 text-xs text-text-secondary">
-        {t('ai.empty')}
-      </div>
-    );
-  }
-
   return (
-    <div className="px-4 py-2 border-b border-border max-h-32 overflow-y-auto">
-      <div className="text-[10px] uppercase tracking-wider text-text-secondary mb-1.5">
-        {t('ai.sessions')}
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {sessions.map((session) => (
-          <button
-            key={session.id}
-            onClick={() => onSelect(session.id)}
-            className={cn(
-              'group flex items-center gap-1.5 px-2.5 py-1 rounded-[5px] text-xs border transition-colors',
-              currentId === session.id
-                ? 'bg-accent/10 border-accent/40 text-accent'
-                : 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary',
-            )}
-            title={session.title}
-          >
-            <span className="truncate max-w-[140px]">{session.title}</span>
-            <X
-              className="h-3 w-3 opacity-0 group-hover:opacity-100 hover:text-red-500"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(session.id);
-              }}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
+    <button
+      data-testid={`ai-session-item-${session.id}`}
+      onClick={onSelect}
+      className={cn(
+        'group w-full flex items-center justify-between px-2.5 py-1.5 rounded-[6px] text-xs border transition-colors text-left',
+        active
+          ? 'bg-accent/10 border-accent/40 text-accent'
+          : 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary hover:bg-bg-surface',
+      )}
+      title={session.title}
+    >
+      <span className="truncate flex-1 min-w-0">{session.title}</span>
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(session.id);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+            onDelete(session.id);
+          }
+        }}
+        className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:text-red-500 focus:opacity-100"
+        title="删除"
+      >
+        <X className="h-3 w-3" />
+      </span>
+    </button>
   );
 }
 
-function ContextPanel({
-  summary,
+function ContextTagBar({
+  view,
+  viewLabel,
   selection,
   enabledSources,
   onToggleSource,
   onClearSelection,
 }: {
-  summary?: string;
+  view: string;
+  viewLabel: string;
   selection: AiSelection | null;
   enabledSources: AiContextSource[];
   onToggleSource: (source: AiContextSource) => void;
   onClearSelection: () => void;
 }) {
   const { t } = useI18n();
-  const hasSummary = summary && enabledSources.includes('workspaceSummary');
-  const hasTags = hasSummary || selection || enabledSources.length > 0;
-  if (!hasTags) return null;
+  if (view === 'unknown' && !selection && enabledSources.length === 0) return null;
 
   return (
-    <div className="mx-4 mt-3 px-3 py-2 rounded-[6px] bg-bg-elevated border border-border text-xs">
-      <div className="flex flex-wrap gap-1.5 items-center text-text-secondary">
-        {hasSummary && (
-          <span className="px-1.5 py-0.5 rounded-[4px] bg-accent/10 text-accent">
-            {t('ai.context')}
-          </span>
-        )}
-        {enabledSources
-          .filter((s) => s !== 'workspaceSummary')
-          .map((source) => (
-            <button
-              key={source}
-              onClick={() => onToggleSource(source)}
-              className="px-1.5 py-0.5 rounded-[4px] bg-bg-base border border-border hover:border-accent/40 transition-colors"
-            >
-              {t(`ai.source${capitalize(source)}`)}
-            </button>
-          ))}
-        {selection && (
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-bg-base border border-border truncate max-w-[200px]">
-            {t('ai.contextSelection', { label: selection.label })}
-            <button
-              onClick={onClearSelection}
-              className="hover:text-red-500"
-              title={t('common.remove')}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        )}
-      </div>
+    <div
+      data-testid="ai-context-tags"
+      className="px-3 pt-2 flex flex-wrap gap-1.5 items-center"
+    >
+      {view !== 'unknown' && (
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] border bg-accent/10 border-accent/20 text-accent">
+          {t('ai.contextView', { view: viewLabel })}
+        </span>
+      )}
+      {enabledSources.map((source) => (
+        <span
+          key={source}
+          className="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-full text-[10px] border bg-bg-elevated border-border text-text-secondary"
+        >
+          {t(`ai.source${capitalize(source)}`)}
+          <button
+            type="button"
+            data-testid={`ai-remove-source-${source}`}
+            onClick={() => onToggleSource(source)}
+            className="p-0.5 rounded hover:bg-border hover:text-text-primary"
+            title={t('common.remove')}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      {selection && (
+        <span className="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-full text-[10px] border bg-bg-elevated border-border text-text-secondary max-w-[200px]">
+          <span className="truncate">{t('ai.contextSelection', { label: selection.label })}</span>
+          <button
+            type="button"
+            data-testid="ai-remove-selection"
+            onClick={onClearSelection}
+            className="p-0.5 rounded hover:bg-border hover:text-text-primary flex-shrink-0"
+            title={t('common.remove')}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      )}
     </div>
   );
 }
@@ -492,30 +534,71 @@ function capitalize(value: AiContextSource): string {
   return map[value];
 }
 
+const APPLY_TARGETS: Array<{
+  target: AiInsertTarget;
+  icon: React.ReactNode;
+  labelKey: string;
+}> = [
+  { target: 'note', icon: <StickyNote className="h-3.5 w-3.5" />, labelKey: 'ai.insertNote' },
+  { target: 'outline', icon: <ListTree className="h-3.5 w-3.5" />, labelKey: 'ai.insertOutline' },
+  { target: 'outline_node', icon: <ListTree className="h-3.5 w-3.5" />, labelKey: 'ai.insertOutlineNode' },
+  { target: 'event', icon: <Calendar className="h-3.5 w-3.5" />, labelKey: 'ai.insertEvent' },
+  { target: 'vn_scene', icon: <Clapperboard className="h-3.5 w-3.5" />, labelKey: 'ai.insertVnScene' },
+  { target: 'character', icon: <User className="h-3.5 w-3.5" />, labelKey: 'ai.insertCharacter' },
+  { target: 'location', icon: <MapPin className="h-3.5 w-3.5" />, labelKey: 'ai.insertLocation' },
+];
+
+function isTargetEnabledForView(target: AiInsertTarget, view: string): boolean {
+  switch (target) {
+    case 'note':
+    case 'outline':
+      return true;
+    case 'outline_node':
+      return view === 'outline';
+    case 'event':
+      return view === 'timeline';
+    case 'vn_scene':
+      return view === 'vn';
+    case 'character':
+      return view === 'characters';
+    case 'location':
+      return view === 'map';
+    default:
+      return false;
+  }
+}
+
+function isTargetRecommendedForView(target: AiInsertTarget, view: string): boolean {
+  switch (view) {
+    case 'timeline':
+      return target === 'event';
+    case 'characters':
+      return target === 'character';
+    case 'map':
+      return target === 'location';
+    case 'outline':
+      return target === 'outline' || target === 'outline_node';
+    case 'vn':
+      return target === 'vn_scene';
+    case 'notebook':
+    case 'novel':
+      return target === 'note';
+    default:
+      return false;
+  }
+}
+
 function MessageBubble({
   message,
   workspaceId,
+  currentView,
 }: {
   message: { id: string; role: string; content: string };
   workspaceId: string;
+  currentView: string;
 }) {
-  const { t } = useI18n();
   const isUser = message.role === 'user';
   const apply = useApplyAiOutput(workspaceId);
-
-  const actions: Array<{
-    target: 'note' | 'outline' | 'event' | 'vn_scene' | 'character' | 'location' | 'outline_node';
-    icon: React.ReactNode;
-    label: string;
-  }> = [
-    { target: 'note', icon: <StickyNote className="h-3 w-3" />, label: t('ai.insertNote') },
-    { target: 'outline', icon: <ListTree className="h-3 w-3" />, label: t('ai.insertOutline') },
-    { target: 'outline_node', icon: <ListTree className="h-3 w-3" />, label: t('ai.insertOutlineNode') },
-    { target: 'event', icon: <Calendar className="h-3 w-3" />, label: t('ai.insertEvent') },
-    { target: 'vn_scene', icon: <Clapperboard className="h-3 w-3" />, label: t('ai.insertVnScene') },
-    { target: 'character', icon: <User className="h-3 w-3" />, label: t('ai.insertCharacter') },
-    { target: 'location', icon: <MapPin className="h-3 w-3" />, label: t('ai.insertLocation') },
-  ];
 
   return (
     <div className={cn('flex flex-col', isUser ? 'items-end' : 'items-start')}>
@@ -530,19 +613,131 @@ function MessageBubble({
         {message.content}
       </div>
       {!isUser && (
-        <div className="flex flex-wrap gap-1 mt-1.5 max-w-[85%]">
-          {actions.map((a) => (
-            <button
-              key={a.target}
-              onClick={() => apply.mutate({ target: a.target, content: message.content })}
-              disabled={apply.isPending}
-              className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] bg-bg-elevated border border-border text-text-secondary hover:text-text-primary hover:border-accent/40 transition-colors disabled:opacity-50"
-              title={a.label}
-            >
-              {a.icon}
-              {a.label}
-            </button>
-          ))}
+        <ApplyDropdown
+          targets={APPLY_TARGETS}
+          view={currentView}
+          onApply={(target) => apply.mutate({ target, content: message.content })}
+          disabled={apply.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+interface ApplyDropdownProps {
+  targets: typeof APPLY_TARGETS;
+  view: string;
+  onApply: (target: AiInsertTarget) => void;
+  disabled?: boolean;
+}
+
+function ApplyDropdown({ targets, view, onApply, disabled }: ApplyDropdownProps) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        !buttonRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [open]);
+
+  const recommended = targets.filter((a) => isTargetRecommendedForView(a.target, view));
+  const other = targets.filter((a) => !isTargetRecommendedForView(a.target, view));
+
+  return (
+    <div className="relative mt-1.5">
+      <button
+        ref={buttonRef}
+        type="button"
+        data-testid="ai-apply-dropdown"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        className={cn(
+          'inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-[10px]',
+          'bg-bg-elevated border border-border text-text-secondary',
+          'hover:text-text-primary hover:border-accent/40 transition-colors',
+          'disabled:opacity-50',
+        )}
+      >
+        {t('ai.apply')}
+        <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          data-testid="ai-apply-menu"
+          className="absolute left-0 top-full mt-1 z-20 min-w-[180px] rounded-[8px] border border-border bg-bg-surface shadow-[var(--shadow-elevated-soft)] p-1 outline-none"
+        >
+          {recommended.length > 0 && (
+            <div className="py-1">
+              <div className="px-3 py-1 text-[10px] font-semibold text-text-secondary uppercase tracking-wider">
+                {t('ai.applyRecommended')}
+              </div>
+              {recommended.map((a) => (
+                <button
+                  key={a.target}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onApply(a.target);
+                    setOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-sm rounded-[6px] text-text-primary hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none flex items-center gap-2"
+                >
+                  {a.icon}
+                  {t(a.labelKey)}
+                </button>
+              ))}
+            </div>
+          )}
+          {recommended.length > 0 && other.length > 0 && (
+            <div className="h-px bg-border my-1" role="separator" />
+          )}
+          {other.length > 0 && (
+            <div className="py-1">
+              <div className="px-3 py-1 text-[10px] font-semibold text-text-secondary uppercase tracking-wider">
+                {t('ai.applyOther')}
+              </div>
+              {other.map((a) => {
+                const itemDisabled = !isTargetEnabledForView(a.target, view);
+                return (
+                  <button
+                    key={a.target}
+                    type="button"
+                    role="menuitem"
+                    disabled={itemDisabled}
+                    onClick={() => {
+                      if (itemDisabled) return;
+                      onApply(a.target);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-sm rounded-[6px] flex items-center gap-2',
+                      'text-text-primary hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none',
+                      itemDisabled && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                    )}
+                  >
+                    {a.icon}
+                    {t(a.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
