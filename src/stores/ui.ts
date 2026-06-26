@@ -85,5 +85,8 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
     if (settings.editorFont) {
       root.style.setProperty('--font-mono', settings.editorFont);
     }
+    if (typeof settings.animationsEnabled === 'boolean') {
+      root.style.setProperty('--motion-enabled', settings.animationsEnabled ? '1' : '0');
+    }
   },
 }));

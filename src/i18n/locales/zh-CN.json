@@ -469,6 +469,8 @@
     "themeMc": "方块",
     "accentColor": "主题色",
     "accentColorMcHint": "方块主题使用固定强调色，自定义主题色不会生效",
+    "animationsEnabled": "启用动画",
+    "animationsEnabledDescription": "关闭后将只保留配色，停止所有装饰动画",
     "uiFont": "界面字体",
     "editorFont": "编辑器字体",
     "fontSize": "字号",

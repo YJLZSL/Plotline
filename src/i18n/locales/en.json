@@ -463,6 +463,8 @@
     "themeMc": "Block",
     "accentColor": "Accent Color",
     "accentColorMcHint": "Block theme uses a fixed accent color; custom accent will not apply",
+    "animationsEnabled": "Enable animations",
+    "animationsEnabledDescription": "Turn off to keep colors only and stop decorative animations",
     "uiFont": "UI Font",
     "editorFont": "Editor Font",
     "fontSize": "Font Size",

@@ -33,4 +33,11 @@ describe('theme store', () => {
     expect(document.documentElement.style.getPropertyValue('--font-sans')).toContain('Smiley Sans');
     expect(document.documentElement.style.getPropertyValue('--font-mono')).toContain('Smiley Sans');
   });
+
+  it('should set --motion-enabled css variable from animationsEnabled', () => {
+    useThemeStore.getState().applyToDOM({ animationsEnabled: false });
+    expect(document.documentElement.style.getPropertyValue('--motion-enabled')).toBe('0');
+    useThemeStore.getState().applyToDOM({ animationsEnabled: true });
+    expect(document.documentElement.style.getPropertyValue('--motion-enabled')).toBe('1');
+  });
 });

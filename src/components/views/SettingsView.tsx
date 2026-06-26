@@ -62,6 +62,7 @@ import {
   CardContent,
   Input,
   Label,
+  Switch,
   Textarea,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
@@ -282,34 +283,38 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                       const active = draft.theme === th.value;
                       return (
                         <button
-                          key={th.value}
-                          data-testid={`theme-${th.value}`}
-                          onClick={() => set({ theme: th.value })}
-                          className={cn(
-                            'flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-all',
-                            active
-                              ? 'border-accent bg-accent/5'
-                              : 'border-border hover:bg-bg-elevated',
-                          )}
-                        >
-                          <div
-                            className="h-14 w-full rounded-[6px] mb-1"
-                            data-theme={th.value}
-                            style={{
-                              background:
-                                th.value === 'light'
-                                  ? 'linear-gradient(135deg, #FAF7F0, #F5EFE3)'
-                                  : th.value === 'dark'
-                                    ? 'linear-gradient(135deg, #1E1A16, #352D27)'
-                                    : 'linear-gradient(135deg, #F2E8D5, #E7D7B6)',
-                            }}
-                          />
-                          <Icon className="h-4 w-4 text-text-secondary" />
-                          <span className="text-xs font-medium text-text-primary">
-                            {t(th.labelKey)}
-                          </span>
-                          {active && <Check className="h-3 w-3 text-accent" />}
-                        </button>
+                        key={th.value}
+                        data-testid={`theme-${th.value}`}
+                        onClick={() => set({ theme: th.value })}
+                        className={cn(
+                          'group relative flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-all overflow-hidden',
+                          active
+                            ? 'border-accent bg-accent/5'
+                            : 'border-border hover:bg-bg-elevated',
+                        )}
+                      >
+                        <div
+                          className="ambient-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-accent/15 to-transparent"
+                          aria-hidden="true"
+                        />
+                        <div
+                          className="h-14 w-full rounded-[6px] mb-1 relative z-10"
+                          data-theme={th.value}
+                          style={{
+                            background:
+                              th.value === 'light'
+                                ? 'linear-gradient(135deg, #FAF7F0, #F5EFE3)'
+                                : th.value === 'dark'
+                                  ? 'linear-gradient(135deg, #1E1A16, #352D27)'
+                                  : 'linear-gradient(135deg, #F2E8D5, #E7D7B6)',
+                          }}
+                        />
+                        <Icon className="h-4 w-4 text-text-secondary" />
+                        <span className="text-xs font-medium text-text-primary">
+                          {t(th.labelKey)}
+                        </span>
+                        {active && <Check className="h-3 w-3 text-accent" />}
+                      </button>
                       );
                     })}
                   </div>
@@ -384,6 +389,20 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                         {t(ft.labelKey)}
                       </button>
                     ))}
+                  </div>
+                </Section>
+
+                <Section title={t('settings.animationsEnabled')}>
+                  <div className="flex items-start gap-3">
+                    <Switch
+                      checked={draft.animationsEnabled}
+                      onCheckedChange={(checked) => {
+                        set({ animationsEnabled: checked });
+                        update.mutate({ animationsEnabled: checked });
+                      }}
+                      data-testid="animations-enabled-toggle"
+                    />
+                    <p className="text-xs text-text-secondary">{t('settings.animationsEnabledDescription')}</p>
                   </div>
                 </Section>
               </div>
