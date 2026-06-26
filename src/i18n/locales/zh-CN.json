@@ -63,6 +63,23 @@
     "exportWord": "导出 Word",
     "exportEpub": "导出 ePub"
   },
+  "contextMenu": {
+    "edit": "编辑",
+    "delete": "删除",
+    "duplicate": "复制",
+    "changeStatus": "更改状态",
+    "startConnection": "建立连接",
+    "askAi": "问 AI",
+    "rename": "重命名",
+    "changeColor": "更改颜色",
+    "hide": "隐藏",
+    "show": "显示",
+    "addEvent": "添加事件",
+    "pasteEvent": "粘贴事件",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "checkConsistency": "一致性检查"
+  },
   "timeline": {
     "title": "时间轴",
     "tracks": "轨道",

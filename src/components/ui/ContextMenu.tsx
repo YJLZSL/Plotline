@@ -1,4 +1,5 @@
 import {
+  cloneElement,
   createContext,
   isValidElement,
   useCallback,
@@ -9,25 +10,15 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { Slot } from '@radix-ui/react-slot';
 
 import { cn } from '@/lib/utils';
-
-interface MenuItemEntry {
-  ref: React.RefObject<HTMLButtonElement | null>;
-  disabled: boolean;
-}
 
 interface ContextMenuContextValue {
   open: boolean;
   positioned: boolean;
   pos: { x: number; y: number };
   adjustedPos: { x: number; y: number } | null;
-  activeIndex: number;
   contentRef: React.MutableRefObject<HTMLDivElement | null>;
-  registerItem: (ref: React.MutableRefObject<HTMLButtonElement | null>, disabled: boolean) => number;
-  unregisterItem: (index: number) => void;
-  setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
   openAt: (point: { x: number; y: number }) => void;
   close: () => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -52,43 +43,19 @@ export function ContextMenu({ children }: ContextMenuProps) {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [adjustedPos, setAdjustedPos] = useState<{ x: number; y: number } | null>(null);
   const [positioned, setPositioned] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const itemsRef = useRef<MenuItemEntry[]>([]);
 
   const close = useCallback(() => {
     setOpen(false);
     setPositioned(false);
     setAdjustedPos(null);
-    setActiveIndex(-1);
-    itemsRef.current = [];
   }, []);
 
   const openAt = useCallback((point: { x: number; y: number }) => {
     setPos(point);
     setAdjustedPos(null);
     setPositioned(false);
-    setActiveIndex(-1);
-    itemsRef.current = [];
     setOpen(true);
-  }, []);
-
-  const registerItem = useCallback(
-    (itemRef: React.RefObject<HTMLButtonElement | null>, disabled: boolean) => {
-      itemsRef.current.push({ ref: itemRef, disabled });
-      return itemsRef.current.length - 1;
-    },
-    [],
-  );
-
-  const unregisterItem = useCallback((index: number) => {
-    itemsRef.current.splice(index, 1);
-    setActiveIndex((prev) => {
-      if (prev >= itemsRef.current.length) {
-        return Math.max(0, itemsRef.current.length - 1);
-      }
-      return prev;
-    });
   }, []);
 
   useLayoutEffect(() => {
@@ -114,19 +81,13 @@ export function ContextMenu({ children }: ContextMenuProps) {
     setAdjustedPos({ x: nextX, y: nextY });
     setPositioned(true);
 
-    const firstEnabled = itemsRef.current.findIndex((item) => !item.disabled);
-    if (firstEnabled >= 0) {
-      setActiveIndex(firstEnabled);
+    const firstEnabled = Array.from(el.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+      (b) => !b.disabled,
+    );
+    if (firstEnabled) {
+      firstEnabled.focus({ preventScroll: true });
     }
   }, [open, pos]);
-
-  useEffect(() => {
-    if (!open || activeIndex < 0) return;
-    const item = itemsRef.current[activeIndex];
-    if (item?.ref.current) {
-      item.ref.current.focus({ preventScroll: true });
-    }
-  }, [open, activeIndex]);
 
   useEffect(() => {
     if (!open) return;
@@ -149,57 +110,53 @@ export function ContextMenu({ children }: ContextMenuProps) {
     };
   }, [open, close]);
 
+  const focusItem = useCallback((delta: number) => {
+    const buttons = Array.from(contentRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    const enabled = buttons.filter((b) => !b.disabled);
+    if (enabled.length === 0) return;
+
+    const active = document.activeElement as HTMLElement | null;
+    let current = enabled.findIndex((b) => b === active);
+    if (current < 0) current = 0;
+
+    const next = (current + delta + enabled.length) % enabled.length;
+    enabled[next]?.focus({ preventScroll: true });
+  }, []);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (!open) return;
 
-      const items = itemsRef.current;
-      const total = items.length;
-      if (total === 0) return;
-
-      const findNextEnabled = (start: number, direction: 1 | -1) => {
-        let i = start;
-        for (let step = 0; step < total; step += 1) {
-          i = (i + direction + total) % total;
-          if (!items[i]?.disabled) return i;
-        }
-        return -1;
-      };
-
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const next = findNextEnabled(activeIndex, 1);
-        if (next >= 0) setActiveIndex(next);
+        focusItem(1);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const next = findNextEnabled(activeIndex, -1);
-        if (next >= 0) setActiveIndex(next);
+        focusItem(-1);
       } else if (e.key === 'Home') {
         e.preventDefault();
-        const next = items.findIndex((item) => !item.disabled);
-        if (next >= 0) setActiveIndex(next);
+        const enabled = Array.from(
+          contentRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+        ).filter((b) => !b.disabled);
+        enabled[0]?.focus({ preventScroll: true });
       } else if (e.key === 'End') {
         e.preventDefault();
-        let next = -1;
-        for (let i = items.length - 1; i >= 0; i -= 1) {
-          if (!items[i]?.disabled) {
-            next = i;
-            break;
-          }
-        }
-        if (next >= 0) setActiveIndex(next);
+        const enabled = Array.from(
+          contentRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+        ).filter((b) => !b.disabled);
+        enabled[enabled.length - 1]?.focus({ preventScroll: true });
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        const item = items[activeIndex];
-        if (item?.ref.current && !item.disabled) {
-          item.ref.current.click();
+        const active = document.activeElement as HTMLButtonElement | null;
+        if (active?.role === 'menuitem' && !active.disabled) {
+          active.click();
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         close();
       }
     },
-    [open, activeIndex, close],
+    [open, close, focusItem],
   );
 
   const value: ContextMenuContextValue = {
@@ -207,11 +164,7 @@ export function ContextMenu({ children }: ContextMenuProps) {
     positioned,
     pos,
     adjustedPos,
-    activeIndex,
     contentRef,
-    registerItem,
-    unregisterItem,
-    setActiveIndex,
     openAt,
     close,
     handleKeyDown,
@@ -235,7 +188,14 @@ export function ContextMenuTrigger({ children, asChild }: ContextMenuTriggerProp
   };
 
   if (asChild && isValidElement(children)) {
-    return <Slot onContextMenu={handleContextMenu}>{children}</Slot>;
+    const child = children as React.ReactElement<{ onContextMenu?: (e: React.MouseEvent) => void }>;
+    const originalOnContextMenu = child.props.onContextMenu;
+    return cloneElement(child, {
+      onContextMenu: (e: React.MouseEvent) => {
+        originalOnContextMenu?.(e);
+        handleContextMenu(e);
+      },
+    });
   }
 
   return (
@@ -289,20 +249,11 @@ export function ContextMenuItem({
   disabled,
   className,
   onClick,
+  onMouseEnter,
   ...props
 }: ContextMenuItemProps) {
   const ctx = useMenuContext();
   const ref = useRef<HTMLButtonElement>(null);
-  const indexRef = useRef<number>(-1);
-
-  useEffect(() => {
-    indexRef.current = ctx.registerItem(ref, disabled ?? false);
-    return () => {
-      ctx.unregisterItem(indexRef.current);
-    };
-  }, [ctx, disabled]);
-
-  const isActive = ctx.activeIndex === indexRef.current;
 
   return (
     <button
@@ -310,9 +261,13 @@ export function ContextMenuItem({
       type="button"
       role="menuitem"
       disabled={disabled}
-      tabIndex={isActive ? 0 : -1}
-      data-active={isActive}
-      onMouseEnter={() => setActiveIndexSafe(ctx, indexRef.current)}
+      tabIndex={-1}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          ref.current?.focus({ preventScroll: true });
+        }
+        onMouseEnter?.(e);
+      }}
       onClick={(e) => {
         if (disabled) return;
         ctx.close();
@@ -333,18 +288,18 @@ export function ContextMenuItem({
   );
 }
 
-function setActiveIndexSafe(ctx: ContextMenuContextValue, index: number) {
-  if (index >= 0) {
-    ctx.setActiveIndex(index);
-  }
-}
-
 interface ContextMenuSeparatorProps {
   className?: string;
 }
 
 export function ContextMenuSeparator({ className }: ContextMenuSeparatorProps) {
-  return <div className={cn('h-px bg-border my-1', className)} role="separator" aria-orientation="horizontal" />;
+  return (
+    <div
+      className={cn('h-px bg-border my-1', className)}
+      role="separator"
+      aria-orientation="horizontal"
+    />
+  );
 }
 
 interface ContextMenuSectionProps {

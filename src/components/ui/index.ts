@@ -19,3 +19,11 @@ export { RichEditor } from './RichEditor';
 export { PomodoroTimer } from './PomodoroTimer';
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
+export {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSection,
+} from './ContextMenu';

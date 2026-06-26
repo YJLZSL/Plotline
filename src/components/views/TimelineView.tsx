@@ -17,6 +17,9 @@ import {
   List,
   Image as ImageIcon,
   X,
+  Copy,
+  ClipboardPaste,
+  Sparkles,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
@@ -32,6 +35,12 @@ import {
   ConfirmDialog,
   Dialog,
   DialogContent,
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSection,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
@@ -57,6 +66,7 @@ import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useUIStore } from '@/stores/ui';
 import { toastError, toastInfo, toastWarning } from '@/stores/toast';
 import { isTauri } from '@/lib/ipc';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -120,6 +130,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [conflictEventIds, setConflictEventIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'timeline' | 'gantt' | 'tree' | 'text'>('timeline');
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
+  const [copiedEvent, setCopiedEvent] = useState<Event | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(0);
@@ -129,6 +140,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const disconnectEvents = useDisconnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
   const setAiContext = useAiContextStore((s) => s.setContext);
+  const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -330,6 +342,58 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       setEditingEvent(null);
     },
     [deleteEvent, selectedEventId],
+  );
+
+  const duplicateEvent = useCallback(
+    async (ev: Event, targetTrackId?: string) => {
+      const trackId = targetTrackId ?? ev.trackId;
+      const newEv = await createEvent.mutateAsync({
+        workspaceId,
+        trackId,
+        title: ev.title,
+        description: ev.description,
+        dateType: ev.dateType,
+        dateValue: ev.dateValue,
+        status: ev.status,
+        color: ev.color,
+        sortOrder: eventsByTrack.get(trackId)?.length ?? 0,
+      });
+      setCopiedEvent(ev);
+      setSelectedEventId(newEv.id);
+    },
+    [createEvent, eventsByTrack, workspaceId],
+  );
+
+  const pasteEvent = useCallback(
+    async (trackId: string) => {
+      if (!copiedEvent) return;
+      await duplicateEvent(copiedEvent, trackId);
+    },
+    [copiedEvent, duplicateEvent],
+  );
+
+  const openAiForEvent = useCallback(
+    (ev: Event) => {
+      setSelectedEventId(ev.id);
+      setEditingEvent(ev);
+      setAiContext({
+        view: 'timeline',
+        viewLabel: t('timeline.title'),
+        selection: {
+          type: 'event',
+          id: ev.id,
+          label: ev.title,
+          content: ev.description ?? '',
+        },
+        suggestions: [
+          { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
+          { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
+          { label: t('ai.suggestNextEvent'), prompt: t('ai.promptNextEvent') },
+        ],
+      });
+      setAiPanelOpen(true);
+    },
+    [setAiContext, setAiPanelOpen, t],
   );
 
   const cycleZoom = (dir: 1 | -1) => {
@@ -558,6 +622,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   setTrackDialogOpen(true);
                 }}
                 onDelete={() => setDeleteTrackTarget(tr)}
+                onChangeColor={(color) => updateTrack.mutateAsync({ id: tr.id, color })}
+                onAddEvent={() => void handleAddEvent(tr.id)}
               />
             ))}
             <div className="px-3 mt-2">
@@ -577,6 +643,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         {/* 画布区域 */}
         <div
           ref={canvasRef}
+          data-testid="timeline-canvas"
           className="flex-1 overflow-auto bg-bg-base relative"
           onWheel={(e) => {
             const el = e.currentTarget;
@@ -644,6 +711,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   key={tr.id}
                   index={idx}
                   track={tr}
+                  tracks={tracks}
                   events={eventsByTrack.get(tr.id) ?? []}
                   eventPositions={eventPositions}
                   timeScale={timeScale}
@@ -655,6 +723,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   pendingConnection={pendingConnection}
                   conflictEventIds={conflictEventIds}
                   eventElementRegistry={eventElementRegistry}
+                  copiedEvent={copiedEvent}
                   onSelectEvent={(id) => {
                     if (pendingConnection && pendingConnection !== id) {
                       void connectEvents.mutateAsync({
@@ -674,8 +743,17 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                     setEventDialogOpen(true);
                   }}
                   onAddEvent={() => void handleAddEvent(tr.id)}
+                  onAddEventToTrack={(trackId) => void handleAddEvent(trackId)}
+                  onPasteEvent={() => void pasteEvent(tr.id)}
                   onCanvasDoubleClick={(x) => void handleCanvasDoubleClick(tr.id, x)}
                   onEventDragEnd={handleEventDragEnd}
+                  onDuplicateEvent={(ev) => void duplicateEvent(ev)}
+                  onAskAiEvent={(ev) => openAiForEvent(ev)}
+                  onZoomIn={() => cycleZoom(1)}
+                  onZoomOut={() => cycleZoom(-1)}
+                  onCheckConsistency={() => void handleConsistencyCheck()}
+                  onDeleteEvent={(id) => void handleDeleteEvent(id)}
+                  onUpdateEventStatus={(id, status) => void updateEvent.mutateAsync({ id, status })}
                   onStartConnection={(id) => setPendingConnection(id)}
                   onDragStart={(id) => setDraggingEvent({ id, offsetX: 0 })}
                   onDrag={(id, offsetX) => setDraggingEvent({ id, offsetX })}
@@ -1029,6 +1107,7 @@ function ConnectionLayer({
 function TrackLane({
   index,
   track,
+  tracks,
   events,
   eventPositions,
   timeScale,
@@ -1040,18 +1119,29 @@ function TrackLane({
   pendingConnection,
   conflictEventIds,
   eventElementRegistry,
+  copiedEvent,
   onSelectEvent,
   onEditEvent,
   onAddEvent,
+  onAddEventToTrack,
+  onPasteEvent,
   onCanvasDoubleClick,
   onEventDragEnd,
   onStartConnection,
   onDragStart,
   onDrag,
+  onDuplicateEvent,
+  onAskAiEvent,
+  onDeleteEvent,
+  onUpdateEventStatus,
+  onZoomIn,
+  onZoomOut,
+  onCheckConsistency,
   onDragEndNotify,
 }: {
   index: number;
   track: Track;
+  tracks: Track[];
   events: Event[];
   eventPositions: Map<string, number>;
   timeScale: TimeScale;
@@ -1063,16 +1153,27 @@ function TrackLane({
   pendingConnection: string | null;
   conflictEventIds: Set<string>;
   eventElementRegistry: React.MutableRefObject<Map<string, HTMLElement>>;
+  copiedEvent: Event | null;
   onSelectEvent: (id: string) => void;
   onEditEvent: (ev: Event) => void;
   onAddEvent: () => void;
+  onAddEventToTrack: (trackId: string) => void;
+  onPasteEvent: () => void;
   onCanvasDoubleClick: (x: number) => void;
   onEventDragEnd: (ev: Event, track: Track, info: PanInfo, finalX: number) => void;
   onStartConnection: (id: string) => void;
+  onDuplicateEvent: (ev: Event) => void;
+  onAskAiEvent: (ev: Event) => void;
+  onDeleteEvent: (id: string) => void;
+  onUpdateEventStatus: (id: string, status: EventStatus) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onCheckConsistency: () => void;
   onDragStart: (id: string) => void;
   onDrag: (id: string, offsetX: number) => void;
   onDragEndNotify: () => void;
 }) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const prevEventIdsRef = useRef<Set<string>>(new Set(events.map((e) => e.id)));
 
@@ -1103,9 +1204,11 @@ function TrackLane({
   }, [events, eventPositions, timeScale, scrollLeft, viewportWidth]);
 
   return (
-    <motion.div
-      ref={containerRef}
-      initial={{ opacity: 0, x: -12 }}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <motion.div
+          ref={containerRef}
+          initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ ...MOTION_BASE, delay: Math.min(index * 0.04, 0.2) }}
       className={cn(
@@ -1160,6 +1263,10 @@ function TrackLane({
                 onDoubleClick={() => onEditEvent(ev)}
                 onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
                 onStartConnection={() => onStartConnection(ev.id)}
+                onDuplicate={() => onDuplicateEvent(ev)}
+                onAskAi={() => onAskAiEvent(ev)}
+                onDelete={() => onDeleteEvent(ev.id)}
+                onChangeStatus={(status) => onUpdateEventStatus(ev.id, status)}
                 onDragStart={() => onDragStart(ev.id)}
                 onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
                 onDragEndNotify={() => onDragEndNotify()}
@@ -1183,7 +1290,45 @@ function TrackLane({
           <Plus className="h-4 w-4" />
         </button>
       </div>
-    </motion.div>
+        </motion.div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuSection label={t('contextMenu.addEvent')}>
+          {tracks.map((tr) => (
+            <ContextMenuItem
+              key={tr.id}
+              onClick={() => onAddEventToTrack(tr.id)}
+              className="gap-2"
+            >
+              <span
+                className="h-2 w-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: tr.color }}
+              />
+              <span className="truncate">{tr.name}</span>
+            </ContextMenuItem>
+          ))}
+        </ContextMenuSection>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={onPasteEvent} disabled={!copiedEvent} className="gap-2">
+          <ClipboardPaste className="h-3.5 w-3.5" />
+          {t('contextMenu.pasteEvent')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={onZoomIn} className="gap-2">
+          <ZoomIn className="h-3.5 w-3.5" />
+          {t('contextMenu.zoomIn')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onZoomOut} className="gap-2">
+          <ZoomOut className="h-3.5 w-3.5" />
+          {t('contextMenu.zoomOut')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={onCheckConsistency} className="gap-2">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          {t('contextMenu.checkConsistency')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -1202,6 +1347,10 @@ function EventCard({
   onDoubleClick,
   onDragEnd,
   onStartConnection,
+  onDuplicate,
+  onAskAi,
+  onDelete,
+  onChangeStatus,
   onDragStart,
   onDrag,
   onDragEndNotify,
@@ -1219,6 +1368,10 @@ function EventCard({
   onDoubleClick: () => void;
   onDragEnd: (info: PanInfo, finalX: number) => void;
   onStartConnection: () => void;
+  onDuplicate: () => void;
+  onAskAi: () => void;
+  onDelete: () => void;
+  onChangeStatus: (status: EventStatus) => void;
   onDragStart: () => void;
   onDrag: (info: PanInfo, offsetX: number) => void;
   onDragEndNotify: () => void;
@@ -1245,12 +1398,14 @@ function EventCard({
   const transition = { ...ambient.transition, delay: Math.min(index * 0.015, 0.1) };
 
   return (
-    <motion.div
-      ref={(el) => {
-        if (el) eventElementRegistry.current.set(event.id, el as unknown as HTMLElement);
-        else eventElementRegistry.current.delete(event.id);
-      }}
-      data-event-id={event.id}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <motion.div
+          ref={(el) => {
+            if (el) eventElementRegistry.current.set(event.id, el as unknown as HTMLElement);
+            else eventElementRegistry.current.delete(event.id);
+          }}
+          data-event-id={event.id}
       initial={initial}
       animate={animate}
       exit={{ opacity: 0, scale: 0.9 }}
@@ -1343,7 +1498,41 @@ function EventCard({
           </div>
         )}
       </div>
-    </motion.div>
+        </motion.div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={onDoubleClick} className="gap-2">
+          <Pencil className="h-3.5 w-3.5" />
+          {t('contextMenu.edit')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onDuplicate} className="gap-2">
+          <Copy className="h-3.5 w-3.5" />
+          {t('contextMenu.duplicate')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onDelete} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
+          <Trash2 className="h-3.5 w-3.5" />
+          {t('contextMenu.delete')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuSection label={t('contextMenu.changeStatus')}>
+          {(['draft', 'done', 'revise'] as const).map((s) => (
+            <ContextMenuItem key={s} onClick={() => onChangeStatus(s)} className="gap-2">
+              <span className={cn('h-2 w-2 rounded-full flex-shrink-0', statusMap[s].dot)} />
+              {t(statusMap[s].labelKey)}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuSection>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={onStartConnection} className="gap-2">
+          <Link2 className="h-3.5 w-3.5" />
+          {t('contextMenu.startConnection')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onAskAi} className="gap-2">
+          <Sparkles className="h-3.5 w-3.5" />
+          {t('contextMenu.askAi')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -1375,15 +1564,22 @@ function TrackRow({
   onToggleVisible,
   onRename,
   onDelete,
+  onChangeColor,
+  onAddEvent,
 }: {
   track: Track;
   eventCount: number;
   onToggleVisible: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onChangeColor: (color: string) => void;
+  onAddEvent: () => void;
 }) {
+  const { t } = useI18n();
   return (
-    <div className="group flex items-center gap-2 px-3 py-2 hover:bg-bg-elevated transition-colors">
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="group flex items-center gap-2 px-3 py-2 hover:bg-bg-elevated transition-colors">
       <span
         className="h-3 w-3 rounded-sm flex-shrink-0 shadow-sm"
         style={{ backgroundColor: track.color }}
@@ -1413,7 +1609,45 @@ function TrackRow({
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
-    </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={onRename} className="gap-2">
+          <Pencil className="h-3.5 w-3.5" />
+          {t('contextMenu.rename')}
+        </ContextMenuItem>
+        <ContextMenuSection label={t('contextMenu.changeColor')}>
+          <div className="px-3 py-1.5 flex gap-1.5 flex-wrap">
+            {EVENT_COLOR_PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onChangeColor(c)}
+                className={cn(
+                  'h-5 w-5 rounded-full border border-border transition-transform',
+                  track.color === c ? 'ring-2 ring-accent scale-110' : 'hover:scale-110',
+                )}
+                style={{ backgroundColor: c }}
+                aria-label={t('contextMenu.changeColor') + ' ' + c}
+              />
+            ))}
+          </div>
+        </ContextMenuSection>
+        <ContextMenuItem onClick={onToggleVisible} className="gap-2">
+          {track.isVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {track.isVisible ? t('contextMenu.hide') : t('contextMenu.show')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onAddEvent} className="gap-2">
+          <Plus className="h-3.5 w-3.5" />
+          {t('contextMenu.addEvent')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={onDelete} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
+          <Trash2 className="h-3.5 w-3.5" />
+          {t('contextMenu.delete')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

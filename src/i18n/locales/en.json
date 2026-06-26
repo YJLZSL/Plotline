@@ -63,6 +63,23 @@
     "exportWord": "Export Word",
     "exportEpub": "Export ePub"
   },
+  "contextMenu": {
+    "edit": "Edit",
+    "delete": "Delete",
+    "duplicate": "Duplicate",
+    "changeStatus": "Change status",
+    "startConnection": "Start connection",
+    "askAi": "Ask AI",
+    "rename": "Rename",
+    "changeColor": "Change color",
+    "hide": "Hide",
+    "show": "Show",
+    "addEvent": "Add event",
+    "pasteEvent": "Paste event",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "checkConsistency": "Check consistency"
+  },
   "timeline": {
     "title": "Timeline",
     "tracks": "Tracks",
