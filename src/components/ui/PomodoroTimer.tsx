@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, RotateCcw, SkipForward, X, Timer } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import { useI18n } from '@/hooks/useI18n';
+import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { playSoundIfEnabled } from '@/lib/sound';
 import { toastInfo, toastSuccess } from '@/stores/toast';
 import {
@@ -38,6 +39,7 @@ interface PomodoroTimerProps {
 
 export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerProps) {
   const { t } = useI18n();
+  const ambient = useAmbientAnimation();
   const {
     phase,
     theme,
@@ -56,6 +58,8 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSecondsRef = useRef(secondsLeft);
   const prevPhaseRef = useRef(phase);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const breakParticles = useMemo(() => makeBreakParticles(6), []);
 
   useEffect(() => {
     if (isRunning) {
@@ -85,11 +89,14 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
   }, [secondsLeft, theme, phase, t]);
 
   useEffect(() => {
-    if (prevPhaseRef.current !== phase) {
-      playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
-      prevPhaseRef.current = phase;
-    }
-  }, [phase, theme]);
+    if (prevPhaseRef.current === phase) return;
+    playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
+    prevPhaseRef.current = phase;
+    if (!ambient.animate) return;
+    setShowConfetti(true);
+    const timer = setTimeout(() => setShowConfetti(false), 1200);
+    return () => clearTimeout(timer);
+  }, [phase, theme, ambient.animate]);
 
   const totalSeconds = phase === 'focus' ? 25 * 60 : phase === 'shortBreak' ? 5 * 60 : 15 * 60;
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
@@ -106,10 +113,75 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
           exit={{ opacity: 0, scale: 0.96, y: 8 }}
           transition={MOTION_BASE}
           className={cn(
-            'fixed bottom-4 right-4 z-[100] w-80 rounded-[12px] border shadow-[var(--shadow-elevated)] overflow-hidden',
+            'fixed bottom-4 right-4 z-[100] w-80 rounded-[12px] border shadow-[var(--shadow-elevated)] overflow-hidden relative',
             themeClasses.container,
           )}
         >
+          {ambient.animate && phase !== 'focus' && (
+            <div
+              data-testid="pomodoro-particles"
+              className="absolute inset-0 overflow-hidden pointer-events-none"
+              aria-hidden="true"
+            >
+              {breakParticles.map((p) => (
+                <motion.div
+                  key={p.id}
+                  className="absolute rounded-[2px] bg-accent/25"
+                  style={{
+                    left: p.left,
+                    top: p.top,
+                    width: p.size,
+                    height: p.size,
+                  }}
+                  animate={{
+                    y: [0, p.distance],
+                    opacity: [0.2, 0.6, 0.2],
+                  }}
+                  transition={{
+                    duration: p.duration,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                    delay: p.delay,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <AnimatePresence>
+            {ambient.animate && showConfetti && (
+              <motion.div
+                key="confetti"
+                data-testid="pomodoro-confetti"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 overflow-hidden pointer-events-none"
+                aria-hidden="true"
+              >
+                {CONFETTI_SQUARES.map((s) => (
+                  <motion.div
+                    key={s.id}
+                    className="absolute left-1/2 top-1/2 rounded-[1px]"
+                    style={{
+                      width: s.size,
+                      height: s.size,
+                      backgroundColor: s.color,
+                    }}
+                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                    animate={{
+                      x: s.x,
+                      y: s.y,
+                      opacity: 0,
+                      scale: 0,
+                      rotate: s.rotate,
+                    }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                  />
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* 头部 */}
           <div className="flex items-center justify-between px-4 h-12 border-b border-black/5">
             <div className="flex items-center gap-2">
@@ -340,6 +412,47 @@ function CreeperFace() {
       <rect x="3" y="5" width="2" height="1" fill="#2F2418" />
     </svg>
   );
+}
+
+const CONFETTI_COLORS = [
+  '#F4B6C2',
+  '#B6D4F4',
+  '#B6F4C8',
+  '#F4E4B6',
+  '#D8B6F4',
+  '#F4CBB6',
+  '#C68A3E',
+];
+
+const CONFETTI_SQUARES = Array.from({ length: 16 }).map((_, i) => ({
+  id: i,
+  size: 6 + (i % 3) * 2,
+  color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
+  x: (Math.random() - 0.5) * 120,
+  y: (Math.random() - 1) * 100,
+  rotate: (Math.random() - 0.5) * 360,
+}));
+
+interface BreakParticle {
+  id: number;
+  left: string;
+  top: string;
+  size: number;
+  distance: number;
+  duration: number;
+  delay: number;
+}
+
+function makeBreakParticles(count: number): BreakParticle[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: i,
+    left: `${10 + Math.random() * 80}%`,
+    top: `${20 + Math.random() * 60}%`,
+    size: 3 + Math.round(Math.random() * 4),
+    distance: -20 - Math.random() * 40,
+    duration: 3 + Math.random() * 2,
+    delay: Math.random() * 2,
+  }));
 }
 
 const THEME_CLASSES: Record<

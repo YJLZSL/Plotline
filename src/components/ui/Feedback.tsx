@@ -63,7 +63,11 @@ export function EmptyState({
       transition={MOTION_BASE}
       className="flex flex-col items-center justify-center text-center py-16 px-6"
     >
-      {icon && <div className="text-text-secondary mb-4 opacity-60">{icon}</div>}
+      {icon && (
+        <div className="text-text-secondary mb-4 opacity-60 animate-ambient-bob">
+          {icon}
+        </div>
+      )}
       <h3 className="text-base font-semibold text-text-primary">{title}</h3>
       {description && (
         <p className="text-sm text-text-secondary mt-1 max-w-sm">{description}</p>

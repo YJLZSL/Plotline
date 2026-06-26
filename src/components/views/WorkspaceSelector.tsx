@@ -29,12 +29,10 @@ import {
 } from '@/features/workspace/hooks';
 import { ConfirmDialog, Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { useI18n } from '@/hooks/useI18n';
+import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { relativeTime, truncate, downloadJSON, downloadText, cn } from '@/lib/utils';
-import { MOTION_BASE } from '@/lib/motion';
 import { useHistoryStore, makeUpdateWorkspaceAction } from '@/stores/historyStore';
 import type { Workspace, WorkspaceTemplate, WorkspaceBundle } from '@/types';
-
-const TRANSITION = MOTION_BASE;
 
 const TEMPLATES: Array<{ value: WorkspaceTemplate; labelKey: string; descKey: string }> = [
   { value: 'blank', labelKey: 'workspace.form.templateBlank', descKey: 'workspace.form.templateBlankDesc' },
@@ -73,6 +71,17 @@ export function WorkspaceSelector() {
   const exportMutation = useExportWorkspace();
   const exportMdMutation = useExportWorkspaceMarkdown();
   const importMutation = useImportWorkspace();
+  const ambient = useAmbientAnimation();
+
+  const cardVariants = {
+    initial: { opacity: 0, y: 16 },
+    animate: { opacity: 1, y: 0, transition: ambient.transition },
+    exit: { opacity: 0, y: 16, transition: ambient.transition },
+  };
+  const listVariants = {
+    initial: {},
+    animate: { transition: { staggerChildren: ambient.animate ? 0.05 : 0 } },
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -288,20 +297,23 @@ export function WorkspaceSelector() {
             </div>
           ) : (
             <>
-              <div
+              <motion.div
                 ref={scrollRef}
                 onScroll={updateScrollability}
                 onWheel={handleWheel}
+                variants={listVariants}
+                initial="initial"
+                animate="animate"
                 className="flex items-center h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth px-6 py-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent"
               >
                 <AnimatePresence>
                   {filtered.map((w) => (
                     <motion.div
                       key={w.id}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 16 }}
-                      transition={TRANSITION}
+                      variants={cardVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
                       className="snap-center shrink-0 first:pl-0 last:pr-0 px-3"
                     >
                       <WorkspaceCard
@@ -324,9 +336,9 @@ export function WorkspaceSelector() {
                   ))}
                 </AnimatePresence>
                 <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={TRANSITION}
+                  variants={cardVariants}
+                  initial="initial"
+                  animate="animate"
                   className="snap-center shrink-0 px-3"
                 >
                   <button
@@ -338,7 +350,7 @@ export function WorkspaceSelector() {
                     <span className="text-sm font-medium">{t('workspace.create')}</span>
                   </button>
                 </motion.div>
-              </div>
+              </motion.div>
 
               <button
                 type="button"
@@ -584,6 +596,7 @@ function WorkspaceCard({
   onDelete,
 }: WorkspaceCardProps) {
   const { t } = useI18n();
+  const ambient = useAmbientAnimation();
 
   const coverStyle: React.CSSProperties = workspace.coverImage
     ? { backgroundImage: `url(${workspace.coverImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -592,10 +605,19 @@ function WorkspaceCard({
   return (
     <Card
       hover
-      className="group relative overflow-hidden cursor-pointer"
+      className={cn(
+        'group relative overflow-hidden cursor-pointer',
+        ambient.animate && 'hover:-translate-y-1',
+      )}
       style={{ width: CARD_WIDTH, height: 384 }}
       onClick={onOpen}
     >
+      {ambient.animate && (
+        <div
+          data-testid="workspace-card-shimmer"
+          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-accent/10 to-transparent opacity-0 transition-[transform,opacity] duration-700 ease-in-out group-hover:translate-x-full group-hover:opacity-100"
+        />
+      )}
       <div className="h-[45%] w-full relative" style={coverStyle}>
         <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/0 to-black/20" />
       </div>

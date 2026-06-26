@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { WorkspaceSelector } from './WorkspaceSelector';
+import { useMotionStore } from '@/stores/motion';
 import type { Workspace } from '@/types';
 
 const mockNavigate = vi.fn();
@@ -59,6 +60,7 @@ function renderSelector() {
 describe('WorkspaceSelector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useMotionStore.setState({ animationsEnabled: true });
     vi.mocked(useWorkspacesQuery).mockReturnValue({
       data: [makeWorkspace()],
       isLoading: false,
@@ -124,5 +126,16 @@ describe('WorkspaceSelector', () => {
 
     const { container } = renderSelector();
     expect(container.querySelectorAll('.skeleton').length).toBeGreaterThan(0);
+  });
+
+  it('renders ambient shimmer overlay on workspace cards when animations are enabled', () => {
+    renderSelector();
+    expect(screen.getByTestId('workspace-card-shimmer')).toBeInTheDocument();
+  });
+
+  it('does not render ambient shimmer when animations are disabled', () => {
+    useMotionStore.setState({ animationsEnabled: false });
+    renderSelector();
+    expect(screen.queryByTestId('workspace-card-shimmer')).not.toBeInTheDocument();
   });
 });

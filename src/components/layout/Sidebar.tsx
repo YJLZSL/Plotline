@@ -17,6 +17,7 @@ import {
 
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
+import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { useUIStore } from '@/stores/ui';
 import { MOTION_FAST } from '@/lib/motion';
 import { AppIcon, BrandMark } from '@/components/ui';
@@ -45,6 +46,7 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
   const toggle = useUIStore((s) => s.toggleSidebar);
   const { t } = useI18n();
   const location = useLocation();
+  const ambient = useAmbientAnimation();
 
   return (
     <motion.aside
@@ -88,8 +90,13 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
               {active && (
                 <motion.span
                   layoutId={`sidebar-active-${item.to}`}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-accent"
-                  transition={MOTION_FAST}
+                  animate={ambient.animate ? { opacity: [1, 0.55, 1] } : { opacity: 1 }}
+                  transition={
+                    ambient.animate
+                      ? { layout: MOTION_FAST, opacity: { repeat: Infinity, duration: 2, ease: 'easeInOut' } }
+                      : MOTION_FAST
+                  }
+                  className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-accent shadow-[0_0_10px_var(--accent)]"
                 />
               )}
               <AppIcon size="sm" tone={active ? 'accent' : 'muted'}>

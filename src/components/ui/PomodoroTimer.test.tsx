@@ -5,10 +5,12 @@ import '@/i18n';
 import { PomodoroTimer } from './PomodoroTimer';
 import { getBlockType, type BlockType } from './PomodoroTimer.utils';
 import { usePomodoroStore } from '@/stores/pomodoro';
+import { useMotionStore } from '@/stores/motion';
 
 describe('PomodoroTimer', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    useMotionStore.setState({ animationsEnabled: true });
     usePomodoroStore.setState({
       phase: 'focus',
       theme: 'warm',
@@ -106,5 +108,36 @@ describe('PomodoroTimer', () => {
     render(<PomodoroTimer open onClose={() => {}} />);
     fireEvent.click(screen.getByLabelText('跳过'));
     expect(usePomodoroStore.getState().phase).toBe('shortBreak');
+  });
+
+  it('renders floating particles during break phases when animations are enabled', () => {
+    usePomodoroStore.setState({ phase: 'shortBreak' });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(screen.getByTestId('pomodoro-particles')).toBeInTheDocument();
+  });
+
+  it('does not render break particles during focus phase', () => {
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(screen.queryByTestId('pomodoro-particles')).not.toBeInTheDocument();
+  });
+
+  it('does not render break particles when animations are disabled', () => {
+    useMotionStore.setState({ animationsEnabled: false });
+    usePomodoroStore.setState({ phase: 'shortBreak' });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(screen.queryByTestId('pomodoro-particles')).not.toBeInTheDocument();
+  });
+
+  it('renders confetti burst on phase change when animations are enabled', () => {
+    render(<PomodoroTimer open onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText('跳过'));
+    expect(screen.getByTestId('pomodoro-confetti')).toBeInTheDocument();
+  });
+
+  it('does not render confetti when animations are disabled', () => {
+    useMotionStore.setState({ animationsEnabled: false });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText('跳过'));
+    expect(screen.queryByTestId('pomodoro-confetti')).not.toBeInTheDocument();
   });
 });

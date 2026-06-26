@@ -35,6 +35,7 @@ import {
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
+import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
@@ -1071,6 +1072,22 @@ function TrackLane({
   onDragEndNotify: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevEventIdsRef = useRef<Set<string>>(new Set(events.map((e) => e.id)));
+
+  const newEventIds = useMemo(() => {
+    const current = new Set(events.map((e) => e.id));
+    const added = new Set<string>();
+    for (const id of current) {
+      if (!prevEventIdsRef.current.has(id)) {
+        added.add(id);
+      }
+    }
+    return added;
+  }, [events]);
+
+  useEffect(() => {
+    prevEventIdsRef.current = new Set(events.map((e) => e.id));
+  }, [events]);
 
   const visibleEvents = useMemo(() => {
     if (viewportWidth === 0) return events;
@@ -1135,6 +1152,7 @@ function TrackLane({
                 selected={ev.id === selectedEventId}
                 pendingConnection={pendingConnection === ev.id}
                 isConflict={conflictEventIds.has(ev.id)}
+                isNew={newEventIds.has(ev.id)}
                 eventElementRegistry={eventElementRegistry}
                 onClick={() => onSelectEvent(ev.id)}
                 onDoubleClick={() => onEditEvent(ev)}
@@ -1176,6 +1194,7 @@ function EventCard({
   selected,
   pendingConnection,
   isConflict,
+  isNew,
   eventElementRegistry,
   onClick,
   onDoubleClick,
@@ -1192,6 +1211,7 @@ function EventCard({
   selected: boolean;
   pendingConnection: boolean;
   isConflict: boolean;
+  isNew: boolean;
   eventElementRegistry: React.MutableRefObject<Map<string, HTMLElement>>;
   onClick: () => void;
   onDoubleClick: () => void;
@@ -1202,6 +1222,7 @@ function EventCard({
   onDragEndNotify: () => void;
 }) {
   const { t } = useI18n();
+  const ambient = useAmbientAnimation();
   const color = event.color ?? track.color;
   const statusMap: Record<
     EventStatus,
@@ -1214,6 +1235,13 @@ function EventCard({
   const status = statusMap[event.status];
   const isRelative = event.dateType !== 'absolute';
 
+  const initial = isNew
+    ? { opacity: 1, scale: 1.05, y: 0 }
+    : { opacity: 0, scale: 0.9, y: 8 };
+  const animate = { opacity: 1, scale: 1, y: 0 };
+  const whileHover = ambient.animate ? { scale: 1.02, y: -2 } : { y: -2 };
+  const transition = { ...ambient.transition, delay: Math.min(index * 0.015, 0.1) };
+
   return (
     <motion.div
       ref={(el) => {
@@ -1221,10 +1249,10 @@ function EventCard({
         else eventElementRegistry.current.delete(event.id);
       }}
       data-event-id={event.id}
-      initial={{ opacity: 0, scale: 0.9, y: 8 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
+      initial={initial}
+      animate={animate}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ ...MOTION_BASE, delay: Math.min(index * 0.015, 0.1) }}
+      transition={transition}
       drag="x"
       dragMomentum={false}
       dragElastic={0}
@@ -1236,7 +1264,7 @@ function EventCard({
       }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      whileHover={{ y: -2 }}
+      whileHover={whileHover}
       title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
       className={cn(
         'absolute top-3 cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',

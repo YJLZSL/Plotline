@@ -52,6 +52,21 @@ test.describe('核心用户流程', () => {
     await expect(page.locator('text=Settings').first()).toBeVisible();
   });
 
+  test('设置：切换减少动画开关并保持可用', async ({ page }) => {
+    await page.locator('nav a').filter({ hasText: /设置|Settings/ }).click();
+    await expect(page).toHaveURL(/\/workspaces\/.+\/settings/);
+
+    const toggle = page.getByTestId('animations-enabled-toggle');
+    await expect(toggle).toBeVisible();
+    const initial = (await toggle.getAttribute('aria-checked')) ?? 'false';
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', initial === 'true' ? 'false' : 'true');
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', initial);
+  });
+
   test('世界观：添加历史条目', async ({ page }) => {
     await page.locator('nav a').filter({ hasText: /世界观|Worldbuilding/ }).click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/worldbuilding/);

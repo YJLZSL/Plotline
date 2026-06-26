@@ -16,6 +16,7 @@ import { WorldbuildingView } from '@/components/views/WorldbuildingView';
 import { NovelView } from '@/components/views/NovelView';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
+import { useMotionStore } from '@/stores/motion';
 import { useI18n } from '@/hooks/useI18n';
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts';
 import { useKonamiCode } from '@/hooks/useKonamiCode';
@@ -54,11 +55,25 @@ function ThemeSync() {
   return null;
 }
 
+function MotionSync() {
+  const { data: settings } = useSettingsQuery();
+  const setAnimationsEnabled = useMotionStore((s) => s.setAnimationsEnabled);
+
+  useEffect(() => {
+    if (settings) {
+      setAnimationsEnabled(settings.animationsEnabled ?? true);
+    }
+  }, [settings, setAnimationsEnabled]);
+
+  return null;
+}
+
 export function AppRoutes() {
   useGlobalShortcuts();
   return (
     <>
       <ThemeSync />
+      <MotionSync />
       <KonamiEasterEgg />
       <AnimatedRoutes />
     </>
