@@ -650,14 +650,14 @@ fn build_context_block(context: &AiChatContext) -> String {
     }
 }
 
-fn build_messages(
-    settings: &crate::models::AppSettings,
-    history: &[AiMessage],
-    user_message: &str,
-    chunks: &[AiSearchResult],
-    context: Option<&AiChatContext>,
-) -> Vec<OpenAiMessage> {
-    let mut messages: Vec<OpenAiMessage> = Vec::new();
+fn build_messages<'a>(
+    settings: &'a crate::models::AppSettings,
+    history: &'a [AiMessage],
+    user_message: &'a str,
+    chunks: &'a [AiSearchResult],
+    context: Option<&'a AiChatContext>,
+) -> Vec<OpenAiMessage<'a>> {
+    let mut messages: Vec<OpenAiMessage<'a>> = Vec::new();
     let system_prompt = if settings.ai_system_prompt.trim().is_empty() {
         DEFAULT_SYSTEM_PROMPT
     } else {
@@ -1064,7 +1064,7 @@ mod tests {
     use super::*;
     use crate::db::migrate;
     use crate::models::{
-        CreateCharacterInput, CreateEventInput, CreateOutlineNodeInput, CreateTrackInput,
+        AiChunk, CreateCharacterInput, CreateEventInput, CreateOutlineNodeInput, CreateTrackInput,
         CreateWorkspaceInput,
     };
 
@@ -1262,5 +1262,57 @@ mod tests {
         .unwrap();
         assert_eq!(location_result.target, "location");
         assert_eq!(location_result.title, "新地点");
+    }
+
+    #[test]
+    fn should_build_messages_with_lifetimes() {
+        let settings = crate::models::AppSettings {
+            ai_system_prompt: "You are a helpful assistant.".into(),
+            ..Default::default()
+        };
+        let history = vec![AiMessage {
+            id: "m1".into(),
+            session_id: "s1".into(),
+            role: AiRole::Assistant,
+            content: "previous".into(),
+            created_at: Utc::now(),
+        }];
+        let chunks = vec![AiSearchResult {
+            chunk: AiChunk {
+                id: "k1".into(),
+                workspace_id: "ws".into(),
+                source_id: "e1".into(),
+                source_type: "event".into(),
+                content: "艾莉丝醒来".into(),
+            },
+            score: 1,
+        }];
+        let context = AiChatContext {
+            workspace_summary: Some("测试工作区".into()),
+            timeline: None,
+            characters: None,
+            locations: None,
+            outline: None,
+            notes: None,
+            selected_entity: None,
+        };
+
+        let messages = build_messages(
+            &settings,
+            &history,
+            "hello",
+            &chunks,
+            Some(&context),
+        );
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("helpful assistant"));
+        assert!(messages[0].content.contains("测试工作区"));
+        assert!(messages[0].content.contains("艾莉丝醒来"));
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(messages[1].content, "previous");
+        assert_eq!(messages[2].role, "user");
+        assert_eq!(messages[2].content, "hello");
     }
 }
