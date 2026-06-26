@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from 'react';
+import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import {
   Plus,
@@ -322,12 +322,15 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     setEditingEvent(null);
   };
 
-  const handleDeleteEvent = async (id: string) => {
-    await deleteEvent.mutateAsync(id);
-    if (selectedEventId === id) setSelectedEventId(null);
-    setEventDialogOpen(false);
-    setEditingEvent(null);
-  };
+  const handleDeleteEvent = useCallback(
+    async (id: string) => {
+      await deleteEvent.mutateAsync(id);
+      if (selectedEventId === id) setSelectedEventId(null);
+      setEventDialogOpen(false);
+      setEditingEvent(null);
+    },
+    [deleteEvent, selectedEventId],
+  );
 
   const cycleZoom = (dir: 1 | -1) => {
     const idx = ZOOM_LEVELS.indexOf(zoom);
@@ -347,8 +350,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedEventId, eventDialogOpen]);
+  }, [selectedEventId, eventDialogOpen, handleDeleteEvent]);
 
   return (
     <>

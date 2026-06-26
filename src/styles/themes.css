@@ -72,9 +72,11 @@
 [data-theme="mc"] {
   /* v2.3.0 MC 主题重构：更舒适、可读的泥土/草方块/圆石/木板配色 */
   --bg-base: #7A5C4A;           /* 泥土棕 - 提高亮度，减少压抑感 */
+  --bg-base-gradient: linear-gradient(180deg, #7A5C4A, #6D4C33);
   --bg-surface: #D4B896;        /* 沙/木板 - 作为卡片表面，更明亮 */
   --bg-elevated: #A68B6F;       /* 深木板 - 中等亮度 */
   --bg-cobble: #9BAAB3;         /* 圆石灰 - 稍亮 */
+  --surface-highlight: rgba(255, 255, 255, 0.12);
   --text-primary: #FFF5E6;      /* 米白 - 在深色背景上可读 */
   --text-secondary: #E8D5C0;     /* 浅沙色 */
   --accent: #6BA84E;            /* 草绿 - 更鲜艳 */
@@ -83,6 +85,8 @@
   --accent-cool: #5CC5C5;       /* 钻石青 */
   --border: #8A7A65;
   --shadow-color: rgba(0, 0, 0, 0.35);
+  --shadow-card-soft: 0 2px 8px var(--shadow-color);
+  --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
   --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
 
   /* CSS/SVG 像素纹理（不使用受版权保护的 Minecraft 素材） */
@@ -118,8 +122,10 @@
 [data-theme="mc"] [data-tauri-drag-region] {
   background-color: var(--bg-cobble);
   background-image: var(--mc-pattern-cobble);
+  background-blend-mode: overlay;
   border-bottom: 3px solid #5A6A72;
   box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.25), inset 3px 3px 0 rgba(255, 255, 255, 0.12);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="mc"] button:not(.rounded-full):not([class*="rounded-full"]) {
@@ -139,9 +145,10 @@
 [data-theme="mc"] .card {
   background-color: var(--bg-surface);
   background-image: var(--mc-pattern-planks);
-  background-blend-mode: normal;
+  background-blend-mode: overlay;
   border: 3px solid #8F6A4A;
   box-shadow: inset -3px -3px 0 rgba(0, 0, 0, 0.15), inset 3px 3px 0 rgba(255, 255, 255, 0.1);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
 }
 
 [data-theme="mc"] [class*="bg-bg-elevated"] {
@@ -168,9 +175,17 @@
   border-radius: 0;
   background-color: var(--bg-cobble);
   background-image: var(--mc-pattern-cobble);
-  background-blend-mode: normal;
+  background-blend-mode: overlay;
   border: 2px solid #5A6A72;
   box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.25), inset -3px -3px 0 rgba(255, 255, 255, 0.1);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="mc"] input:focus,
+[data-theme="mc"] textarea:focus,
+[data-theme="mc"] select:focus {
+  border-color: var(--accent);
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.25), inset -3px -3px 0 rgba(255, 255, 255, 0.1), 0 0 0 2px var(--accent);
 }
 
 [data-theme="mc"] .mc-block {
@@ -362,6 +377,7 @@ body,
 
 body {
   background-color: var(--bg-base);
+  background-image: var(--bg-base-gradient);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;

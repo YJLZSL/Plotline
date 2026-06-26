@@ -298,17 +298,15 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                           aria-hidden="true"
                         />
                         <div
-                          className="h-14 w-full rounded-[6px] mb-1 relative z-10"
+                          className="h-14 w-full rounded-[6px] mb-1 relative z-10 overflow-hidden border border-border/50 flex items-center justify-center gap-2"
                           data-theme={th.value}
-                          style={{
-                            background:
-                              th.value === 'light'
-                                ? 'linear-gradient(135deg, #FAF7F0, #F5EFE3)'
-                                : th.value === 'dark'
-                                  ? 'linear-gradient(135deg, #1E1A16, #352D27)'
-                                  : 'linear-gradient(135deg, #F2E8D5, #E7D7B6)',
-                          }}
-                        />
+                          style={{ background: 'var(--bg-base-gradient)' }}
+                        >
+                          <span className="text-[10px] font-medium text-text-primary">
+                            Aa
+                          </span>
+                          <span className="h-2 w-2 rounded-full bg-accent" />
+                        </div>
                         <Icon className="h-4 w-4 text-text-secondary" />
                         <span className="text-xs font-medium text-text-primary">
                           {t(th.labelKey)}
