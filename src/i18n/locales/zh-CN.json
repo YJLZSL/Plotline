@@ -364,7 +364,9 @@
     "focusComplete": "专注时间结束，休息一下！",
     "breakComplete": "休息结束，继续创作！",
     "reset": "重置",
-    "skip": "跳过"
+    "skip": "跳过",
+    "minimize": "最小化",
+    "restore": "恢复"
   },
   "ai": {
     "title": "AI 助手",

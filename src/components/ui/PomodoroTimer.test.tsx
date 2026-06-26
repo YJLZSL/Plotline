@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@/i18n';
 import { PomodoroTimer } from './PomodoroTimer';
 import { getBlockType, type BlockType } from './PomodoroTimer.utils';
-import { usePomodoroStore } from '@/stores/pomodoro';
+import { usePomodoroStore, getDefaultPomodoroPosition } from '@/stores/pomodoro';
 import { useMotionStore } from '@/stores/motion';
 
 describe('PomodoroTimer', () => {
@@ -17,6 +17,8 @@ describe('PomodoroTimer', () => {
       secondsLeft: 25 * 60,
       isRunning: false,
       completedFocusSessions: 0,
+      position: null,
+      minimized: false,
     });
   });
 
@@ -139,5 +141,31 @@ describe('PomodoroTimer', () => {
     render(<PomodoroTimer open onClose={() => {}} />);
     fireEvent.click(screen.getByLabelText('跳过'));
     expect(screen.queryByTestId('pomodoro-confetti')).not.toBeInTheDocument();
+  });
+
+  it('minimizes when header button is clicked', () => {
+    render(<PomodoroTimer open onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText('最小化'));
+    expect(usePomodoroStore.getState().minimized).toBe(true);
+  });
+
+  it('shows a minimized chip with remaining time instead of the full panel', () => {
+    usePomodoroStore.setState({ minimized: true });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(screen.queryByText('番茄钟')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('恢复')).toHaveTextContent('25:00');
+  });
+
+  it('restores from the minimized chip when clicked', () => {
+    usePomodoroStore.setState({ minimized: true });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText('恢复'));
+    expect(usePomodoroStore.getState().minimized).toBe(false);
+  });
+
+  it('sets default position on first render when position is null', () => {
+    usePomodoroStore.setState({ position: null });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(usePomodoroStore.getState().position).toEqual(getDefaultPomodoroPosition());
   });
 });

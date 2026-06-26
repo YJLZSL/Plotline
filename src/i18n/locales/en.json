@@ -360,7 +360,9 @@
     "focusComplete": "Focus session complete, take a break!",
     "breakComplete": "Break over, back to work!",
     "reset": "Reset",
-    "skip": "Skip"
+    "skip": "Skip",
+    "minimize": "Minimize",
+    "restore": "Restore"
   },
   "ai": {
     "title": "AI Assistant",

@@ -16,6 +16,8 @@ interface PomodoroState {
   secondsLeft: number;
   isRunning: boolean;
   completedFocusSessions: number;
+  position: { x: number; y: number } | null;
+  minimized: boolean;
   setTheme: (theme: PomodoroTheme) => void;
   setPhase: (phase: PomodoroPhase) => void;
   start: () => void;
@@ -23,10 +25,22 @@ interface PomodoroState {
   reset: () => void;
   tick: () => void;
   skip: () => void;
+  setPosition: (position: { x: number; y: number } | null) => void;
+  setMinimized: (minimized: boolean) => void;
+  toggleMinimized: () => void;
 }
 
 function phaseSeconds(phase: PomodoroPhase): number {
   return PHASE_MINUTES[phase] * 60;
+}
+
+export function getDefaultPomodoroPosition(): { x: number; y: number } {
+  const width = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const height = typeof window !== 'undefined' ? window.innerHeight : 768;
+  return {
+    x: width - 336,
+    y: height - 420,
+  };
 }
 
 export const usePomodoroStore = create<PomodoroState>()(
@@ -37,6 +51,8 @@ export const usePomodoroStore = create<PomodoroState>()(
       secondsLeft: phaseSeconds('focus'),
       isRunning: false,
       completedFocusSessions: 0,
+      position: null,
+      minimized: false,
       setTheme: (theme) => set({ theme }),
       setPhase: (phase) =>
         set({ phase, secondsLeft: phaseSeconds(phase), isRunning: false }),
@@ -84,12 +100,17 @@ export const usePomodoroStore = create<PomodoroState>()(
           completedFocusSessions: nextCompleted,
         });
       },
+      setPosition: (position) => set({ position }),
+      setMinimized: (minimized) => set({ minimized }),
+      toggleMinimized: () => set((state) => ({ minimized: !state.minimized })),
     }),
     {
       name: 'plotline:pomodoro',
       partialize: (state) => ({
         theme: state.theme,
         completedFocusSessions: state.completedFocusSessions,
+        position: state.position,
+        minimized: state.minimized,
       }),
     },
   ),
