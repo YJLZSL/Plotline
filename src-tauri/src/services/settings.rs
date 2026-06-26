@@ -8,7 +8,8 @@ pub fn read_settings(conn: &Connection) -> AppResult<AppSettings> {
         "SELECT theme, accent_color, language, editor_font, ui_font, font_size,
                 backup_path, auto_backup, backup_interval_hours, default_view, timeline_zoom,
                 font_theme, ai_provider, ai_model, ai_api_key, ai_base_url,
-                ai_enabled, ai_rag_enabled, ai_system_prompt, splash_enabled, splash_duration_ms
+                ai_enabled, ai_rag_enabled, ai_system_prompt, splash_enabled, splash_duration_ms,
+                animations_enabled
          FROM app_settings WHERE id=1",
         [],
         |row| {
@@ -34,6 +35,7 @@ pub fn read_settings(conn: &Connection) -> AppResult<AppSettings> {
                 ai_system_prompt: row.get(18)?,
                 splash_enabled: row.get::<_, i64>(19)? != 0,
                 splash_duration_ms: row.get(20)?,
+                animations_enabled: row.get::<_, i64>(21)? != 0,
             })
         },
     )
@@ -46,7 +48,8 @@ pub fn write_settings(conn: &Connection, s: &AppSettings) -> AppResult<()> {
              ui_font=?5, font_size=?6, backup_path=?7, auto_backup=?8,
              backup_interval_hours=?9, default_view=?10, timeline_zoom=?11, font_theme=?12,
              ai_provider=?13, ai_model=?14, ai_api_key=?15, ai_base_url=?16,
-             ai_enabled=?17, ai_rag_enabled=?18, ai_system_prompt=?19, splash_enabled=?20, splash_duration_ms=?21
+             ai_enabled=?17, ai_rag_enabled=?18, ai_system_prompt=?19, splash_enabled=?20, splash_duration_ms=?21,
+             animations_enabled=?22
          WHERE id=1",
         rusqlite::params![
             s.theme,
@@ -70,6 +73,7 @@ pub fn write_settings(conn: &Connection, s: &AppSettings) -> AppResult<()> {
             s.ai_system_prompt,
             s.splash_enabled as i64,
             s.splash_duration_ms,
+            s.animations_enabled as i64,
         ],
     )?;
     Ok(())
@@ -105,6 +109,9 @@ pub fn merge_settings(conn: &Connection, input: UpdateSettingsInput) -> AppResul
         splash_duration_ms: input
             .splash_duration_ms
             .unwrap_or(existing.splash_duration_ms),
+        animations_enabled: input
+            .animations_enabled
+            .unwrap_or(existing.animations_enabled),
     };
     write_settings(conn, &merged)?;
     Ok(merged)
@@ -140,5 +147,37 @@ mod tests {
 
         let updated = read_settings(&conn).unwrap();
         assert_eq!(updated.font_theme, "pixel");
+    }
+
+    #[test]
+    fn reads_default_animations_enabled() {
+        let conn = test_conn();
+        let settings = read_settings(&conn).unwrap();
+        assert!(settings.animations_enabled);
+    }
+
+    #[test]
+    fn writes_and_reads_animations_enabled() {
+        let conn = test_conn();
+        let mut settings = read_settings(&conn).unwrap();
+        settings.animations_enabled = false;
+        write_settings(&conn, &settings).unwrap();
+
+        let updated = read_settings(&conn).unwrap();
+        assert!(!updated.animations_enabled);
+    }
+
+    #[test]
+    fn merge_settings_updates_animations_enabled() {
+        let conn = test_conn();
+        let input = UpdateSettingsInput {
+            animations_enabled: Some(false),
+            ..Default::default()
+        };
+        let merged = merge_settings(&conn, input).unwrap();
+        assert!(!merged.animations_enabled);
+
+        let read_back = read_settings(&conn).unwrap();
+        assert!(!read_back.animations_enabled);
     }
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { toastError, toastSuccess } from '@/stores/toast';
 import { useI18n } from '@/hooks/useI18n';
+import { useMotionStore } from '@/stores/motion';
 import { useThemeStore } from '@/stores/ui';
 
 import { getSettings as apiGet, updateSettings as apiUpdate } from './api';
@@ -16,11 +17,13 @@ export function useUpdateSettings() {
   const qc = useQueryClient();
   const { t } = useI18n();
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
+  const setAnimationsEnabled = useMotionStore((s) => s.setAnimationsEnabled);
   return useMutation({
     mutationFn: apiUpdate,
     onSuccess: (s) => {
       qc.setQueryData(KEY, s);
       applyToDOM(s);
+      setAnimationsEnabled(s.animationsEnabled ?? true);
       toastSuccess(t('toast.settingsSaved'));
     },
     onError: toastError,

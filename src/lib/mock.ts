@@ -96,6 +96,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   aiSystemPrompt: '',
   splashEnabled: true,
   splashDurationMs: 2500,
+  animationsEnabled: true,
 };
 
 const TRACK_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
@@ -1401,6 +1402,7 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
         ...(input.aiSystemPrompt !== undefined ? { aiSystemPrompt: input.aiSystemPrompt } : {}),
         ...(input.splashEnabled !== undefined ? { splashEnabled: input.splashEnabled } : {}),
         ...(input.splashDurationMs !== undefined ? { splashDurationMs: input.splashDurationMs } : {}),
+        ...(input.animationsEnabled !== undefined ? { animationsEnabled: input.animationsEnabled } : {}),
       };
       return db.settings;
     }

@@ -26,6 +26,7 @@ export interface AppSettings {
   aiSystemPrompt: string;
   splashEnabled: boolean;
   splashDurationMs: number;
+  animationsEnabled: boolean;
 }
 
 export interface UpdateSettingsInput {
@@ -50,6 +51,7 @@ export interface UpdateSettingsInput {
   aiSystemPrompt?: string;
   splashEnabled?: boolean;
   splashDurationMs?: number;
+  animationsEnabled?: boolean;
 }
 
 export interface Statistics {

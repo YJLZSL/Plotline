@@ -24,6 +24,7 @@ pub struct AppSettings {
     pub ai_system_prompt: String,
     pub splash_enabled: bool,
     pub splash_duration_ms: i64,
+    pub animations_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -50,6 +51,7 @@ impl Default for AppSettings {
             ai_system_prompt: String::new(),
             splash_enabled: true,
             splash_duration_ms: 2500,
+            animations_enabled: true,
         }
     }
 }
@@ -78,4 +80,5 @@ pub struct UpdateSettingsInput {
     pub ai_system_prompt: Option<String>,
     pub splash_enabled: Option<bool>,
     pub splash_duration_ms: Option<i64>,
+    pub animations_enabled: Option<bool>,
 }
