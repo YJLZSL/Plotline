@@ -905,6 +905,7 @@ pub fn apply_output(conn: &Connection, input: &AiInsertInput) -> AppResult<AiIns
                         choice_label: None,
                         choice_target_scene_id: None,
                         sprite_asset_path: None,
+                        sprite_position: None,
                         voice_path: None,
                     },
                 )?;
