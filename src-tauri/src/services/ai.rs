@@ -906,29 +906,54 @@ fn map_connection_test_http_status(status: reqwest::StatusCode, body: &str) -> S
 }
 
 fn map_connection_test_request_error(err: &reqwest::Error) -> String {
-    if err.is_timeout() {
+    map_connection_test_request_error_kind(
+        err.is_timeout(),
+        err.is_connect(),
+        err.is_request(),
+        &err.to_string(),
+    )
+}
+
+fn map_connection_test_request_error_kind(
+    is_timeout: bool,
+    is_connect: bool,
+    is_request: bool,
+    detail: &str,
+) -> String {
+    if is_timeout {
         "连接超时，请检查网络或代理设置".into()
-    } else if err.is_connect() {
+    } else if is_connect {
         "无法连接到 AI 服务，请检查 Base URL 和网络/代理设置".into()
-    } else if err.is_request() {
+    } else if is_request {
         "请求发送失败，请检查网络连接".into()
     } else {
-        format!("连接失败：{}", err)
+        format!("连接失败：{}", detail)
+    }
+}
+
+fn validate_connection_input(
+    input: &crate::models::AiConnectionTestInput,
+) -> Option<crate::models::AiConnectionTestResult> {
+    let base_url = input.base_url.trim().trim_end_matches('/');
+    if base_url.is_empty() {
+        Some(crate::models::AiConnectionTestResult {
+            status: "error".into(),
+            latency_ms: 0,
+            message: "请先配置 API 基础地址".into(),
+        })
+    } else {
+        None
     }
 }
 
 pub async fn test_connection(
     input: &crate::models::AiConnectionTestInput,
 ) -> AppResult<crate::models::AiConnectionTestResult> {
-    let base_url = input.base_url.trim().trim_end_matches('/');
-    if base_url.is_empty() {
-        return Ok(crate::models::AiConnectionTestResult {
-            status: "error".into(),
-            latency_ms: 0,
-            message: "请先配置 API 基础地址".into(),
-        });
+    if let Some(result) = validate_connection_input(input) {
+        return Ok(result);
     }
 
+    let base_url = input.base_url.trim().trim_end_matches('/');
     let api_key = input.api_key.trim();
     let url = format!("{}/models", base_url);
     let client = reqwest::Client::builder()
@@ -1466,28 +1491,26 @@ mod tests {
     }
 
     #[test]
-    fn should_map_connection_test_request_errors_to_friendly_message() {
-        let timeout = reqwest::Error::from(reqwest::Error::from(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            "timeout",
-        )));
-        assert!(map_connection_test_request_error(&timeout).contains("超时"));
-
-        let connect = reqwest::Error::from(reqwest::Error::from(std::io::Error::new(
-            std::io::ErrorKind::ConnectionRefused,
-            "refused",
-        )));
-        assert!(map_connection_test_request_error(&connect).contains("无法连接"));
+    fn should_map_connection_test_request_error_kind_to_friendly_message() {
+        assert!(map_connection_test_request_error_kind(true, false, false, "")
+            .contains("超时"));
+        assert!(map_connection_test_request_error_kind(false, true, false, "")
+            .contains("无法连接"));
+        assert!(map_connection_test_request_error_kind(false, false, true, "")
+            .contains("请求发送失败"));
+        let fallback = map_connection_test_request_error_kind(false, false, false, "oops");
+        assert!(fallback.contains("连接失败"));
+        assert!(fallback.contains("oops"));
     }
 
-    #[tokio::test]
-    async fn should_return_error_when_base_url_empty() {
+    #[test]
+    fn should_return_error_when_base_url_empty() {
         let input = crate::models::AiConnectionTestInput {
             base_url: "   ".into(),
             api_key: "sk-test".into(),
             model: None,
         };
-        let result = test_connection(&input).await.unwrap();
+        let result = validate_connection_input(&input).unwrap();
         assert_eq!(result.status, "error");
         assert_eq!(result.latency_ms, 0);
         assert!(result.message.contains("基础地址"));
