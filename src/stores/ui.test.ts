@@ -30,8 +30,14 @@ describe('theme store', () => {
 
   it('should apply pixel font theme to --font-sans and --font-mono', () => {
     useThemeStore.getState().setFontTheme('pixel');
+    expect(document.documentElement.style.getPropertyValue('--font-sans')).toContain('Fusion Pixel 10px');
+    expect(document.documentElement.style.getPropertyValue('--font-mono')).toContain('Fusion Pixel 10px');
+  });
+
+  it('should apply smiley font theme to --font-sans only', () => {
+    useThemeStore.getState().setFontTheme('smiley');
     expect(document.documentElement.style.getPropertyValue('--font-sans')).toContain('Smiley Sans');
-    expect(document.documentElement.style.getPropertyValue('--font-mono')).toContain('Smiley Sans');
+    expect(document.documentElement.style.getPropertyValue('--font-mono')).toContain('JetBrains Mono');
   });
 
   it('should set --motion-enabled css variable from animationsEnabled', () => {

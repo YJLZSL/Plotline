@@ -35,7 +35,8 @@ export const useUIStore = create<UIState>()(
 const FONT_STACKS: Record<FontTheme, string> = {
   sans: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
   mono: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-  pixel: '"Smiley Sans", "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+  pixel: '"Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+  smiley: '"Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
 };
 
 interface ThemeState {

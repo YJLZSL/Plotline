@@ -69,6 +69,7 @@ import { useCharactersQuery } from '@/features/characters/hooks';
 import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
 import { useTimelineFilters, filterEvents } from '@/features/timeline/useTimelineFilters';
+import { clampTodayLabelX, computeAddButtonLeft } from '@/features/timeline/timelineLayout';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useUIStore } from '@/stores/ui';
@@ -76,12 +77,14 @@ import { toastError, toastInfo, toastWarning } from '@/stores/toast';
 import { isTauri } from '@/lib/ipc';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import * as Popover from '@radix-ui/react-popover';
 
 // ===== 常量 =====
 const TRACK_HEIGHT = 92;
 const TRACK_COLLAPSED_HEIGHT = 24;
 const TRACK_GAP = 6;
-const EVENT_MIN_WIDTH = 180;
+const EVENT_MIN_WIDTH = 220;
+const ADD_EVENT_BUTTON_WIDTH = 64;
 const EVENT_HEIGHT = 64;
 const RULER_HEIGHT = 44;
 const LEFT_PADDING = 24;
@@ -249,6 +252,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const totalWidth = useMemo(
     () => Math.max(800, timeScale.timeToX(timeScale.max) + LEFT_PADDING + EVENT_MIN_WIDTH),
     [timeScale],
+  );
+
+  const timelineMinHeight = useMemo(
+    () => visibleTracks.reduce((sum, tr) => sum + (isCollapsed(tr.id) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT) + TRACK_GAP, RULER_HEIGHT),
+    [visibleTracks, isCollapsed],
   );
 
   // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 min 的伪时间戳
@@ -727,34 +735,50 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               }
             />
           ) : (
-            <div style={{ minWidth: totalWidth, minHeight: visibleTracks.reduce((sum, tr) => sum + (isCollapsed(tr.id) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT) + TRACK_GAP, RULER_HEIGHT) }}>
-              {/* 日期标尺 */}
-              <DateRuler
-                timeScale={timeScale}
-                totalWidth={totalWidth}
-              />
+            <div style={{ minWidth: totalWidth, minHeight: timelineMinHeight }}>
+              {hasActiveFilters && filteredEvents.length === 0 ? (
+                <div className="flex items-center justify-center" style={{ minWidth: totalWidth, minHeight: timelineMinHeight }}>
+                  <EmptyState
+                    icon={<Search className="h-10 w-10" />}
+                    title={t('timeline.noMatchingEventsTitle')}
+                    description={t('timeline.noMatchingEventsDescription')}
+                    action={
+                      <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1.5">
+                        <X className="h-3.5 w-3.5" />
+                        {t('timeline.clearFilters')}
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* 日期标尺 */}
+                  <DateRuler
+                    timeScale={timeScale}
+                    totalWidth={totalWidth}
+                  />
 
-              {/* 连线层（SVG，覆盖在轨道上） */}
-              {showConnections && filteredEvents.length > 1 && (
-              <ConnectionLayer
-                events={filteredEvents}
-                tracks={visibleTracks}
-                collapsedTrackIds={filters.collapsedTrackIds}
-                eventPositions={eventPositions}
-                timeScale={timeScale}
-                scrollLeft={scrollLeft}
-                viewportWidth={viewportWidth}
-                pendingConnection={pendingConnection}
-                selectedEventId={selectedEventId}
-                eventConnections={eventConnections}
-                eventElements={eventElementRegistry.current}
-                draggingEvent={draggingEvent}
-                onDisconnect={(sourceId, targetId) => void disconnectEvents.mutateAsync({ sourceId, targetId })}
-              />
-              )}
+                  {/* 连线层（SVG，覆盖在轨道上） */}
+                  {showConnections && filteredEvents.length > 1 && (
+                  <ConnectionLayer
+                    events={filteredEvents}
+                    tracks={visibleTracks}
+                    collapsedTrackIds={filters.collapsedTrackIds}
+                    eventPositions={eventPositions}
+                    timeScale={timeScale}
+                    scrollLeft={scrollLeft}
+                    viewportWidth={viewportWidth}
+                    pendingConnection={pendingConnection}
+                    selectedEventId={selectedEventId}
+                    eventConnections={eventConnections}
+                    eventElements={eventElementRegistry.current}
+                    draggingEvent={draggingEvent}
+                    onDisconnect={(sourceId, targetId) => void disconnectEvents.mutateAsync({ sourceId, targetId })}
+                  />
+                  )}
 
-              {/* 轨道 */}
-              {visibleTracks.map((tr, idx) => (
+                  {/* 轨道 */}
+                  {visibleTracks.map((tr, idx) => (
                 <TrackLane
                   key={tr.id}
                   index={idx}
@@ -810,6 +834,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   onToggleCollapse={() => toggleTrackCollapse(tr.id)}
                 />
               ))}
+                </>
+              )}
             </div>
           )}
 
@@ -956,7 +982,11 @@ function DateRuler({
             style={{ left: todayX }}
           >
             <div className="h-full w-px bg-red-500/60" />
-            <span className="absolute top-1 -translate-x-1/2 left-0 text-[9px] font-bold text-red-500 bg-bg-surface px-1 rounded">
+            <span
+              className="absolute top-1 left-0 text-[9px] font-bold text-red-500 bg-bg-surface px-1 rounded whitespace-nowrap"
+              style={{ left: clampTodayLabelX(todayX, totalWidth) - todayX }}
+              data-testid="today-marker-label"
+            >
               {t('timeline.today')}
             </span>
           </div>
@@ -1274,6 +1304,16 @@ function TrackLane({
     });
   }, [events, eventPositions, timeScale, scrollLeft, viewportWidth]);
 
+  const eventXs = useMemo(
+    () => events.map((ev) => timeScale.timeToX(eventPositions.get(ev.id) ?? 0)),
+    [events, eventPositions, timeScale],
+  );
+
+  const addButtonLeft = useMemo(
+    () => computeAddButtonLeft(eventXs, totalWidth, ADD_EVENT_BUTTON_WIDTH, EVENT_MIN_WIDTH, 12),
+    [eventXs, totalWidth],
+  );
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -1304,9 +1344,9 @@ function TrackLane({
 
       {/* 折叠状态标题与计数 */}
       {collapsed && (
-        <div className="absolute inset-0 flex items-center px-3 gap-2">
-          <span className="text-[10px] font-medium text-text-secondary truncate">{track.name}</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-bg-elevated text-text-secondary border border-border">
+        <div className="absolute inset-0 flex items-center gap-2 pl-4 pr-3">
+          <span className="text-[10px] font-medium text-text-secondary truncate leading-none">{track.name}</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-bg-elevated text-text-secondary border border-border leading-none">
             {events.length}
           </span>
         </div>
@@ -1365,12 +1405,12 @@ function TrackLane({
           onClick={onAddEvent}
           data-testid="add-event-btn"
           className={cn(
-            'absolute top-3 flex items-center justify-center gap-1',
+            'absolute top-3 z-10 flex items-center justify-center gap-1',
             'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
             'hover:border-accent hover:text-accent transition-colors',
           )}
-          style={{ left: 8, width: 72, height: EVENT_HEIGHT }}
-          title="添加事件"
+          style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
+          title={t('timeline.addEvent')}
         >
           <Plus className="h-4 w-4" />
         </button>
@@ -1492,7 +1532,7 @@ function EventCard({
       <ContextMenuTrigger asChild>
         <motion.div
           ref={(el) => {
-            if (el) eventElementRegistry.current.set(event.id, el as unknown as HTMLElement);
+            if (el) eventElementRegistry.current.set(event.id, el);
             else eventElementRegistry.current.delete(event.id);
           }}
           data-event-id={event.id}
@@ -1541,24 +1581,26 @@ function EventCard({
         />
       )}
 
-      <div className="px-3 py-2 flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', status.dot)} />
-          <span className="text-xs font-semibold text-text-primary truncate flex-1">
-            {event.title}
-          </span>
-          {isRelative && (
-            <span className="text-[9px] px-1 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
+      <div className="px-3 py-2 flex flex-col gap-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {isRelative ? (
+            <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
+              <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
               {t('timeline.relativeBadge')}
             </span>
+          ) : (
+            <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', status.dot)} />
           )}
+          <span className="text-xs font-semibold text-text-primary truncate flex-1 min-w-0">
+            {event.title}
+          </span>
           {/* 连线手柄 */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onStartConnection();
             }}
-            className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-all"
+            className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-all flex-shrink-0"
             title={t('timeline.startConnection')}
           >
             <Link2 className="h-3 w-3" />
@@ -2273,7 +2315,7 @@ function FilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-bg-surface/80 backdrop-blur-sm">
-      <div className="flex items-center gap-1.5 text-text-secondary text-xs">
+      <div className="flex items-center gap-1.5 text-text-secondary text-xs h-8">
         <Filter className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">{t('timeline.filter')}</span>
       </div>
@@ -2359,43 +2401,36 @@ interface MultiSelectDropdownProps {
 
 function MultiSelectDropdown({ label, options, selectedIds, onToggle }: MultiSelectDropdownProps) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleMouseDown = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleMouseDown);
-    return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, [open]);
-
   const selectedCount = selectedIds.length;
   const displayLabel = selectedCount > 0 ? `${label} (${selectedCount})` : label;
 
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          'flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] text-xs transition-colors border',
-          open || selectedCount > 0
-            ? 'bg-accent/10 border-accent/30 text-accent'
-            : 'bg-bg-surface border-border text-text-secondary hover:text-text-primary hover:border-accent/30',
-        )}
-      >
-        <span className="max-w-[80px] sm:max-w-[120px] truncate">{displayLabel}</span>
-        <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
-      </button>
-
-      {open && (
-        <div
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
           className={cn(
-            'absolute top-full left-0 mt-1 z-50 min-w-[160px] max-w-[240px]',
+            'flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] text-xs transition-colors border',
+            open || selectedCount > 0
+              ? 'bg-accent/10 border-accent/30 text-accent'
+              : 'bg-bg-surface border-border text-text-secondary hover:text-text-primary hover:border-accent/30',
+          )}
+        >
+          <span className="max-w-[80px] sm:max-w-[120px] truncate">{displayLabel}</span>
+          <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          avoidCollisions
+          className={cn(
+            'z-50 min-w-[160px] max-w-[240px]',
             'rounded-[8px] border border-border bg-bg-surface shadow-[var(--shadow-elevated)] p-1.5',
+            'focus:outline-none',
           )}
         >
           {options.length === 0 ? (
@@ -2437,8 +2472,8 @@ function MultiSelectDropdown({ label, options, selectedIds, onToggle }: MultiSel
               })}
             </div>
           )}
-        </div>
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

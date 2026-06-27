@@ -892,6 +892,87 @@ pub async fn list_models(base_url: &str, api_key: &str) -> AppResult<Vec<AiModel
     Ok(models)
 }
 
+const CONNECTION_TEST_TIMEOUT_SECONDS: u64 = 15;
+
+fn map_connection_test_http_status(status: reqwest::StatusCode, body: &str) -> String {
+    match status.as_u16() {
+        401 => "API Key 无效或已过期，请检查密钥是否复制完整".into(),
+        403 => "账号没有访问该模型的权限，或 API Key 被禁用".into(),
+        404 => "API 端点不存在，请检查 Base URL 是否正确".into(),
+        429 => "请求过于频繁或余额不足，请稍后重试或检查账户额度".into(),
+        500 | 502 | 503 | 504 => "AI 服务暂时不可用，请稍后重试".into(),
+        _ => format!("AI 服务返回错误 (HTTP {})：{}", status, truncate_string(body, 200)),
+    }
+}
+
+fn map_connection_test_request_error(err: &reqwest::Error) -> String {
+    if err.is_timeout() {
+        "连接超时，请检查网络或代理设置".into()
+    } else if err.is_connect() {
+        "无法连接到 AI 服务，请检查 Base URL 和网络/代理设置".into()
+    } else if err.is_request() {
+        "请求发送失败，请检查网络连接".into()
+    } else {
+        format!("连接失败：{}", err)
+    }
+}
+
+pub async fn test_connection(
+    input: &crate::models::AiConnectionTestInput,
+) -> AppResult<crate::models::AiConnectionTestResult> {
+    let base_url = input.base_url.trim().trim_end_matches('/');
+    if base_url.is_empty() {
+        return Ok(crate::models::AiConnectionTestResult {
+            status: "error".into(),
+            latency_ms: 0,
+            message: "请先配置 API 基础地址".into(),
+        });
+    }
+
+    let api_key = input.api_key.trim();
+    let url = format!("{}/models", base_url);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(CONNECTION_TEST_TIMEOUT_SECONDS))
+        .build()
+        .map_err(|e| AppError::Internal(format!("创建 HTTP 客户端失败: {}", e)))?;
+
+    let start = std::time::Instant::now();
+    let result = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await;
+    let latency_ms = start.elapsed().as_millis() as u64;
+
+    match result {
+        Ok(response) => {
+            if response.status().is_success() {
+                Ok(crate::models::AiConnectionTestResult {
+                    status: "ok".into(),
+                    latency_ms,
+                    message: format!("连接成功，延迟 {}ms", latency_ms),
+                })
+            } else {
+                let status = response.status();
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "未知错误".into());
+                Ok(crate::models::AiConnectionTestResult {
+                    status: "error".into(),
+                    latency_ms,
+                    message: map_connection_test_http_status(status, &body),
+                })
+            }
+        }
+        Err(err) => Ok(crate::models::AiConnectionTestResult {
+            status: "error".into(),
+            latency_ms,
+            message: map_connection_test_request_error(&err),
+        }),
+    }
+}
+
 fn parse_title_body(content: &str) -> (String, String) {
     let lines: Vec<&str> = content.lines().collect();
     let title = lines
@@ -1355,5 +1436,60 @@ mod tests {
         assert_eq!(messages[0].role, "system");
         assert!(messages[0].content.contains("Override prompt."));
         assert!(!messages[0].content.contains("helpful assistant"));
+    }
+
+    #[test]
+    fn should_map_connection_test_http_status_to_friendly_message() {
+        assert!(map_connection_test_http_status(
+            reqwest::StatusCode::UNAUTHORIZED,
+            ""
+        )
+        .contains("API Key"));
+        assert!(map_connection_test_http_status(
+            reqwest::StatusCode::NOT_FOUND,
+            ""
+        )
+        .contains("Base URL"));
+        assert!(map_connection_test_http_status(
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            ""
+        )
+        .contains("频繁"));
+        assert!(map_connection_test_http_status(
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            ""
+        )
+        .contains("暂时不可用"));
+        let generic = map_connection_test_http_status(reqwest::StatusCode::BAD_REQUEST, "bad");
+        assert!(generic.contains("400"));
+        assert!(generic.contains("bad"));
+    }
+
+    #[test]
+    fn should_map_connection_test_request_errors_to_friendly_message() {
+        let timeout = reqwest::Error::from(reqwest::Error::from(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "timeout",
+        )));
+        assert!(map_connection_test_request_error(&timeout).contains("超时"));
+
+        let connect = reqwest::Error::from(reqwest::Error::from(std::io::Error::new(
+            std::io::ErrorKind::ConnectionRefused,
+            "refused",
+        )));
+        assert!(map_connection_test_request_error(&connect).contains("无法连接"));
+    }
+
+    #[tokio::test]
+    async fn should_return_error_when_base_url_empty() {
+        let input = crate::models::AiConnectionTestInput {
+            base_url: "   ".into(),
+            api_key: "sk-test".into(),
+            model: None,
+        };
+        let result = test_connection(&input).await.unwrap();
+        assert_eq!(result.status, "error");
+        assert_eq!(result.latency_ms, 0);
+        assert!(result.message.contains("基础地址"));
     }
 }

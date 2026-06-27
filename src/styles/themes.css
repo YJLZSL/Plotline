@@ -13,6 +13,7 @@
   --shadow-card-soft: 0 2px 8px var(--shadow-color);
   --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
   --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
+  --font-smiley: "Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --motion-enabled: 1;
   --motion-duration: calc(var(--motion-enabled) * 0.25s);
 }

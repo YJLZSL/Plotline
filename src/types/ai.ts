@@ -151,6 +151,18 @@ export interface AiModelInfo {
   ownedBy?: string;
 }
 
+export interface AiConnectionTestInput {
+  baseUrl: string;
+  apiKey: string;
+  model?: string;
+}
+
+export interface AiConnectionTestResult {
+  status: 'ok' | 'error';
+  latencyMs: number;
+  message: string;
+}
+
 export type AiStreamEvent =
   | { type: 'delta'; data: string }
   | { type: 'error'; data: string }

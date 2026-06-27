@@ -1,8 +1,8 @@
 import re
-import os
+from pathlib import Path
 
-svgs_dir = 'public/ai-logos'
-out = 'src/features/ai/providerIcons.tsx'
+svgs_dir = Path('public/ai-logos')
+out = Path('src/features/ai/providerIcons.tsx')
 
 mapping = [
     ('openai', 'openai'),
@@ -41,13 +41,23 @@ function baseProps(className?: string): SVGProps<SVGSVGElement> {
 
 parts = [header]
 
+def to_camel_case(s: str) -> str:
+    parts = s.split('-')
+    return parts[0] + ''.join(p.capitalize() for p in parts[1:])
+
 for pid, slug in mapping:
-    path = os.path.join(svgs_dir, f'{slug}.svg')
+    path = svgs_dir / f'{slug}.svg'
     with open(path, 'r', encoding='utf-8') as f:
         svg = f.read().strip()
     m = re.fullmatch(r'<svg[^>]*>(.*)</svg>', svg, re.S)
     inner = m.group(1) if m else svg
     inner = re.sub(r'<title>[^<]*</title>', f'<title>{pid}</title>', inner)
+    # Convert kebab-case SVG attributes to React camelCase, but keep data-* / aria-* intact.
+    inner = re.sub(
+        r'(?<![\w-])(?!data-|aria-)([a-z]+(?:-[a-z]+)+)(?==)',
+        lambda m: to_camel_case(m.group(1)),
+        inner,
+    )
     comp_name = pid[0].upper() + pid[1:] + 'Icon'
     parts.append(f'''
 export function {comp_name}({{ className, ...rest }}: BrandIconProps) {{
@@ -72,4 +82,4 @@ export function CustomIcon({ className, ...rest }: BrandIconProps) {
 
 with open(out, 'w', encoding='utf-8') as f:
     f.write('\n'.join(parts))
-print('Generated', out)
+print('Generated', out.as_posix())

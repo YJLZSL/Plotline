@@ -2,7 +2,7 @@ export type Theme = 'light' | 'dark' | 'sepia' | 'mc';
 export type Language = 'zh-CN' | 'zh-TW' | 'en';
 export type DefaultView = 'timeline' | 'characters' | 'outline' | 'statistics' | 'notebook' | 'map' | 'vn' | 'worldbuilding';
 export type TimelineZoom = 'year' | 'month' | 'day' | 'hour';
-export type FontTheme = 'sans' | 'mono' | 'pixel';
+export type FontTheme = 'sans' | 'mono' | 'pixel' | 'smiley';
 
 export interface AppSettings {
   theme: Theme;

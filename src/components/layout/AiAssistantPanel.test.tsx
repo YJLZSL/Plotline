@@ -14,6 +14,7 @@ import { useAiContextStore, type AiContextState } from '@/stores/aiContext';
 import { aiChatStream } from '@/features/ai/api';
 import { collectAiContext } from '@/features/ai/contextCollector';
 import {
+  useAiConnectionTest,
   useAiIndexWorkspace,
   useAiKvGet,
   useAiMessagesQuery,
@@ -24,6 +25,8 @@ import {
 } from '@/features/ai/hooks';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import type { AiInsertInput, AiInsertResult, AiMessage, AiSession, CreateAiSessionInput } from '@/types';
+
+const applyMutate = vi.fn();
 
 const defaultContext: Partial<AiContextState> = {
   view: 'unknown',
@@ -47,6 +50,7 @@ vi.mock('@/features/ai/hooks', () => ({
   useAiIndexWorkspace: vi.fn(),
   useAiKvGet: vi.fn(),
   useApplyAiOutput: vi.fn(),
+  useAiConnectionTest: vi.fn(),
 }));
 
 vi.mock('@/features/ai/api', () => ({
@@ -141,8 +145,14 @@ function mockHooks(messages: AiMessage[] = []) {
     data: undefined,
   } as ReturnType<typeof useAiKvGet>);
   vi.mocked(useApplyAiOutput).mockReturnValue(
-    makeMutationResult<AiInsertResult, Omit<AiInsertInput, 'workspaceId'>>(vi.fn()),
+    makeMutationResult<AiInsertResult, Omit<AiInsertInput, 'workspaceId'>>(applyMutate),
   );
+  vi.mocked(useAiConnectionTest).mockReturnValue({
+    data: undefined,
+    isFetching: false,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useAiConnectionTest>);
   vi.mocked(aiChatStream).mockResolvedValue({
     sessionId: 'session-1',
     reply: '',

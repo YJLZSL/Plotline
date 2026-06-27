@@ -197,6 +197,22 @@ pub struct AiModelInfo {
     pub owned_by: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiConnectionTestInput {
+    pub base_url: String,
+    pub api_key: String,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiConnectionTestResult {
+    pub status: String,
+    pub latency_ms: u64,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type", content = "data")]
 pub enum AiStreamEvent {

@@ -3,8 +3,9 @@ use tauri::{ipc::Channel, State};
 use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    AiChatInput, AiChatResult, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo,
-    AiSession, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
+    AiChatInput, AiChatResult, AiConnectionTestInput, AiConnectionTestResult, AiInsertInput,
+    AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiSession, AiStreamEvent,
+    CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
 };
 use crate::services::settings::read_settings;
 use crate::AppState;
@@ -272,6 +273,11 @@ pub fn ai_kv_set(state: State<'_, AppState>, entry: AiKvEntry) -> AppResult<AiKv
 #[tauri::command]
 pub async fn list_ai_models(input: ListAiModelsInput) -> AppResult<Vec<AiModelInfo>> {
     crate::services::ai::list_models(&input.base_url, &input.api_key).await
+}
+
+#[tauri::command]
+pub async fn test_ai_connection(input: AiConnectionTestInput) -> AppResult<AiConnectionTestResult> {
+    crate::services::ai::test_connection(&input).await
 }
 
 #[tauri::command]

@@ -3,7 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createElement } from 'react';
 import type { ReactNode } from 'react';
 
-import type { AiInsertInput, AiKvEntry, AiMessage, AiSession } from '@/types';
+import type {
+  AiConnectionTestResult,
+  AiInsertInput,
+  AiKvEntry,
+  AiMessage,
+  AiSession,
+} from '@/types';
 import { updateOutlineNode } from '@/features/outline/api';
 import { toastError, toastSuccess } from '@/stores/toast';
 import { useEditorSelectionStore } from '@/stores/editorSelection';
@@ -20,6 +26,7 @@ import {
   listAiMessages as apiListMessages,
   listAiModels as apiListModels,
   listAiSessions as apiListSessions,
+  testAiConnection as apiTestAiConnection,
 } from './api';
 
 export const aiSessionsKey = (workspaceId: string) =>
@@ -140,6 +147,35 @@ export function useAiModelsQuery(baseUrl: string, apiKey: string, enabled: boole
     queryFn: () => apiListModels({ baseUrl, apiKey }),
     enabled: enabled && baseUrl.trim().length > 0 && apiKey.trim().length > 0,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+export const aiConnectionTestKey = (baseUrl: string, model: string) =>
+  ['aiConnectionTest', baseUrl, model] as const;
+
+export function useAiConnectionTest(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  provider: string,
+  enabled: boolean,
+) {
+  const canSkipKey = provider === 'ollama';
+  return useQuery<AiConnectionTestResult, Error>({
+    queryKey: aiConnectionTestKey(baseUrl, model),
+    queryFn: () =>
+      apiTestAiConnection({
+        baseUrl,
+        apiKey,
+        model: model || undefined,
+      }),
+    enabled:
+      enabled &&
+      baseUrl.trim().length > 0 &&
+      (apiKey.trim().length > 0 || canSkipKey),
+    staleTime: 1000 * 60 * 2,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 

@@ -5,6 +5,8 @@ import type {
   AiChatInput,
   AiChatResult,
   AiChunk,
+  AiConnectionTestInput,
+  AiConnectionTestResult,
   AiInsertInput,
   AiInsertResult,
   AiKvEntry,
@@ -82,6 +84,12 @@ export function aiSearchChunks(
 
 export function listAiModels(input: ListAiModelsInput): Promise<AiModelInfo[]> {
   return invoke<AiModelInfo[]>('list_ai_models', { input });
+}
+
+export function testAiConnection(
+  input: AiConnectionTestInput,
+): Promise<AiConnectionTestResult> {
+  return invoke<AiConnectionTestResult>('test_ai_connection', { input });
 }
 
 export function applyAiOutput(input: AiInsertInput): Promise<AiInsertResult> {

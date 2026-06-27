@@ -165,6 +165,7 @@ pub fn run() {
             commands::ai::ai_kv_get,
             commands::ai::ai_kv_set,
             commands::ai::list_ai_models,
+            commands::ai::test_ai_connection,
             commands::ai::apply_ai_output,
         ])
         .run(tauri::generate_context!())

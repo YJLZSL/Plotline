@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clapperboard,
   ListTree,
+  Loader2,
   MapPin,
   MessageSquarePlus,
   PanelLeft,
@@ -37,6 +38,7 @@ import {
 import {
   aiMessagesKey,
   aiSessionsKey,
+  useAiConnectionTest,
   useAiIndexWorkspace,
   useAiKvGet,
   useAiMessagesQuery,
@@ -65,6 +67,13 @@ export function AiAssistantPanel({
 }: AiAssistantPanelProps) {
   const { t } = useI18n();
   const { data: settings } = useSettingsQuery();
+  const connectionTest = useAiConnectionTest(
+    settings?.aiBaseUrl ?? '',
+    settings?.aiApiKey ?? '',
+    settings?.aiModel ?? '',
+    settings?.aiProvider ?? '',
+    Boolean(settings?.aiEnabled) && open,
+  );
   const qc = useQueryClient();
   const { data: sessions = [] } = useAiSessionsQuery(workspaceId);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -235,6 +244,7 @@ export function AiAssistantPanel({
                 <span className="text-sm font-semibold">{t('ai.title')}</span>
               </div>
               <div className="flex items-center gap-1">
+                <ConnectionIndicator test={connectionTest} enabled={settings?.aiEnabled ?? false} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -437,6 +447,66 @@ function DisabledState() {
       <p className="text-sm text-text-secondary mt-1">
         {t('ai.disabledDescription')}
       </p>
+    </div>
+  );
+}
+
+function ConnectionIndicator({
+  test,
+  enabled,
+}: {
+  test: ReturnType<typeof useAiConnectionTest>;
+  enabled: boolean;
+}) {
+  const { t } = useI18n();
+
+  const meta = (() => {
+    if (!enabled) {
+      return {
+        dot: 'bg-text-secondary',
+        label: t('ai.connectionDisabled'),
+        text: 'text-text-secondary',
+      };
+    }
+    if (test.isFetching) {
+      return {
+        dot: 'bg-yellow-500',
+        label: t('ai.statusTesting'),
+        text: 'text-yellow-600',
+      };
+    }
+    if (test.error || (test.data && test.data.status === 'error')) {
+      return {
+        dot: 'bg-red-500',
+        label: t('ai.statusFailed'),
+        text: 'text-red-600',
+      };
+    }
+    if (test.data && test.data.status === 'ok') {
+      return {
+        dot: 'bg-green-500',
+        label: t('ai.statusConnected'),
+        text: 'text-green-600',
+      };
+    }
+    return {
+      dot: 'bg-text-secondary',
+      label: t('ai.statusUnconfigured'),
+      text: 'text-text-secondary',
+    };
+  })();
+
+  return (
+    <div
+      className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-[6px] text-xs"
+      title={test.data?.message ?? meta.label}
+    >
+      {test.isFetching ? (
+        <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
+      ) : (
+        <span className={cn('h-2 w-2 rounded-full', meta.dot)} />
+      )}
+      <span className={cn('hidden md:inline', meta.text)}>{meta.label}</span>
     </div>
   );
 }
