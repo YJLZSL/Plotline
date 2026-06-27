@@ -1350,12 +1350,14 @@ pub fn prepare_shortcut(
         })
         .collect();
 
+    let retrieved_chunks = entities.len();
+
     Ok(ShortcutPrep::NeedApi {
         session_id,
         user_message: user_message.to_string(),
         history,
         entities,
-        retrieved_chunks: entities.len(),
+        retrieved_chunks,
         cache_key,
     })
 }
@@ -1786,7 +1788,7 @@ mod tests {
     use crate::db::migrate;
     use crate::models::{
         AiChunk, CreateCharacterInput, CreateEventInput, CreateOutlineNodeInput, CreateTrackInput,
-        CreateWorkspaceInput, UpdateWorkspaceInput,
+        CreateWorkspaceInput,
     };
 
     fn in_memory_db() -> Connection {
@@ -2256,6 +2258,7 @@ mod tests {
                 user_message,
                 history,
                 entities,
+                retrieved_chunks: _,
                 cache_key,
             } => {
                 assert!(!session_id.is_empty());
@@ -2365,6 +2368,7 @@ mod tests {
                 description: None,
                 cover_color: None,
                 cover_image: None,
+                settings: None,
             },
         )
         .unwrap();
