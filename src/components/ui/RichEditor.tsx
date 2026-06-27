@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -22,6 +23,10 @@ interface RichEditorProps {
   placeholder?: string;
   className?: string;
   minHeight?: string;
+  onEditorReady?: (editor: Editor) => void;
+  onFocus?: (editor: Editor) => void;
+  onBlur?: (editor: Editor, event: FocusEvent) => void;
+  onSelectionUpdate?: (editor: Editor) => void;
 }
 
 export function RichEditor({
@@ -30,6 +35,10 @@ export function RichEditor({
   placeholder = '开始输入…',
   className,
   minHeight = 'calc(100vh - 220px)',
+  onEditorReady,
+  onFocus,
+  onBlur,
+  onSelectionUpdate,
 }: RichEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -42,7 +51,22 @@ export function RichEditor({
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
+    onFocus: ({ editor }) => {
+      onFocus?.(editor);
+    },
+    onBlur: ({ editor, event }) => {
+      onBlur?.(editor, event);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      onSelectionUpdate?.(editor);
+    },
   });
+
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
 
   return (
     <div

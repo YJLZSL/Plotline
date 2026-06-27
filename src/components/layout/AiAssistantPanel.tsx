@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  BookOpen,
   Bot,
   Calendar,
   ChevronDown,
@@ -26,6 +27,7 @@ import { MOTION_BASE } from '@/lib/motion';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { toastError } from '@/stores/toast';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useEditorSelectionStore } from '@/stores/editorSelection';
 import { getProviderPreset } from '@/features/ai/providers';
 import { aiChatStream } from '@/features/ai/api';
 import {
@@ -43,6 +45,10 @@ import {
   useCreateAiSession,
   useDeleteAiSession,
 } from '@/features/ai/hooks';
+import {
+  AI_STYLE_TEMPLATES,
+  type AiStyleTemplate,
+} from '@/features/ai/promptTemplates';
 import type { AiChatContext, AiInsertTarget, AiMessage, AiSession } from '@/types';
 import type { AiSelection } from '@/stores/aiContext';
 
@@ -66,6 +72,7 @@ export function AiAssistantPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [isCollectingContext, setIsCollectingContext] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [sessionSearch, setSessionSearch] = useState('');
   const [showSessionsMobile, setShowSessionsMobile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -123,6 +130,12 @@ export function AiAssistantPanel({
       if (summary?.value && aiContext.enabledSources.includes('workspaceSummary')) {
         context = { ...context, workspaceSummary: summary.value };
       }
+      if (selectedTemplateId) {
+        const template = AI_STYLE_TEMPLATES.find((t) => t.id === selectedTemplateId);
+        if (template) {
+          context = { ...context, systemPromptOverride: template.systemPrompt };
+        }
+      }
     } catch {
       // 上下文收集失败时仍然发送消息，只是不带上下文
     } finally {
@@ -154,6 +167,7 @@ export function AiAssistantPanel({
     } finally {
       setIsStreaming(false);
       setStreamingContent('');
+      setSelectedTemplateId(null);
     }
   };
 
@@ -163,6 +177,15 @@ export function AiAssistantPanel({
 
   const handleSuggestionClick = (prompt: string) => {
     void sendMessage(prompt);
+  };
+
+  const handleTemplateClick = (template: AiStyleTemplate) => {
+    if (selectedTemplateId === template.id) {
+      setSelectedTemplateId(null);
+      return;
+    }
+    setSelectedTemplateId(template.id);
+    setInput(template.template);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -368,6 +391,12 @@ export function AiAssistantPanel({
                       onClearSelection={aiContext.clearSelection}
                     />
 
+                    <TemplateChips
+                      selectedId={selectedTemplateId}
+                      onSelect={handleTemplateClick}
+                      disabled={isStreaming || isCollectingContext}
+                    />
+
                     <div className="p-3 flex items-end gap-2">
                       <Textarea
                         value={input}
@@ -521,6 +550,49 @@ function ContextTagBar({
   );
 }
 
+function TemplateChips({
+  selectedId,
+  onSelect,
+  disabled,
+}: {
+  selectedId: string | null;
+  onSelect: (template: AiStyleTemplate) => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div
+      data-testid="ai-template-chips"
+      className="px-3 pt-2 overflow-x-auto scrollbar-thin"
+    >
+      <div className="flex items-center gap-2 min-w-min pb-1">
+        {AI_STYLE_TEMPLATES.map((template) => {
+          const active = selectedId === template.id;
+          return (
+            <button
+              key={template.id}
+              type="button"
+              data-testid={`ai-template-${template.id}`}
+              onClick={() => onSelect(template)}
+              disabled={disabled}
+              className={cn(
+                'flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-colors disabled:opacity-50',
+                active
+                  ? 'bg-accent/10 border-accent/40 text-accent'
+                  : 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary hover:border-accent/40 hover:bg-bg-surface',
+              )}
+            >
+              {template.icon}
+              {t(template.labelKey)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function capitalize(value: AiContextSource): string {
   const map: Record<AiContextSource, string> = {
     workspaceSummary: 'WorkspaceSummary',
@@ -536,9 +608,46 @@ function capitalize(value: AiContextSource): string {
 
 const APPLY_TARGETS: Array<{
   target: AiInsertTarget;
+  mode?: 'insert' | 'replace';
   icon: React.ReactNode;
   labelKey: string;
 }> = [
+  {
+    target: 'novel_chapter',
+    mode: 'insert',
+    icon: <BookOpen className="h-3.5 w-3.5" />,
+    labelKey: 'ai.insertNovelChapter',
+  },
+  {
+    target: 'novel_chapter',
+    mode: 'replace',
+    icon: <BookOpen className="h-3.5 w-3.5" />,
+    labelKey: 'ai.replaceSelection',
+  },
+  {
+    target: 'notebook_content',
+    mode: 'insert',
+    icon: <StickyNote className="h-3.5 w-3.5" />,
+    labelKey: 'ai.insertNotebookContent',
+  },
+  {
+    target: 'notebook_content',
+    mode: 'replace',
+    icon: <StickyNote className="h-3.5 w-3.5" />,
+    labelKey: 'ai.replaceSelection',
+  },
+  {
+    target: 'outline_node_content',
+    mode: 'insert',
+    icon: <ListTree className="h-3.5 w-3.5" />,
+    labelKey: 'ai.insertOutlineNodeContent',
+  },
+  {
+    target: 'outline_node_content',
+    mode: 'replace',
+    icon: <ListTree className="h-3.5 w-3.5" />,
+    labelKey: 'ai.replaceOutlineNodeContent',
+  },
   { target: 'note', icon: <StickyNote className="h-3.5 w-3.5" />, labelKey: 'ai.insertNote' },
   { target: 'outline', icon: <ListTree className="h-3.5 w-3.5" />, labelKey: 'ai.insertOutline' },
   { target: 'outline_node', icon: <ListTree className="h-3.5 w-3.5" />, labelKey: 'ai.insertOutlineNode' },
@@ -548,7 +657,30 @@ const APPLY_TARGETS: Array<{
   { target: 'location', icon: <MapPin className="h-3.5 w-3.5" />, labelKey: 'ai.insertLocation' },
 ];
 
+function isEditorTarget(target: AiInsertTarget): boolean {
+  return (
+    target === 'novel_chapter' ||
+    target === 'notebook_content' ||
+    target === 'outline_node_content'
+  );
+}
+
+function editorTypeForTarget(target: AiInsertTarget): 'novel' | 'notebook' | 'outline' {
+  switch (target) {
+    case 'novel_chapter':
+      return 'novel';
+    case 'notebook_content':
+      return 'notebook';
+    case 'outline_node_content':
+      return 'outline';
+  }
+  throw new Error(`Not an editor target: ${target}`);
+}
+
 function isTargetEnabledForView(target: AiInsertTarget, view: string): boolean {
+  if (isEditorTarget(target)) {
+    return editorTypeForTarget(target) === view;
+  }
   switch (target) {
     case 'note':
     case 'outline':
@@ -569,6 +701,9 @@ function isTargetEnabledForView(target: AiInsertTarget, view: string): boolean {
 }
 
 function isTargetRecommendedForView(target: AiInsertTarget, view: string): boolean {
+  if (isEditorTarget(target)) {
+    return editorTypeForTarget(target) === view;
+  }
   switch (view) {
     case 'timeline':
       return target === 'event';
@@ -580,9 +715,6 @@ function isTargetRecommendedForView(target: AiInsertTarget, view: string): boole
       return target === 'outline' || target === 'outline_node';
     case 'vn':
       return target === 'vn_scene';
-    case 'notebook':
-    case 'novel':
-      return target === 'note';
     default:
       return false;
   }
@@ -616,7 +748,9 @@ function MessageBubble({
         <ApplyDropdown
           targets={APPLY_TARGETS}
           view={currentView}
-          onApply={(target) => apply.mutate({ target, content: message.content })}
+          onApply={(target, mode) =>
+            apply.mutate({ target, content: message.content, mode })
+          }
           disabled={apply.isPending}
         />
       )}
@@ -627,7 +761,7 @@ function MessageBubble({
 interface ApplyDropdownProps {
   targets: typeof APPLY_TARGETS;
   view: string;
-  onApply: (target: AiInsertTarget) => void;
+  onApply: (target: AiInsertTarget, mode?: 'insert' | 'replace') => void;
   disabled?: boolean;
 }
 
@@ -636,6 +770,7 @@ function ApplyDropdown({ targets, view, onApply, disabled }: ApplyDropdownProps)
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const editorSelection = useEditorSelectionStore();
 
   useEffect(() => {
     if (!open) return;
@@ -653,6 +788,23 @@ function ApplyDropdown({ targets, view, onApply, disabled }: ApplyDropdownProps)
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [open]);
+
+  const isItemDisabled = (item: (typeof targets)[number]) => {
+    if (disabled) return true;
+    if (!isTargetEnabledForView(item.target, view)) return true;
+    if (isEditorTarget(item.target)) {
+      const expectedType = editorTypeForTarget(item.target);
+      if (editorSelection.type !== expectedType) return true;
+      if (item.mode === 'replace') {
+        if (item.target === 'outline_node_content') {
+          return !editorSelection.nodeId;
+        }
+        const sel = editorSelection.selection;
+        return !sel || sel.from === sel.to;
+      }
+    }
+    return false;
+  };
 
   const recommended = targets.filter((a) => isTargetRecommendedForView(a.target, view));
   const other = targets.filter((a) => !isTargetRecommendedForView(a.target, view));
@@ -687,21 +839,30 @@ function ApplyDropdown({ targets, view, onApply, disabled }: ApplyDropdownProps)
               <div className="px-3 py-1 text-[10px] font-semibold text-text-secondary uppercase tracking-wider">
                 {t('ai.applyRecommended')}
               </div>
-              {recommended.map((a) => (
-                <button
-                  key={a.target}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    onApply(a.target);
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm rounded-[6px] text-text-primary hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none flex items-center gap-2"
-                >
-                  {a.icon}
-                  {t(a.labelKey)}
-                </button>
-              ))}
+              {recommended.map((a) => {
+                const itemDisabled = isItemDisabled(a);
+                return (
+                  <button
+                    key={`${a.target}-${a.mode ?? 'default'}`}
+                    type="button"
+                    role="menuitem"
+                    disabled={itemDisabled}
+                    onClick={() => {
+                      if (itemDisabled) return;
+                      onApply(a.target, a.mode);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-sm rounded-[6px] flex items-center gap-2',
+                      'text-text-primary hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none',
+                      itemDisabled && 'opacity-50 cursor-not-allowed hover:bg-transparent',
+                    )}
+                  >
+                    {a.icon}
+                    {t(a.labelKey)}
+                  </button>
+                );
+              })}
             </div>
           )}
           {recommended.length > 0 && other.length > 0 && (
@@ -713,16 +874,16 @@ function ApplyDropdown({ targets, view, onApply, disabled }: ApplyDropdownProps)
                 {t('ai.applyOther')}
               </div>
               {other.map((a) => {
-                const itemDisabled = !isTargetEnabledForView(a.target, view);
+                const itemDisabled = isItemDisabled(a);
                 return (
                   <button
-                    key={a.target}
+                    key={`${a.target}-${a.mode ?? 'default'}`}
                     type="button"
                     role="menuitem"
                     disabled={itemDisabled}
                     onClick={() => {
                       if (itemDisabled) return;
-                      onApply(a.target);
+                      onApply(a.target, a.mode);
                       setOpen(false);
                     }}
                     className={cn(

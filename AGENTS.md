@@ -44,22 +44,23 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.5.4 已发布：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强）
-- **番茄钟可拖动与最小化**：`src/stores/pomodoro.ts` 新增 `position` 与 `minimized` 状态并持久化；`PomodoroTimer` 支持拖拽、最小化为悬浮芯片，解决遮挡时间轴问题。
-- **时间轴右键菜单**：新增 `src/components/ui/ContextMenu.tsx`，在 `TimelineView` 中为事件卡片、轨道行、画布空白区提供右键菜单，支持编辑/删除/复制/改状态/起连接/问 AI、轨道改名/改色/隐藏/删除/添加事件、画布添加事件/粘贴/缩放/一致性检查。
-- **主题质感升级**：`src/styles/themes.css` 引入 `--shadow-card-soft`、`--shadow-elevated-soft`、`--bg-base-gradient`、`--surface-highlight` 等变量；light/sepia/dark 主题使用柔和渐变背景，MC 主题减少文字面纹理覆盖、提升可读性；`SettingsView` 主题卡片新增 live mini-preview。
-- **AI 面板两列布局**：`AiAssistantPanel.tsx` 重构为可调整左右宽度的两栏布局，左侧会话列表、右侧消息与输入；建议词改为横向滚动一键发送；上下文标签可移除。
-- **AI 跨功能上下文**：新增 `src/features/ai/contextCollector.ts`，汇总工作区摘要、时间轴、角色、地点、大纲、笔记与当前选中实体；前后端 `AiChatInput` 同步 `context` 字段，Rust 服务端按 Token 预算截断并组装 Prompt；AI 面板新增来源开关，`useApplyAiOutput` 扩展支持角色/地点/大纲/笔记目标。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.5.4`；`AGENTS.md`、`更新日志.md`、`交接文档.md` 更新至 v2.5.4 状态。
-- **发布说明**：v2.5.4 的 Release 签名继续由 CI 自动完成（自 v2.5.3 起已自动化），发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+### 当前迭代状态（v2.6.0 已发布：AI 风格模板、apply-to-doc、时间轴筛选折叠、模板向导空状态）
+- **AI 风格模板 chips**：新增 `src/features/ai/promptTemplates.tsx`，内置玄幻/都市/言情/悬疑/番茄风/知乎风 6 种题材模板；`AiAssistantPanel.tsx` 输入框上方新增横向 chips，点击自动填充提示词并注入对应 system prompt。
+- **AI apply-to-doc**：扩展 `AiInsertTarget` 与 `useApplyAiOutput`，新增 `novel_chapter`/`notebook_content`/`outline_node_content` 目标；新增 `src/stores/editorSelection.ts` 追踪当前激活的 TipTap 编辑器与选区，`NovelView`/`NotebookView`/`OutlineView` 在 focus/blur 时注册/注销编辑器，实现 AI 回复一键插入光标处或替换选中段落。
+- **时间轴筛选与折叠**：新增 `src/features/timeline/useTimelineFilters.ts`，支持按角色/地点/状态/搜索词筛选事件，并持久化到 `localStorage`；`TimelineView.tsx` 新增筛选栏与轨道折叠/展开按钮，折叠轨道仅保留标题条以释放垂直空间。
+- **模板向导空状态**：扩展 `src/components/ui/Feedback.tsx` 的 `EmptyState` 支持多 CTA；新增 `src/features/workspace/seedTemplates.ts` 内置奇幻小说/都市言情/跑团战役 3 种模板；后端 `CreateWorkspaceInput` 增加 `template_id`，创建时在一个事务中插入示例角色/地点/事件/大纲；`WorkspaceSelector.tsx` 创建弹窗增加模板选择步骤，各主要视图空状态提供明确下一步操作。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.6.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.6.0 状态。
+- **发布说明**：v2.6.0 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
 
-### 上一版本（v2.3.0 / v2.2.0 已发布）
+### 上一版本（v2.5.4 / v2.3.0 / v2.2.0 已发布）
+- v2.5.4：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强。
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
 - v2.2.0：时间轴/事件逻辑重写、动画与性能优化、MC 主题再设计、工作区保存改进、自定义字体导入、真实浏览器测试。
-- GitHub Release v2.2.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
+- GitHub Release v2.5.4：<https://github.com/YJLZSL/Plotline/releases/tag/v2.5.4>
 - GitHub Release v2.3.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.3.0>
+- GitHub Release v2.2.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
 
-### 下一迭代方向（v2.5+ 候选）
+### 下一迭代方向（v2.7+ 候选）
 - 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
 - VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
 - 世界观：种族/物种/宗教等实体管理、设定冲突检测。

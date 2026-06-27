@@ -658,7 +658,13 @@ fn build_messages<'a>(
     context: Option<&'a AiChatContext>,
 ) -> Vec<OpenAiMessage<'a>> {
     let mut messages: Vec<OpenAiMessage<'a>> = Vec::new();
-    let system_prompt = if settings.ai_system_prompt.trim().is_empty() {
+    let override_prompt = context
+        .and_then(|c| c.system_prompt_override.as_deref())
+        .filter(|s| !s.trim().is_empty());
+
+    let system_prompt = if let Some(prompt) = override_prompt {
+        prompt.trim()
+    } else if settings.ai_system_prompt.trim().is_empty() {
         DEFAULT_SYSTEM_PROMPT
     } else {
         settings.ai_system_prompt.trim()
@@ -1081,6 +1087,7 @@ mod tests {
                 name: "测试工作区".into(),
                 description: None,
                 template: None,
+                template_id: None,
                 cover_color: None,
                 cover_image: None,
             },
@@ -1224,6 +1231,7 @@ mod tests {
                 label: "开场".into(),
                 content: None,
             })),
+            system_prompt_override: None,
         };
         let block = build_context_block(&context);
         assert!(block.contains("工作区上下文"));
@@ -1296,6 +1304,7 @@ mod tests {
             outline: None,
             notes: None,
             selected_entity: None,
+            system_prompt_override: None,
         };
 
         let messages = build_messages(
@@ -1315,5 +1324,36 @@ mod tests {
         assert_eq!(messages[1].content, "previous");
         assert_eq!(messages[2].role, "user");
         assert_eq!(messages[2].content, "hello");
+    }
+
+    #[test]
+    fn should_use_system_prompt_override_when_present() {
+        let settings = crate::models::AppSettings {
+            ai_system_prompt: "You are a helpful assistant.".into(),
+            ..Default::default()
+        };
+        let context = AiChatContext {
+            workspace_summary: None,
+            timeline: None,
+            characters: None,
+            locations: None,
+            outline: None,
+            notes: None,
+            selected_entity: None,
+            system_prompt_override: Some("Override prompt.".into()),
+        };
+
+        let messages = build_messages(
+            &settings,
+            &[],
+            "hello",
+            &[],
+            Some(&context),
+        );
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("Override prompt."));
+        assert!(!messages[0].content.contains("helpful assistant"));
     }
 }

@@ -22,6 +22,7 @@ pub struct CreateWorkspaceInput {
     pub name: String,
     pub description: Option<String>,
     pub template: Option<String>,
+    pub template_id: Option<String>,
     pub cover_color: Option<String>,
     pub cover_image: Option<String>,
 }

@@ -44,17 +44,19 @@ export function LoadingVeil({ label = '加载中' }: { label?: string }) {
   );
 }
 
-/** 空状态：引导文案 + 可选 CTA 按钮。 */
+/** 空状态：引导文案 + 可选 CTA 按钮（支持单个或多个）。 */
 export function EmptyState({
   icon,
   title,
   description,
   action,
+  actions,
 }: {
   icon?: React.ReactNode;
   title: string;
   description?: string;
   action?: React.ReactNode;
+  actions?: React.ReactNode[];
 }) {
   return (
     <motion.div
@@ -72,7 +74,12 @@ export function EmptyState({
       {description && (
         <p className="text-sm text-text-secondary mt-1 max-w-sm">{description}</p>
       )}
-      {action && <div className="mt-6">{action}</div>}
+      {(action || (actions && actions.length > 0)) && (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          {action}
+          {actions}
+        </div>
+      )}
     </motion.div>
   );
 }

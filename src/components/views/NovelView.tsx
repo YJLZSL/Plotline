@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Trash2,
   X,
   BookOpen,
   GripVertical,
+  ListTree,
 } from 'lucide-react';
 
 import {
@@ -31,6 +33,7 @@ import {
 import { useOutlineQuery } from '@/features/outline/hooks';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useEditorSelectionStore } from '@/stores/editorSelection';
 
 interface NovelViewProps {
   workspaceId: string;
@@ -56,6 +59,7 @@ function countWords(html: string): number {
 
 export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { data: chapters = [], isLoading } = useNovelChaptersQuery(workspaceId);
   const { data: outlineNodes = [] } = useOutlineQuery(workspaceId);
   const createMutation = useCreateNovelChapter(workspaceId);
@@ -74,6 +78,9 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
 
   const selected = chapters.find((c) => c.id === selectedId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
+  const registerEditor = useEditorSelectionStore((s) => s.registerEditor);
+  const unregisterEditor = useEditorSelectionStore((s) => s.unregisterEditor);
+  const updateSelection = useEditorSelectionStore((s) => s.updateSelection);
 
   const outlineOptions = useMemo(() => {
     return outlineNodes.filter((n) => n.type === 'chapter' || n.type === 'scene');
@@ -186,6 +193,12 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
   const sortedChapters = useMemo(() => {
     return [...chapters].sort((a, b) => a.sortOrder - b.sortOrder);
   }, [chapters]);
+
+  const isBlurMovingToAiPanel = (event: FocusEvent) => {
+    const related = event.relatedTarget as HTMLElement | null;
+    const aiPanel = document.querySelector('[data-testid="ai-assistant-panel"]');
+    return Boolean(aiPanel && related && aiPanel.contains(related));
+  };
 
   return (
     <>
@@ -360,6 +373,23 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
                   }}
                   placeholder={t('novel.editorPlaceholder')}
                   minHeight="calc(100vh - 220px)"
+                  onFocus={(editor) => {
+                    registerEditor('novel', editor);
+                    updateSelection(
+                      editor.state.selection.from,
+                      editor.state.selection.to,
+                    );
+                  }}
+                  onBlur={(_, event) => {
+                    if (isBlurMovingToAiPanel(event)) return;
+                    unregisterEditor();
+                  }}
+                  onSelectionUpdate={(editor) => {
+                    updateSelection(
+                      editor.state.selection.from,
+                      editor.state.selection.to,
+                    );
+                  }}
                 />
               </div>
               <div className="h-8 flex items-center justify-between px-4 border-t border-border bg-bg-surface text-xs text-text-secondary flex-shrink-0">
@@ -391,12 +421,21 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
                 }
                 title={t('nav.novel')}
                 description={t('novel.emptyStateDesc')}
-                action={
-                  <Button onClick={handleAdd} className="gap-2">
+                actions={[
+                  <Button key="add" onClick={handleAdd} className="gap-2">
                     <Plus className="h-4 w-4" />
                     {t('novel.newChapter')}
-                  </Button>
-                }
+                  </Button>,
+                  <Button
+                    key="outline"
+                    variant="outline"
+                    onClick={() => navigate(`/workspaces/${workspaceId}/outline`)}
+                    className="gap-2"
+                  >
+                    <ListTree className="h-4 w-4" />
+                    {t('nav.outline')}
+                  </Button>,
+                ]}
               />
             </div>
           )}

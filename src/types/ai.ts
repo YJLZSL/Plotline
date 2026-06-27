@@ -77,6 +77,7 @@ export interface AiChatContext {
   outline?: AiChatOutlineItem[];
   notes?: AiChatNoteItem[];
   selectedEntity?: AiChatContextSelectedEntity | null;
+  systemPromptOverride?: string;
 }
 
 export interface AiChatInput {
@@ -121,13 +122,17 @@ export type AiInsertTarget =
   | 'vn_scene'
   | 'character'
   | 'location'
-  | 'outline_node';
+  | 'outline_node'
+  | 'novel_chapter'
+  | 'notebook_content'
+  | 'outline_node_content';
 
 export interface AiInsertInput {
   workspaceId: string;
   target: AiInsertTarget;
   content: string;
   trackId?: string;
+  mode?: 'insert' | 'replace';
 }
 
 export interface AiInsertResult {

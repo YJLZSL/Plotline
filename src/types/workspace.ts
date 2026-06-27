@@ -17,6 +17,7 @@ export interface CreateWorkspaceInput {
   name: string;
   description?: string;
   template?: WorkspaceTemplate;
+  templateId?: string;
   coverColor?: string;
   coverImage?: string;
 }

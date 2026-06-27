@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   BarChart3,
@@ -21,7 +22,7 @@ import {
   Legend,
 } from 'recharts';
 
-import { Card, CardContent, EmptyState } from '@/components/ui';
+import { Button, Card, CardContent, EmptyState } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
@@ -54,6 +55,7 @@ interface StatisticsViewProps {
 
 export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewProps) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { data, isLoading } = useStatisticsQuery(workspaceId);
   const { data: connections = [] } = useEventConnectionsQuery(workspaceId);
   const { data: events = [] } = useEventsQuery(workspaceId);
@@ -107,6 +109,25 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
             icon={<BarChart3 className="h-10 w-10" />}
             title={t('statistics.title')}
             description={t('statistics.empty')}
+            actions={[
+              <Button
+                key="timeline"
+                onClick={() => navigate(`/workspaces/${workspaceId}/timeline`)}
+                className="gap-2"
+              >
+                <Clock4 className="h-4 w-4" />
+                {t('nav.timeline')}
+              </Button>,
+              <Button
+                key="outline"
+                variant="outline"
+                onClick={() => navigate(`/workspaces/${workspaceId}/outline`)}
+                className="gap-2"
+              >
+                <ListTree className="h-4 w-4" />
+                {t('nav.outline')}
+              </Button>,
+            ]}
           />
         ) : (
           <div className="space-y-4">

@@ -20,6 +20,10 @@ import {
   Copy,
   ClipboardPaste,
   Sparkles,
+  Filter,
+  Search,
+  ChevronDown,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
@@ -64,6 +68,7 @@ import {
 import { useCharactersQuery } from '@/features/characters/hooks';
 import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
+import { useTimelineFilters, filterEvents } from '@/features/timeline/useTimelineFilters';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useUIStore } from '@/stores/ui';
@@ -74,6 +79,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 
 // ===== 常量 =====
 const TRACK_HEIGHT = 92;
+const TRACK_COLLAPSED_HEIGHT = 24;
 const TRACK_GAP = 6;
 const EVENT_MIN_WIDTH = 180;
 const EVENT_HEIGHT = 64;
@@ -116,6 +122,20 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const createEvent = useCreateEvent(workspaceId);
   const updateEvent = useUpdateEvent(workspaceId);
   const deleteEvent = useDeleteEvent(workspaceId);
+
+  const {
+    filters,
+    hasActiveFilters,
+    toggleCharacter,
+    toggleLocation,
+    toggleStatus,
+    setSearchQuery,
+    toggleTrackCollapse,
+    collapseAllTracks,
+    expandAllTracks,
+    clearFilters,
+    isCollapsed,
+  } = useTimelineFilters(workspaceId);
 
   const [zoom, setZoom] = useState<ZoomLevel>('month');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -202,9 +222,14 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
   const visibleTracks = tracks.filter((tr) => tr.isVisible);
 
+  const filteredEvents = useMemo(
+    () => filterEvents(events, filters),
+    [events, filters],
+  );
+
   // 计算时间轴范围：找出所有绝对日期事件的最早/最晚时间
   const timeScale = useMemo(() => {
-    const absoluteEvents = events.filter((e) => e.dateType === 'absolute' && e.dateValue);
+    const absoluteEvents = filteredEvents.filter((e) => e.dateType === 'absolute' && e.dateValue);
     let minTime = Date.now();
     let maxTime = Date.now() + 365 * DAY_MS;
     if (absoluteEvents.length > 0) {
@@ -219,7 +244,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       }
     }
     return createTimeScale(minTime, maxTime, zoom, LEFT_PADDING, ZOOM_UNIT_WIDTH[zoom]);
-  }, [events, zoom]);
+  }, [filteredEvents, zoom]);
 
   const totalWidth = useMemo(
     () => Math.max(800, timeScale.timeToX(timeScale.max) + LEFT_PADDING + EVENT_MIN_WIDTH),
@@ -229,7 +254,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 min 的伪时间戳
   const eventPositions = useMemo(() => {
     const positions = new Map<string, number>();
-    events.forEach((ev) => {
+    filteredEvents.forEach((ev) => {
       if (ev.dateType === 'absolute' && ev.dateValue) {
         const t = new Date(ev.dateValue).getTime();
         if (!Number.isNaN(t)) {
@@ -237,7 +262,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         }
       }
     });
-    const relativeEvents = events
+    const relativeEvents = filteredEvents
       .filter((e) => e.dateType !== 'absolute' || !positions.has(e.id))
       .sort((a, b) => a.sortOrder - b.sortOrder);
     const unitMs = timeScale.getMsPerUnit();
@@ -246,18 +271,18 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       positions.set(ev.id, fallbackStart + i * unitMs * 2);
     });
     return positions;
-  }, [events, timeScale]);
+  }, [filteredEvents, timeScale]);
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
     for (const tr of tracks) map.set(tr.id, []);
-    for (const ev of events) {
+    for (const ev of filteredEvents) {
       const arr = map.get(ev.trackId);
       if (arr) arr.push(ev);
     }
     for (const arr of map.values()) arr.sort((a, b) => a.sortOrder - b.sortOrder);
     return map;
-  }, [tracks, events]);
+  }, [tracks, filteredEvents]);
 
   const handleAddTrack = async () => {
     if (!newTrackName.trim()) return;
@@ -540,6 +565,26 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         }
       />
 
+      {viewMode === 'timeline' && (
+        <FilterBar
+          characters={characters}
+          locations={locations}
+          selectedCharacterIds={filters.selectedCharacterIds}
+          selectedLocationIds={filters.selectedLocationIds}
+          selectedStatuses={filters.selectedStatuses}
+          searchQuery={filters.searchQuery}
+          hasActiveFilters={hasActiveFilters}
+          allCollapsed={visibleTracks.length > 0 && visibleTracks.every((t) => isCollapsed(t.id))}
+          onToggleCharacter={toggleCharacter}
+          onToggleLocation={toggleLocation}
+          onToggleStatus={toggleStatus}
+          onSearchChange={setSearchQuery}
+          onClearFilters={clearFilters}
+          onCollapseAll={() => collapseAllTracks(visibleTracks.map((t) => t.id))}
+          onExpandAll={expandAllTracks}
+        />
+      )}
+
       {viewMode === 'gantt' ? (
         <GanttChart
           tracks={tracks}
@@ -616,6 +661,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 key={tr.id}
                 track={tr}
                 eventCount={eventsByTrack.get(tr.id)?.length ?? 0}
+                collapsed={isCollapsed(tr.id)}
                 onToggleVisible={() => updateTrack.mutateAsync({ id: tr.id, isVisible: !tr.isVisible })}
                 onRename={() => {
                   setEditingTrack(tr);
@@ -624,6 +670,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 onDelete={() => setDeleteTrackTarget(tr)}
                 onChangeColor={(color) => updateTrack.mutateAsync({ id: tr.id, color })}
                 onAddEvent={() => void handleAddEvent(tr.id)}
+                onToggleCollapse={() => toggleTrackCollapse(tr.id)}
               />
             ))}
             <div className="px-3 mt-2">
@@ -680,7 +727,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               }
             />
           ) : (
-            <div style={{ minWidth: totalWidth, minHeight: visibleTracks.length * (TRACK_HEIGHT + TRACK_GAP) + RULER_HEIGHT }}>
+            <div style={{ minWidth: totalWidth, minHeight: visibleTracks.reduce((sum, tr) => sum + (isCollapsed(tr.id) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT) + TRACK_GAP, RULER_HEIGHT) }}>
               {/* 日期标尺 */}
               <DateRuler
                 timeScale={timeScale}
@@ -688,10 +735,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               />
 
               {/* 连线层（SVG，覆盖在轨道上） */}
-              {showConnections && events.length > 1 && (
+              {showConnections && filteredEvents.length > 1 && (
               <ConnectionLayer
-                events={events}
+                events={filteredEvents}
                 tracks={visibleTracks}
+                collapsedTrackIds={filters.collapsedTrackIds}
                 eventPositions={eventPositions}
                 timeScale={timeScale}
                 scrollLeft={scrollLeft}
@@ -712,6 +760,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   index={idx}
                   track={tr}
                   tracks={tracks}
+                  collapsed={isCollapsed(tr.id)}
                   events={eventsByTrack.get(tr.id) ?? []}
                   eventPositions={eventPositions}
                   timeScale={timeScale}
@@ -758,6 +807,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   onDragStart={(id) => setDraggingEvent({ id, offsetX: 0 })}
                   onDrag={(id, offsetX) => setDraggingEvent({ id, offsetX })}
                   onDragEndNotify={() => setDraggingEvent(null)}
+                  onToggleCollapse={() => toggleTrackCollapse(tr.id)}
                 />
               ))}
             </div>
@@ -952,6 +1002,7 @@ function measureEventRect(el: HTMLElement, container: HTMLElement): MeasuredRect
 function ConnectionLayer({
   events,
   tracks,
+  collapsedTrackIds,
   eventPositions,
   timeScale,
   scrollLeft,
@@ -965,6 +1016,7 @@ function ConnectionLayer({
 }: {
   events: Event[];
   tracks: Track[];
+  collapsedTrackIds: string[];
   eventPositions: Map<string, number>;
   timeScale: TimeScale;
   scrollLeft: number;
@@ -1019,11 +1071,25 @@ function ConnectionLayer({
   const visibleMin = scrollLeft - buffer;
   const visibleMax = scrollLeft + viewportWidth + buffer;
 
+  const trackTopByIndex = useMemo(() => {
+    const map = new Map<number, number>();
+    let top = RULER_HEIGHT;
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      if (!track) continue;
+      map.set(i, top);
+      const height = collapsedTrackIds.includes(track.id) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
+      top += height + TRACK_GAP;
+    }
+    return map;
+  }, [tracks, collapsedTrackIds]);
+
   const eventPoints = useMemo(() => {
     const map = new Map<string, { source: { x: number; y: number }; target: { x: number; y: number } }>();
     for (const ev of events) {
       const rect = measuredRects.get(ev.id);
       const trackIndex = tracks.findIndex((t) => t.id === ev.trackId);
+      const trackTop = trackTopByIndex.get(trackIndex) ?? RULER_HEIGHT;
       let sourceX: number;
       let targetX: number;
       let y: number;
@@ -1041,12 +1107,13 @@ function ConnectionLayer({
         const cx = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
         sourceX = cx + EVENT_MIN_WIDTH / 2;
         targetX = cx - EVENT_MIN_WIDTH / 2;
-        y = RULER_HEIGHT + Math.max(0, trackIndex) * (TRACK_HEIGHT + TRACK_GAP) + TRACK_HEIGHT / 2;
+        const height = collapsedTrackIds.includes(ev.trackId) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
+        y = trackTop + height / 2;
       }
       map.set(ev.id, { source: { x: sourceX, y }, target: { x: targetX, y } });
     }
     return map;
-  }, [events, measuredRects, draggingEvent, tracks, timeScale, eventPositions]);
+  }, [events, measuredRects, draggingEvent, tracks, collapsedTrackIds, timeScale, eventPositions, trackTopByIndex]);
 
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
@@ -1108,6 +1175,7 @@ function TrackLane({
   index,
   track,
   tracks,
+  collapsed,
   events,
   eventPositions,
   timeScale,
@@ -1137,11 +1205,13 @@ function TrackLane({
   onZoomIn,
   onZoomOut,
   onCheckConsistency,
+  onToggleCollapse,
   onDragEndNotify,
 }: {
   index: number;
   track: Track;
   tracks: Track[];
+  collapsed: boolean;
   events: Event[];
   eventPositions: Map<string, number>;
   timeScale: TimeScale;
@@ -1169,6 +1239,7 @@ function TrackLane({
   onZoomIn: () => void;
   onZoomOut: () => void;
   onCheckConsistency: () => void;
+  onToggleCollapse: () => void;
   onDragStart: (id: string) => void;
   onDrag: (id: string, offsetX: number) => void;
   onDragEndNotify: () => void;
@@ -1216,10 +1287,11 @@ function TrackLane({
         index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
       )}
       style={{
-        height: TRACK_HEIGHT,
+        height: collapsed ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT,
         minWidth: totalWidth,
       }}
       onDoubleClick={(e) => {
+        if (collapsed) return;
         const rect = containerRef.current?.getBoundingClientRect();
         if (rect) onCanvasDoubleClick(e.clientX - rect.left + (containerRef.current?.parentElement?.scrollLeft ?? 0));
       }}
@@ -1230,19 +1302,32 @@ function TrackLane({
         style={{ backgroundColor: track.color }}
       />
 
+      {/* 折叠状态标题与计数 */}
+      {collapsed && (
+        <div className="absolute inset-0 flex items-center px-3 gap-2">
+          <span className="text-[10px] font-medium text-text-secondary truncate">{track.name}</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-bg-elevated text-text-secondary border border-border">
+            {events.length}
+          </span>
+        </div>
+      )}
+
       {/* 时间网格背景 */}
-      <div
-        className="absolute inset-0 opacity-20 pointer-events-none"
-        style={{
-          backgroundImage: `repeating-linear-gradient(90deg, transparent 0, transparent ${
-            ZOOM_UNIT_WIDTH[zoom]
-          }px, var(--border) ${ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
-            ZOOM_UNIT_WIDTH[zoom] + 1
-          }px)`,
-        }}
-      />
+      {!collapsed && (
+        <div
+          className="absolute inset-0 opacity-20 pointer-events-none"
+          style={{
+            backgroundImage: `repeating-linear-gradient(90deg, transparent 0, transparent ${
+              ZOOM_UNIT_WIDTH[zoom]
+            }px, var(--border) ${ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
+              ZOOM_UNIT_WIDTH[zoom] + 1
+            }px)`,
+          }}
+        />
+      )}
 
       {/* 事件卡片 */}
+      {!collapsed && (
       <div className="absolute inset-0 px-6">
         <AnimatePresence>
           {visibleEvents.map((ev, i) => {
@@ -1290,6 +1375,7 @@ function TrackLane({
           <Plus className="h-4 w-4" />
         </button>
       </div>
+      )}
         </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -1323,6 +1409,10 @@ function TrackLane({
           {t('contextMenu.zoomOut')}
         </ContextMenuItem>
         <ContextMenuSeparator />
+        <ContextMenuItem onClick={onToggleCollapse} className="gap-2">
+          <ChevronsUpDown className="h-3.5 w-3.5" />
+          {collapsed ? t('contextMenu.expandTrack') : t('contextMenu.collapseTrack')}
+        </ContextMenuItem>
         <ContextMenuItem onClick={onCheckConsistency} className="gap-2">
           <ShieldCheck className="h-3.5 w-3.5" />
           {t('contextMenu.checkConsistency')}
@@ -1561,19 +1651,23 @@ function computeNewSortOrder(
 function TrackRow({
   track,
   eventCount,
+  collapsed,
   onToggleVisible,
   onRename,
   onDelete,
   onChangeColor,
   onAddEvent,
+  onToggleCollapse,
 }: {
   track: Track;
   eventCount: number;
+  collapsed: boolean;
   onToggleVisible: () => void;
   onRename: () => void;
   onDelete: () => void;
   onChangeColor: (color: string) => void;
   onAddEvent: () => void;
+  onToggleCollapse: () => void;
 }) {
   const { t } = useI18n();
   return (
@@ -1589,23 +1683,33 @@ function TrackRow({
         <div className="text-[10px] text-text-secondary">{eventCount} 个事件</div>
       </div>
       <button
+        onClick={onToggleCollapse}
+        className={cn(
+          'text-text-secondary hover:text-text-primary p-1 rounded transition-all',
+          collapsed && 'text-accent',
+        )}
+        title={collapsed ? t('contextMenu.expandTrack') : t('contextMenu.collapseTrack')}
+      >
+        <ChevronsUpDown className="h-3.5 w-3.5" />
+      </button>
+      <button
         onClick={onToggleVisible}
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-all"
-        title={track.isVisible ? '隐藏' : '显示'}
+        title={track.isVisible ? t('contextMenu.hide') : t('contextMenu.show')}
       >
         {track.isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
       </button>
       <button
         onClick={onRename}
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-all"
-        title="重命名"
+        title={t('contextMenu.rename')}
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={onDelete}
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-500 p-1 rounded transition-all"
-        title="删除"
+        title={t('contextMenu.delete')}
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -1636,6 +1740,10 @@ function TrackRow({
         <ContextMenuItem onClick={onToggleVisible} className="gap-2">
           {track.isVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
           {track.isVisible ? t('contextMenu.hide') : t('contextMenu.show')}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onToggleCollapse} className="gap-2">
+          <ChevronsUpDown className="h-3.5 w-3.5" />
+          {collapsed ? t('contextMenu.expandTrack') : t('contextMenu.collapseTrack')}
         </ContextMenuItem>
         <ContextMenuItem onClick={onAddEvent} className="gap-2">
           <Plus className="h-3.5 w-3.5" />
@@ -2116,5 +2224,221 @@ function TrackEditDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ===== 筛选栏 =====
+interface FilterBarProps {
+  characters: Character[];
+  locations: { id: string; name: string; color?: string }[];
+  selectedCharacterIds: string[];
+  selectedLocationIds: string[];
+  selectedStatuses: string[];
+  searchQuery: string;
+  hasActiveFilters: boolean;
+  allCollapsed: boolean;
+  onToggleCharacter: (id: string) => void;
+  onToggleLocation: (id: string) => void;
+  onToggleStatus: (status: string) => void;
+  onSearchChange: (query: string) => void;
+  onClearFilters: () => void;
+  onCollapseAll: () => void;
+  onExpandAll: () => void;
+}
+
+function FilterBar({
+  characters,
+  locations,
+  selectedCharacterIds,
+  selectedLocationIds,
+  selectedStatuses,
+  searchQuery,
+  hasActiveFilters,
+  allCollapsed,
+  onToggleCharacter,
+  onToggleLocation,
+  onToggleStatus,
+  onSearchChange,
+  onClearFilters,
+  onCollapseAll,
+  onExpandAll,
+}: FilterBarProps) {
+  const { t } = useI18n();
+
+  const statusOptions = [
+    { value: 'draft', label: t('timeline.event.statusDraft'), colorClass: 'bg-text-secondary/60' },
+    { value: 'done', label: t('timeline.event.statusDone'), colorClass: 'bg-status-done' },
+    { value: 'revise', label: t('timeline.event.statusRevise'), colorClass: 'bg-status-revise' },
+  ] as const;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-bg-surface/80 backdrop-blur-sm">
+      <div className="flex items-center gap-1.5 text-text-secondary text-xs">
+        <Filter className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{t('timeline.filter')}</span>
+      </div>
+
+      <MultiSelectDropdown
+        label={t('timeline.filterCharacters')}
+        options={characters.map((c) => ({ id: c.id, label: c.name, color: c.color }))}
+        selectedIds={selectedCharacterIds}
+        onToggle={onToggleCharacter}
+      />
+
+      <MultiSelectDropdown
+        label={t('timeline.filterLocations')}
+        options={locations.map((l) => ({ id: l.id, label: l.name, color: l.color || '#999' }))}
+        selectedIds={selectedLocationIds}
+        onToggle={onToggleLocation}
+      />
+
+      <MultiSelectDropdown
+        label={t('timeline.filterStatus')}
+        options={statusOptions.map((s) => ({ id: s.value, label: s.label, colorClass: s.colorClass }))}
+        selectedIds={selectedStatuses}
+        onToggle={onToggleStatus}
+      />
+
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-secondary" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={t('timeline.searchEvents')}
+          className="h-8 pl-7 pr-7 text-xs w-40 sm:w-52"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => onSearchChange('')}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-0.5 rounded"
+            aria-label={t('common.clear')}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      {hasActiveFilters && (
+        <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-8 text-xs gap-1.5">
+          <X className="h-3.5 w-3.5" />
+          {t('timeline.clearFilters')}
+        </Button>
+      )}
+
+      <div className="w-px h-5 bg-border hidden sm:block" />
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={allCollapsed ? onExpandAll : onCollapseAll}
+        className="h-8 text-xs gap-1.5"
+        title={allCollapsed ? t('timeline.expandAllTracks') : t('timeline.collapseAllTracks')}
+      >
+        <ChevronsUpDown className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">
+          {allCollapsed ? t('timeline.expandAllTracks') : t('timeline.collapseAllTracks')}
+        </span>
+      </Button>
+    </div>
+  );
+}
+
+interface MultiSelectDropdownOption {
+  id: string;
+  label: string;
+  color?: string;
+  colorClass?: string;
+}
+
+interface MultiSelectDropdownProps {
+  label: string;
+  options: MultiSelectDropdownOption[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}
+
+function MultiSelectDropdown({ label, options, selectedIds, onToggle }: MultiSelectDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [open]);
+
+  const selectedCount = selectedIds.length;
+  const displayLabel = selectedCount > 0 ? `${label} (${selectedCount})` : label;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] text-xs transition-colors border',
+          open || selectedCount > 0
+            ? 'bg-accent/10 border-accent/30 text-accent'
+            : 'bg-bg-surface border-border text-text-secondary hover:text-text-primary hover:border-accent/30',
+        )}
+      >
+        <span className="max-w-[80px] sm:max-w-[120px] truncate">{displayLabel}</span>
+        <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div
+          className={cn(
+            'absolute top-full left-0 mt-1 z-50 min-w-[160px] max-w-[240px]',
+            'rounded-[8px] border border-border bg-bg-surface shadow-[var(--shadow-elevated)] p-1.5',
+          )}
+        >
+          {options.length === 0 ? (
+            <div className="px-2 py-1.5 text-xs text-text-secondary/70">{label}</div>
+          ) : (
+            <div className="max-h-60 overflow-y-auto">
+              {options.map((opt) => {
+                const selected = selectedIds.includes(opt.id);
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onToggle(opt.id)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-[6px] text-xs text-left',
+                      'hover:bg-bg-elevated transition-colors',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'h-3.5 w-3.5 rounded border flex-shrink-0 flex items-center justify-center',
+                        selected
+                          ? 'bg-accent border-accent text-white'
+                          : 'border-border bg-bg-surface',
+                      )}
+                    >
+                      {selected && <span className="text-[10px] leading-none">✓</span>}
+                    </span>
+                    {opt.color && (
+                      <span
+                        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: opt.color }}
+                      />
+                    )}
+                    {opt.colorClass && <span className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0', opt.colorClass)} />}
+                    <span className="truncate">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

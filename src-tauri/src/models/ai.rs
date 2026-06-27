@@ -65,6 +65,7 @@ pub struct AiChatContext {
     pub outline: Option<Vec<AiChatContextOutlineItem>>,
     pub notes: Option<Vec<AiChatContextNoteItem>>,
     pub selected_entity: Option<Option<AiChatContextSelectedEntity>>,
+    pub system_prompt_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -53,6 +53,7 @@ import { useMoveOutlineNode } from '@/features/outline/moveHooks';
 import { OutlineTreeChart } from './OutlineTreeChart';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useEditorSelectionStore } from '@/stores/editorSelection';
 
 interface OutlineViewProps {
   workspaceId: string;
@@ -88,6 +89,22 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const tree = useMemo(() => buildTree(nodes), [nodes]);
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
+  const registerTextEditor = useEditorSelectionStore(
+    (s) => s.registerTextEditor,
+  );
+  const unregisterEditor = useEditorSelectionStore((s) => s.unregisterEditor);
+  const updateContent = useEditorSelectionStore((s) => s.updateContent);
+  const updateSelection = useEditorSelectionStore((s) => s.updateSelection);
+
+  const registerOutlineTextEditor = (nodeId: string, content: string) => {
+    registerTextEditor('outline', nodeId, content);
+  };
+
+  const isBlurMovingToAiPanel = (event: { relatedTarget: EventTarget | null }) => {
+    const related = event.relatedTarget as HTMLElement | null;
+    const aiPanel = document.querySelector('[data-testid="ai-assistant-panel"]');
+    return Boolean(aiPanel && related && aiPanel.contains(related));
+  };
 
   useEffect(() => {
     setAiContext({
@@ -381,6 +398,11 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
         }}
         node={editing}
         onSave={handleSave}
+        registerTextEditor={registerOutlineTextEditor}
+        unregisterEditor={unregisterEditor}
+        updateContent={updateContent}
+        updateSelection={updateSelection}
+        isBlurMovingToAiPanel={isBlurMovingToAiPanel}
       />
 
       <ConfirmDialog
@@ -711,11 +733,21 @@ function OutlineEditDialog({
   onOpenChange,
   node,
   onSave,
+  registerTextEditor,
+  unregisterEditor,
+  updateContent,
+  updateSelection,
+  isBlurMovingToAiPanel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   node: OutlineNode | null;
   onSave: (data: { title: string; content: string; status: OutlineNode['status']; coverImage?: string | null }) => void;
+  registerTextEditor: (nodeId: string, content: string) => void;
+  unregisterEditor: () => void;
+  updateContent: (content: string) => void;
+  updateSelection: (from: number, to: number) => void;
+  isBlurMovingToAiPanel: (event: { relatedTarget: EventTarget | null }) => boolean;
 }) {
   const { t } = useI18n();
   const [title, setTitle] = useState('');
@@ -723,14 +755,24 @@ function OutlineEditDialog({
   const [status, setStatus] = useState<OutlineNode['status']>('draft');
   const [coverImage, setCoverImage] = useState<string | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     if (node) {
       setTitle(node.title);
       setContent(node.content);
       setStatus(node.status);
       setCoverImage(node.coverImage);
+      registerTextEditor(node.id, node.content);
     }
-  }, [node]);
+    return () => {
+      unregisterEditor();
+    };
+  }, [node, registerTextEditor, unregisterEditor]);
+
+  useEffect(() => {
+    if (node) {
+      updateContent(content);
+    }
+  }, [content, node, updateContent]);
 
   const pickCoverImage = async () => {
     if (!isTauri()) {
@@ -846,6 +888,19 @@ function OutlineEditDialog({
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onFocus={() => {
+                if (node) {
+                  registerTextEditor(node.id, content);
+                }
+              }}
+              onBlur={(e) => {
+                if (isBlurMovingToAiPanel(e)) return;
+                unregisterEditor();
+              }}
+              onSelect={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                updateSelection(target.selectionStart, target.selectionEnd);
+              }}
               className="mt-1.5 min-h-[160px]"
             />
           </div>

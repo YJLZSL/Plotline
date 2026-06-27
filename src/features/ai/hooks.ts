@@ -4,7 +4,9 @@ import { createElement } from 'react';
 import type { ReactNode } from 'react';
 
 import type { AiInsertInput, AiKvEntry, AiMessage, AiSession } from '@/types';
+import { updateOutlineNode } from '@/features/outline/api';
 import { toastError, toastSuccess } from '@/stores/toast';
+import { useEditorSelectionStore } from '@/stores/editorSelection';
 
 import {
   addAiMessage as apiAddMessage,
@@ -141,13 +143,86 @@ export function useAiModelsQuery(baseUrl: string, apiKey: string, enabled: boole
   });
 }
 
+function isEditorTarget(target: string): boolean {
+  return (
+    target === 'novel_chapter' ||
+    target === 'notebook_content' ||
+    target === 'outline_node_content'
+  );
+}
+
+async function applyToEditor(
+  input: AiInsertInput,
+): Promise<{ target: string; id: string; title: string }> {
+  const store = useEditorSelectionStore.getState();
+
+  if (input.target === 'novel_chapter' || input.target === 'notebook_content') {
+    if (!store.editor) {
+      throw new Error('请先点击编辑器定位光标');
+    }
+    const selection =
+      store.selection ?? {
+        from: store.editor.state.selection.from,
+        to: store.editor.state.selection.to,
+      };
+    if (input.mode === 'replace' && selection.from !== selection.to) {
+      store.editor
+        .chain()
+        .focus()
+        .insertContentAt(
+          { from: selection.from, to: selection.to },
+          input.content,
+        )
+        .run();
+    } else {
+      store.editor.chain().focus().insertContentAt(selection.from, input.content).run();
+    }
+    return {
+      target: input.target,
+      id: store.nodeId ?? '',
+      title: input.target === 'novel_chapter' ? '当前章节' : '当前笔记',
+    };
+  }
+
+  if (input.target === 'outline_node_content') {
+    if (store.type !== 'outline' || !store.nodeId) {
+      throw new Error('请先选择大纲节点');
+    }
+    const currentContent = store.content ?? '';
+    const newContent =
+      input.mode === 'replace'
+        ? input.content
+        : currentContent
+          ? `${currentContent}\n\n${input.content}`
+          : input.content;
+    const node = await updateOutlineNode({ id: store.nodeId, content: newContent });
+    return { target: input.target, id: node.id, title: node.title };
+  }
+
+  throw new Error(`不支持的编辑器目标: ${input.target}`);
+}
+
 export function useApplyAiOutput(workspaceId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: Omit<AiInsertInput, 'workspaceId'>) =>
-      apiApplyOutput({ ...input, workspaceId }),
+    mutationFn: async ({ mode, ...input }: Omit<AiInsertInput, 'workspaceId'>) => {
+      if (isEditorTarget(input.target)) {
+        return applyToEditor({ ...input, workspaceId, mode });
+      }
+      return apiApplyOutput({ ...input, workspaceId });
+    },
     onSuccess: (result) => {
-      toastSuccess(`已创建 ${result.title}`);
+      if (result.target === 'novel_chapter') {
+        toastSuccess('已插入到当前章节');
+      } else if (result.target === 'notebook_content') {
+        toastSuccess('已插入到当前笔记');
+      } else if (result.target === 'outline_node_content') {
+        toastSuccess('已更新大纲节点内容');
+        qc.invalidateQueries({ queryKey: ['outline', workspaceId] });
+        qc.invalidateQueries({ queryKey: ['outlineNodes', workspaceId] });
+      } else {
+        toastSuccess(`已创建 ${result.title}`);
+      }
       if (result.target === 'note') {
         qc.invalidateQueries({ queryKey: ['notes', workspaceId] });
       } else if (result.target === 'outline' || result.target === 'outline_node') {

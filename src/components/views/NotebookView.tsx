@@ -29,6 +29,7 @@ import {
 } from '@/features/notebook/hooks';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useEditorSelectionStore } from '@/stores/editorSelection';
 
 interface NotebookViewProps {
   workspaceId: string;
@@ -64,6 +65,15 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
+  const registerEditor = useEditorSelectionStore((s) => s.registerEditor);
+  const unregisterEditor = useEditorSelectionStore((s) => s.unregisterEditor);
+  const updateSelection = useEditorSelectionStore((s) => s.updateSelection);
+
+  const isBlurMovingToAiPanel = (event: FocusEvent) => {
+    const related = event.relatedTarget as HTMLElement | null;
+    const aiPanel = document.querySelector('[data-testid="ai-assistant-panel"]');
+    return Boolean(aiPanel && related && aiPanel.contains(related));
+  };
 
   useEffect(() => {
     setAiContext({
@@ -308,6 +318,23 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
                   }}
                   placeholder={t('notebook.editorPlaceholder')}
                   minHeight="calc(100vh - 260px)"
+                  onFocus={(editor) => {
+                    registerEditor('notebook', editor);
+                    updateSelection(
+                      editor.state.selection.from,
+                      editor.state.selection.to,
+                    );
+                  }}
+                  onBlur={(_, event) => {
+                    if (isBlurMovingToAiPanel(event)) return;
+                    unregisterEditor();
+                  }}
+                  onSelectionUpdate={(editor) => {
+                    updateSelection(
+                      editor.state.selection.from,
+                      editor.state.selection.to,
+                    );
+                  }}
                 />
               </div>
             </>

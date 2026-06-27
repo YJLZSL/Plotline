@@ -15,6 +15,10 @@ import {
   Image as ImageIcon,
   X,
   Check,
+  Sword,
+  Heart,
+  Dices,
+  Layers,
 } from 'lucide-react';
 
 import { AppIcon, BrandMark, Button, Card, CardContent, EmptyState, Input } from '@/components/ui';
@@ -27,6 +31,7 @@ import {
   useUpdateWorkspace,
   useWorkspacesQuery,
 } from '@/features/workspace/hooks';
+import { WORKSPACE_TEMPLATES } from '@/features/workspace/seedTemplates';
 import { ConfirmDialog, Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { useI18n } from '@/hooks/useI18n';
 import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
@@ -34,13 +39,37 @@ import { relativeTime, truncate, downloadJSON, downloadText, cn } from '@/lib/ut
 import { useHistoryStore, makeUpdateWorkspaceAction } from '@/stores/historyStore';
 import type { Workspace, WorkspaceTemplate, WorkspaceBundle } from '@/types';
 
-const TEMPLATES: Array<{ value: WorkspaceTemplate; labelKey: string; descKey: string }> = [
-  { value: 'blank', labelKey: 'workspace.form.templateBlank', descKey: 'workspace.form.templateBlankDesc' },
-  { value: 'hero-journey', labelKey: 'workspace.form.templateHeroJourney', descKey: 'workspace.form.templateHeroJourneyDesc' },
-  { value: 'three-act', labelKey: 'workspace.form.templateThreeAct', descKey: 'workspace.form.templateThreeActDesc' },
-  { value: 'chronicle', labelKey: 'workspace.form.templateChronicle', descKey: 'workspace.form.templateChronicleDesc' },
-  { value: 'biography', labelKey: 'workspace.form.templateBiography', descKey: 'workspace.form.templateBiographyDesc' },
+interface TemplateOption {
+  id: string;
+  labelKey: string;
+  descKey: string;
+  icon: React.ComponentType<{ className?: string }>;
+  isSeed: boolean;
+}
+
+const LEGACY_TEMPLATES: TemplateOption[] = [
+  { id: 'blank', labelKey: 'workspace.form.templateBlank', descKey: 'workspace.form.templateBlankDesc', icon: Layers, isSeed: false },
+  { id: 'hero-journey', labelKey: 'workspace.form.templateHeroJourney', descKey: 'workspace.form.templateHeroJourneyDesc', icon: FileText, isSeed: false },
+  { id: 'three-act', labelKey: 'workspace.form.templateThreeAct', descKey: 'workspace.form.templateThreeActDesc', icon: FileText, isSeed: false },
+  { id: 'chronicle', labelKey: 'workspace.form.templateChronicle', descKey: 'workspace.form.templateChronicleDesc', icon: FileText, isSeed: false },
+  { id: 'biography', labelKey: 'workspace.form.templateBiography', descKey: 'workspace.form.templateBiographyDesc', icon: FileText, isSeed: false },
 ];
+
+const SEED_TEMPLATE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  sword: Sword,
+  heart: Heart,
+  dice: Dices,
+};
+
+const SEED_TEMPLATES: TemplateOption[] = WORKSPACE_TEMPLATES.map((tpl) => ({
+  id: tpl.id,
+  labelKey: tpl.nameKey,
+  descKey: tpl.descriptionKey,
+  icon: SEED_TEMPLATE_ICONS[tpl.icon] ?? FileText,
+  isSeed: true,
+}));
+
+const TEMPLATES: TemplateOption[] = [...LEGACY_TEMPLATES, ...SEED_TEMPLATES];
 
 const COVER_PALETTE = [
   '#C68A3E',
@@ -96,6 +125,7 @@ export function WorkspaceSelector() {
     name: '',
     description: '',
     template: 'blank' as WorkspaceTemplate,
+    templateId: undefined as string | undefined,
   });
 
   const filtered = (workspaces ?? []).filter((w) =>
@@ -131,10 +161,11 @@ export function WorkspaceSelector() {
     const ws = await createMutation.mutateAsync({
       name: form.name.trim(),
       description: form.description.trim(),
-      template: form.template,
+      template: form.templateId ? 'blank' : form.template,
+      templateId: form.templateId,
     });
     setCreateOpen(false);
-    setForm({ name: '', description: '', template: 'blank' });
+    setForm({ name: '', description: '', template: 'blank', templateId: undefined });
     navigate(`/workspaces/${ws.id}/timeline`);
   };
 
@@ -287,12 +318,28 @@ export function WorkspaceSelector() {
                 }
                 title={t('workspace.empty.title')}
                 description={t('workspace.empty.description')}
-                action={
-                  <Button onClick={() => setCreateOpen(true)} className="gap-2">
+                actions={[
+                  <Button key="create" onClick={() => setCreateOpen(true)} className="gap-2">
                     <Plus className="h-4 w-4" />
                     {t('workspace.empty.cta')}
-                  </Button>
-                }
+                  </Button>,
+                  <label key="import" className="inline-flex">
+                    <Button variant="outline" className="gap-2 cursor-pointer">
+                      <Upload className="h-4 w-4" />
+                      {t('workspace.import')}
+                    </Button>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleImport(f);
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>,
+                ]}
               />
             </div>
           ) : (
@@ -414,24 +461,41 @@ export function WorkspaceSelector() {
                 {t('workspace.form.template')}
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
-                {TEMPLATES.map((tpl) => (
-                  <button
-                    key={tpl.value}
-                    onClick={() => setForm((f) => ({ ...f, template: tpl.value }))}
-                    className={`text-left p-3 rounded-[6px] border transition-all ${
-                      form.template === tpl.value
-                        ? 'border-accent bg-accent/10'
-                        : 'border-border hover:bg-bg-elevated'
-                    }`}
-                  >
-                    <div className="text-sm font-medium text-text-primary">
-                      {t(tpl.labelKey)}
-                    </div>
-                    <div className="text-xs text-text-secondary mt-0.5">
-                      {t(tpl.descKey)}
-                    </div>
-                  </button>
-                ))}
+                {TEMPLATES.map((tpl) => {
+                  const selected = tpl.isSeed
+                    ? form.templateId === tpl.id
+                    : form.template === tpl.id && !form.templateId;
+                  const Icon = tpl.icon;
+                  return (
+                    <button
+                      key={tpl.id}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          template: tpl.isSeed ? 'blank' : (tpl.id as WorkspaceTemplate),
+                          templateId: tpl.isSeed ? tpl.id : undefined,
+                        }))
+                      }
+                      className={`text-left p-3 rounded-[6px] border transition-all flex items-start gap-3 ${
+                        selected
+                          ? 'border-accent bg-accent/10'
+                          : 'border-border hover:bg-bg-elevated'
+                      }`}
+                    >
+                      <AppIcon size="sm" tone={selected ? 'accent' : 'muted'}>
+                        <Icon className="h-4 w-4" />
+                      </AppIcon>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-text-primary">
+                          {t(tpl.labelKey)}
+                        </div>
+                        <div className="text-xs text-text-secondary mt-0.5">
+                          {t(tpl.descKey)}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
