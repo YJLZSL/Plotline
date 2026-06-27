@@ -13,7 +13,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       className={cn(
         'bg-bg-surface border border-border rounded-[8px] shadow-[var(--shadow-card)]',
         hover &&
-          'transition-all duration-200 ease-out hover:scale-[1.01] hover:shadow-[var(--shadow-elevated)]',
+          'transition-transform duration-200 ease-out hover:scale-[1.01] hover:shadow-[var(--shadow-elevated)] will-change-transform',
         className,
       )}
       {...props}

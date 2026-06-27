@@ -7,6 +7,7 @@ import { listEvents } from '@/features/timeline/eventApi';
 import type {
   AiChatContext,
   AiChatContextSelectedEntity,
+  AiContextScope,
 } from '@/types/ai';
 import type { AiSelection } from '@/stores/aiContext';
 
@@ -35,13 +36,27 @@ function limit<T>(items: T[]): T[] {
   return items.slice(0, MAX_ITEMS);
 }
 
+function sourcesForScope(scope: AiContextScope): AiContextSource[] {
+  switch (scope) {
+    case 'selected_entity':
+      return ['workspaceSummary', 'selectedEntity'];
+    case 'current_view':
+      return ['workspaceSummary', 'timeline', 'selectedEntity'];
+    case 'whole_workspace':
+    default:
+      return ['workspaceSummary', 'timeline', 'characters', 'locations', 'outline', 'notes', 'selectedEntity'];
+  }
+}
+
 export async function collectAiContext(
   workspaceId: string,
   sources: AiContextSource[],
   selection?: AiSelection | null,
+  scope?: AiContextScope,
 ): Promise<AiChatContext> {
-  const enabled = new Set(sources);
-  const context: AiChatContext = {};
+  const effectiveSources = scope ? sourcesForScope(scope) : sources;
+  const enabled = new Set(effectiveSources);
+  const context: AiChatContext = { scope };
 
   if (enabled.has('workspaceSummary')) {
     // workspaceSummary 由调用方（如 AiAssistantPanel）从 aiKv 传入。

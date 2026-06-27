@@ -13,6 +13,8 @@ import type {
   AiMessage,
   AiModelInfo,
   AiSession,
+  AiShortcutInput,
+  AiShortcutResult,
   AiStreamEvent,
   CreateAiMessageInput,
   CreateAiSessionInput,
@@ -94,4 +96,24 @@ export function testAiConnection(
 
 export function applyAiOutput(input: AiInsertInput): Promise<AiInsertResult> {
   return invoke<AiInsertResult>('apply_ai_output', { input });
+}
+
+export function optimizeEvent(input: AiShortcutInput): Promise<AiShortcutResult> {
+  return invoke<AiShortcutResult>('optimize_event', { input });
+}
+
+export function optimizeTimelineSegment(
+  input: AiShortcutInput,
+): Promise<AiShortcutResult> {
+  return invoke<AiShortcutResult>('optimize_timeline_segment', { input });
+}
+
+export function summarizeWorkspace(input: AiShortcutInput): Promise<AiShortcutResult> {
+  return invoke<AiShortcutResult>('summarize_workspace', { input });
+}
+
+export function checkTimelineConsistency(
+  input: AiShortcutInput,
+): Promise<AiShortcutResult> {
+  return invoke<AiShortcutResult>('check_timeline_consistency', { input });
 }

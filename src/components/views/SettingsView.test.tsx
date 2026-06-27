@@ -20,6 +20,8 @@ vi.mock('@/features/settings/hooks', () => ({
   })),
 }));
 
+const mockSetFancyAnimationsEnabled = vi.fn();
+
 vi.mock('@/stores/ui', () => ({
   useThemeStore: vi.fn((selector?: (state: { applyToDOM: typeof mockApplyToDOM }) => unknown) =>
     selector ? selector({ applyToDOM: mockApplyToDOM }) : { applyToDOM: mockApplyToDOM },
@@ -28,6 +30,14 @@ vi.mock('@/stores/ui', () => ({
     selector
       ? selector({ aiPanelOpen: false, toggleAiPanel: vi.fn() })
       : { aiPanelOpen: false, toggleAiPanel: vi.fn() },
+  ),
+}));
+
+vi.mock('@/stores/motion', () => ({
+  useMotionStore: vi.fn((selector?: (state: { fancyAnimationsEnabled: boolean; setFancyAnimationsEnabled: typeof mockSetFancyAnimationsEnabled }) => unknown) =>
+    selector
+      ? selector({ fancyAnimationsEnabled: false, setFancyAnimationsEnabled: mockSetFancyAnimationsEnabled })
+      : { fancyAnimationsEnabled: false, setFancyAnimationsEnabled: mockSetFancyAnimationsEnabled },
   ),
 }));
 
@@ -182,6 +192,31 @@ describe('SettingsView', () => {
         editorFont: expect.stringContaining('JetBrains Mono'),
       }),
     );
+  });
+
+  it('should render fancy animations toggle and call store setter', () => {
+    renderSettings();
+    const toggle = screen.getByTestId('fancy-animations-toggle');
+    expect(toggle).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(mockSetFancyAnimationsEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('should disable fancy animations toggle when animations are turned off', () => {
+    vi.mocked(useSettingsQuery).mockReturnValue({
+      data: { ...baseSettings, animationsEnabled: false },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useSettingsQuery>);
+    renderSettings();
+    const toggle = screen.getByTestId('fancy-animations-toggle');
+    expect(toggle).toBeDisabled();
+  });
+
+  it('should toggle animations enabled and persist through update', () => {
+    renderSettings();
+    const toggle = screen.getByTestId('animations-enabled-toggle');
+    fireEvent.click(toggle);
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ animationsEnabled: false }));
   });
 
   it('should switch tabs and keep AI connection placeholder', async () => {

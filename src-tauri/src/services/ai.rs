@@ -7,14 +7,20 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 use uuid::Uuid;
 
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    AiChatContext, AiChunk, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo,
-    AiRole, AiSearchResult, AiSession, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput,
+    AiActionType, AiCacheEntry, AiChatContext, AiChunk, AiConversationHistoryEntry,
+    AiContextScope, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRole,
+    AiScoredEntity, AiSearchResult, AiSession, AiShortcutInput, AiShortcutResult, AiStreamEvent,
+    CreateAiMessageInput, CreateAiSessionInput,
 };
 
 const DEFAULT_SYSTEM_PROMPT: &str =
-    "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答。";
+    "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答，并使用 Markdown 格式（**粗体**、*斜体*、`代码`、列表、标题、引用）以便界面正确渲染。"
 pub const MAX_HISTORY_MESSAGES: usize = 10;
 pub const MAX_RAG_CHUNKS: usize = 5;
 const MAX_CHUNK_TOKENS: usize = 800;
@@ -180,6 +186,307 @@ pub fn kv_set(conn: &Connection, entry: AiKvEntry) -> AppResult<AiKvEntry> {
     kv_get(conn, &entry.workspace_id, &entry.key)?.ok_or_else(|| {
         AppError::Internal("kv_set upsert succeeded but kv_get returned None".into())
     })
+}
+
+pub fn get_cached_response(conn: &Connection, key: &str) -> AppResult<Option<String>> {
+    let now = Utc::now();
+    conn.execute("DELETE FROM ai_cache WHERE expires_at < ?1", params![now])?;
+    let mut stmt = conn.prepare("SELECT value FROM ai_cache WHERE key = ?1")?;
+    let mut rows = stmt.query_map(params![key], |row| row.get::<_, String>(0))?;
+    rows.next().transpose().map_err(Into::into)
+}
+
+pub fn set_cached_response(
+    conn: &Connection,
+    key: &str,
+    value: &str,
+    ttl_seconds: u64,
+) -> AppResult<()> {
+    let now = Utc::now();
+    let expires_at = now + chrono::Duration::seconds(ttl_seconds as i64);
+    conn.execute(
+        "INSERT INTO ai_cache (key, value, created_at, expires_at)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value, created_at=excluded.created_at, expires_at=excluded.expires_at",
+        params![key, value, now, expires_at],
+    )?;
+    Ok(())
+}
+
+pub fn append_conversation_history(
+    conn: &Connection,
+    session_id: &str,
+    role: AiRole,
+    content: &str,
+) -> AppResult<AiConversationHistoryEntry> {
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now();
+    conn.execute(
+        "INSERT INTO ai_conversation_history (id, session_id, role, content, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, session_id, role.to_string(), content, now],
+    )?;
+    get_conversation_history_entry(conn, &id)
+}
+
+fn get_conversation_history_entry(conn: &Connection, id: &str) -> AppResult<AiConversationHistoryEntry> {
+    conn.query_row(
+        "SELECT id, session_id, role, content, created_at FROM ai_conversation_history WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(AiConversationHistoryEntry {
+                id: row.get(0)?,
+                session_id: row.get(1)?,
+                role: parse_role(&row.get::<_, String>(2)?),
+                content: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        },
+    )
+    .map_err(|e| crate::error::map_not_found(e, format!("AI 对话历史 {} 不存在", id)))
+}
+
+pub fn get_conversation_history(
+    conn: &Connection,
+    session_id: &str,
+    limit: Option<usize>,
+) -> AppResult<Vec<AiConversationHistoryEntry>> {
+    let limit = limit.unwrap_or(100);
+    let mut stmt = conn.prepare(
+        "SELECT id, session_id, role, content, created_at
+         FROM ai_conversation_history WHERE session_id = ?1
+         ORDER BY created_at ASC LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![session_id, limit as i64], |row| {
+        Ok(AiConversationHistoryEntry {
+            id: row.get(0)?,
+            session_id: row.get(1)?,
+            role: parse_role(&row.get::<_, String>(2)?),
+            content: row.get(3)?,
+            created_at: row.get(4)?,
+        })
+    })?;
+    rows.collect::<Result<_, _>>().map_err(Into::into)
+}
+
+fn hash_cache_key_material(material: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    material.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub fn make_cache_key(
+    workspace_id: &str,
+    action: AiActionType,
+    context_material: &str,
+) -> String {
+    format!(
+        "ai:cache:{}:{}:{}",
+        workspace_id,
+        action,
+        hash_cache_key_material(context_material)
+    )
+}
+
+pub fn retrieve_relevant_entities(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+    limit: Option<usize>,
+) -> AppResult<Vec<AiScoredEntity>> {
+    let terms = extract_terms(query);
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    let limit = limit.unwrap_or(5);
+
+    let mut scores: HashMap<String, (AiScoredEntity, i64)> = HashMap::new();
+
+    retrieve_character_entities(conn, workspace_id, &terms, &mut scores)?;
+    retrieve_location_entities(conn, workspace_id, &terms, &mut scores)?;
+    retrieve_event_entities(conn, workspace_id, &terms, &mut scores)?;
+    retrieve_outline_entities(conn, workspace_id, &terms, &mut scores)?;
+
+    let mut results: Vec<AiScoredEntity> = scores.into_values().map(|(entity, _)| entity).collect();
+    results.sort_by(|a, b| b.score.cmp(&a.score));
+    results.truncate(limit);
+    Ok(results)
+}
+
+fn retrieve_character_entities(
+    conn: &Connection,
+    workspace_id: &str,
+    terms: &[String],
+    scores: &mut HashMap<String, (AiScoredEntity, i64)>,
+) -> AppResult<()> {
+    let cases: Vec<String> = terms
+        .iter()
+        .map(|t| format!("CASE WHEN LOWER(name || ' ' || COALESCE(description,'') || ' ' || COALESCE(appearance,'') || ' ' || COALESCE(backstory,'') || ' ' || COALESCE(goals,'') || ' ' || COALESCE(conflicts,'') || ' ' || COALESCE(arc,'') || ' ' || COALESCE(aliases,'') || ' ' || COALESCE(tags,'')) LIKE LOWER('{}') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .collect();
+    let where_clauses: Vec<String> = terms
+        .iter()
+        .map(|t| format!("LOWER(name || ' ' || COALESCE(description,'') || ' ' || COALESCE(appearance,'') || ' ' || COALESCE(backstory,'') || ' ' || COALESCE(goals,'') || ' ' || COALESCE(conflicts,'') || ' ' || COALESCE(arc,'') || ' ' || COALESCE(aliases,'') || ' ' || COALESCE(tags,'')) LIKE LOWER('{}') ESCAPE '\\'", escape_like(t)))
+        .collect();
+    let sql = format!(
+        "SELECT id, name, description, {} AS score
+         FROM characters
+         WHERE workspace_id = ?1 AND ({})",
+        cases.join(" + "),
+        where_clauses.join(" OR ")
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let summary: String = row.get(2)?;
+        let score: i64 = row.get(3)?;
+        Ok((id, name, summary, score))
+    })?;
+    for row in rows {
+        let (id, name, summary, score) = row?;
+        let entity = AiScoredEntity {
+            id: id.clone(),
+            entity_type: "character".into(),
+            name,
+            summary,
+            score,
+        };
+        scores.insert(id, (entity, score));
+    }
+    Ok(())
+}
+
+fn retrieve_location_entities(
+    conn: &Connection,
+    workspace_id: &str,
+    terms: &[String],
+    scores: &mut HashMap<String, (AiScoredEntity, i64)>,
+) -> AppResult<()> {
+    let cases: Vec<String> = terms
+        .iter()
+        .map(|t| format!("CASE WHEN LOWER(name || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .collect();
+    let where_clauses: Vec<String> = terms
+        .iter()
+        .map(|t| format!("LOWER(name || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\\\'", escape_like(t)))
+        .collect();
+    let sql = format!(
+        "SELECT id, name, description, {} AS score
+         FROM locations
+         WHERE workspace_id = ?1 AND ({})",
+        cases.join(" + "),
+        where_clauses.join(" OR ")
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let summary: String = row.get(2)?;
+        let score: i64 = row.get(3)?;
+        Ok((id, name, summary, score))
+    })?;
+    for row in rows {
+        let (id, name, summary, score) = row?;
+        let entity = AiScoredEntity {
+            id: id.clone(),
+            entity_type: "location".into(),
+            name,
+            summary,
+            score,
+        };
+        scores.insert(id, (entity, score));
+    }
+    Ok(())
+}
+
+fn retrieve_event_entities(
+    conn: &Connection,
+    workspace_id: &str,
+    terms: &[String],
+    scores: &mut HashMap<String, (AiScoredEntity, i64)>,
+) -> AppResult<()> {
+    let cases: Vec<String> = terms
+        .iter()
+        .map(|t| format!("CASE WHEN LOWER(title || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .collect();
+    let where_clauses: Vec<String> = terms
+        .iter()
+        .map(|t| format!("LOWER(title || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\\\'", escape_like(t)))
+        .collect();
+    let sql = format!(
+        "SELECT id, title, description, {} AS score
+         FROM events
+         WHERE workspace_id = ?1 AND ({})",
+        cases.join(" + "),
+        where_clauses.join(" OR ")
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let summary: String = row.get(2)?;
+        let score: i64 = row.get(3)?;
+        Ok((id, name, summary, score))
+    })?;
+    for row in rows {
+        let (id, name, summary, score) = row?;
+        let entity = AiScoredEntity {
+            id: id.clone(),
+            entity_type: "event".into(),
+            name,
+            summary,
+            score,
+        };
+        scores.insert(id, (entity, score));
+    }
+    Ok(())
+}
+
+fn retrieve_outline_entities(
+    conn: &Connection,
+    workspace_id: &str,
+    terms: &[String],
+    scores: &mut HashMap<String, (AiScoredEntity, i64)>,
+) -> AppResult<()> {
+    let cases: Vec<String> = terms
+        .iter()
+        .map(|t| format!("CASE WHEN LOWER(title || ' ' || COALESCE(content,'')) LIKE LOWER('{}') ESCAPE '\\\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .collect();
+    let where_clauses: Vec<String> = terms
+        .iter()
+        .map(|t| format!("LOWER(title || ' ' || COALESCE(content,'')) LIKE LOWER('{}') ESCAPE '\\\\'", escape_like(t)))
+        .collect();
+    let sql = format!(
+        "SELECT id, title, content, {} AS score
+         FROM outline_nodes
+         WHERE workspace_id = ?1 AND ({})",
+        cases.join(" + "),
+        where_clauses.join(" OR ")
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![workspace_id], |row| {
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let summary: String = row.get(2)?;
+        let score: i64 = row.get(3)?;
+        Ok((id, name, summary, score))
+    })?;
+    for row in rows {
+        let (id, name, summary, score) = row?;
+        let entity = AiScoredEntity {
+            id: id.clone(),
+            entity_type: "outline".into(),
+            name,
+            summary,
+            score,
+        };
+        scores.insert(id, (entity, score));
+    }
+    Ok(())
+}
+
+fn escape_like(term: &str) -> String {
+    term.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
 }
 
 pub fn index_workspace(conn: &Connection, workspace_id: &str) -> AppResult<()> {
@@ -852,6 +1159,215 @@ pub async fn call_chat_api_stream(
     Ok(full)
 }
 
+fn validate_ai_enabled(settings: &crate::models::AppSettings) -> AppResult<()> {
+    if !settings.ai_enabled {
+        return Err(AppError::Forbidden(
+            "AI 助手未启用，请先在设置中开启".into(),
+        ));
+    }
+    if settings.ai_base_url.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API 基础地址".into()));
+    }
+    if settings.ai_model.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置模型名称".into()));
+    }
+    if settings.ai_api_key.trim().is_empty() {
+        return Err(AppError::InvalidInput("请先配置 API Key".into()));
+    }
+    Ok(())
+}
+
+fn cache_ttl_for_action(action: AiActionType) -> u64 {
+    match action {
+        AiActionType::SummarizeWorkspace => 300,
+        AiActionType::CheckTimelineConsistency => 300,
+        _ => 600,
+    }
+}
+
+fn build_shortcut_context_block(
+    context: Option<&AiChatContext>,
+    entities: &[AiScoredEntity],
+    action: AiActionType,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    if let Some(ctx) = context {
+        let block = build_context_block(ctx);
+        if !block.is_empty() {
+            parts.push(block);
+        }
+    }
+
+    if !entities.is_empty() {
+        let lines: Vec<String> = entities
+            .iter()
+            .map(|e| format!("- [{}] {}：{}", e.entity_type, e.name, truncate_string(&e.summary, MAX_CONTEXT_DESC_LEN)))
+            .collect();
+        parts.push(format!(
+            "【相关实体】\n{}\n\n这些实体可能与当前任务有关，请酌情参考。",
+            lines.join("\n")
+        ));
+    }
+
+    if let AiActionType::OptimizeEvent = action {
+        parts.push("请直接给出优化后的内容，并简要说明修改理由。".into());
+    }
+
+    parts.join("\n\n")
+}
+
+pub async fn run_shortcut(
+    conn: &Connection,
+    settings: &crate::models::AppSettings,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    validate_ai_enabled(settings)?;
+
+    let session_id = match input.session_id {
+        Some(id) => id,
+        None => create_session(
+            conn,
+            CreateAiSessionInput {
+                workspace_id: input.workspace_id.clone(),
+                title: Some(format!("AI {}", input.action)),
+            },
+        )?
+        .id,
+    };
+
+    let user_message = crate::services::ai_prompts::user_prompt_for_action(input.action);
+    add_message(conn, &session_id, AiRole::User, user_message)?;
+
+    let context_material = format!(
+        "{:?}|{:?}|{:?}",
+        input.action,
+        input.query.as_deref().unwrap_or(""),
+        input.context.as_ref().map(|c| format!("{:?}", c.scope)).unwrap_or_default()
+    );
+    let cache_key = make_cache_key(&input.workspace_id, input.action, &context_material);
+
+    if let Some(cached) = get_cached_response(conn, &cache_key)? {
+        let messages = {
+            add_message(conn, &session_id, AiRole::Assistant, &cached)?;
+            list_messages(conn, &session_id, None)?
+        };
+        append_conversation_history(conn, &session_id, AiRole::Assistant, &cached)?;
+        return Ok(AiShortcutResult {
+            session_id,
+            reply: cached,
+            messages,
+            cached: true,
+            entities: Vec::new(),
+        });
+    }
+
+    let query = input
+        .query
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(user_message);
+    let entities = if settings.ai_rag_enabled {
+        retrieve_relevant_entities(conn, &input.workspace_id, query, Some(5))?
+    } else {
+        Vec::new()
+    };
+
+    let history = get_conversation_history(conn, &session_id, Some(MAX_HISTORY_MESSAGES));
+    let history: Vec<AiMessage> = history?
+        .into_iter()
+        .map(|h| AiMessage {
+            id: h.id,
+            session_id: h.session_id,
+            role: h.role,
+            content: h.content,
+            created_at: h.created_at,
+        })
+        .collect();
+
+    let system_prompt = crate::services::ai_prompts::system_prompt_for_action_with_markdown(input.action);
+    let context_block = build_shortcut_context_block(input.context.as_ref(), &entities, input.action);
+    let mut system_content = system_prompt.to_string();
+    if !context_block.is_empty() {
+        system_content.push_str("\n\n");
+        system_content.push_str(&context_block);
+    }
+
+    let mut messages: Vec<OpenAiMessage<'_>> = Vec::new();
+    messages.push(OpenAiMessage {
+        role: "system",
+        content: system_content,
+    });
+    for msg in history.iter().filter(|m| m.role != AiRole::System) {
+        messages.push(OpenAiMessage {
+            role: match msg.role {
+                AiRole::User => "user",
+                AiRole::Assistant => "assistant",
+                AiRole::System => "system",
+            },
+            content: msg.content.clone(),
+        });
+    }
+    messages.push(OpenAiMessage {
+        role: "user",
+        content: user_message.to_string(),
+    });
+
+    let base_url = settings.ai_base_url.trim().trim_end_matches('/');
+    let url = format!("{}/chat/completions", base_url);
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", settings.ai_api_key))
+        .json(&OpenAiChatRequest {
+            model: &settings.ai_model,
+            messages,
+            stream: None,
+        })
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("AI 请求失败: {}", e)))?;
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_else(|_| "未知错误".into());
+        return Err(AppError::Internal(format!("AI API 错误: {}", body)));
+    }
+
+    let payload: OpenAiChatResponse = response
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("解析 AI 响应失败: {}", e)))?;
+
+    let reply = payload
+        .choices
+        .into_iter()
+        .next()
+        .map(|c| c.message.content)
+        .ok_or_else(|| AppError::Internal("AI 响应为空".into()))?;
+
+    set_cached_response(
+        conn,
+        &cache_key,
+        &reply,
+        cache_ttl_for_action(input.action),
+    )?;
+    append_conversation_history(conn, &session_id, AiRole::User, user_message)?;
+    append_conversation_history(conn, &session_id, AiRole::Assistant, &reply)?;
+
+    let messages = {
+        add_message(conn, &session_id, AiRole::Assistant, &reply)?;
+        list_messages(conn, &session_id, None)?
+    };
+
+    Ok(AiShortcutResult {
+        session_id,
+        reply,
+        messages,
+        cached: false,
+        entities,
+    })
+}
+
 pub async fn list_models(base_url: &str, api_key: &str) -> AppResult<Vec<AiModelInfo>> {
     let base_url = base_url.trim().trim_end_matches('/');
     if base_url.is_empty() {
@@ -1514,5 +2030,110 @@ mod tests {
         assert_eq!(result.status, "error");
         assert_eq!(result.latency_ms, 0);
         assert!(result.message.contains("基础地址"));
+    }
+
+    #[test]
+    fn should_cache_and_retrieve_response() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let key = make_cache_key(&ws_id, AiActionType::SummarizeWorkspace, "ctx-v1");
+
+        assert!(get_cached_response(&conn, &key).unwrap().is_none());
+
+        set_cached_response(&conn, &key, "cached summary", 600).unwrap();
+
+        let cached = get_cached_response(&conn, &key).unwrap();
+        assert_eq!(cached.as_deref(), Some("cached summary"));
+    }
+
+    #[test]
+    fn should_expire_cached_response() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let key = make_cache_key(&ws_id, AiActionType::SummarizeWorkspace, "ctx-exp");
+
+        set_cached_response(&conn, &key, "will expire", 1).unwrap();
+        assert!(get_cached_response(&conn, &key).unwrap().is_some());
+
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        let cached = get_cached_response(&conn, &key).unwrap();
+        assert!(cached.is_none());
+    }
+
+    #[test]
+    fn should_overwrite_cached_response() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let key = make_cache_key(&ws_id, AiActionType::OptimizeEvent, "ctx-overwrite");
+
+        set_cached_response(&conn, &key, "first", 600).unwrap();
+        set_cached_response(&conn, &key, "second", 600).unwrap();
+
+        let cached = get_cached_response(&conn, &key).unwrap();
+        assert_eq!(cached.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn should_retrieve_relevant_entities_for_character() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        let entities = retrieve_relevant_entities(&conn, &ws_id, "艾莉丝", Some(5)).unwrap();
+
+        assert!(!entities.is_empty());
+        let character = entities.iter().find(|e| e.entity_type == "character").unwrap();
+        assert_eq!(character.name, "艾莉丝");
+        assert!(character.score >= 1);
+    }
+
+    #[test]
+    fn should_score_entities_by_term_frequency() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        let entities =
+            retrieve_relevant_entities(&conn, &ws_id, "艾莉丝 森林", Some(5)).unwrap();
+
+        let character = entities
+            .iter()
+            .find(|e| e.entity_type == "character" && e.name == "艾莉丝")
+            .unwrap();
+        let event = entities
+            .iter()
+            .find(|e| e.entity_type == "event" && e.name == "开场")
+            .unwrap();
+
+        assert!(character.score >= 1);
+        assert!(event.score >= 1);
+    }
+
+    #[test]
+    fn should_return_empty_for_irrelevant_query() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        let entities =
+            retrieve_relevant_entities(&conn, &ws_id, "完全不存在的词", Some(5)).unwrap();
+        assert!(entities.is_empty());
+    }
+
+    #[test]
+    fn should_limit_rag_results() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        let entities = retrieve_relevant_entities(&conn, &ws_id, "艾莉丝", Some(1)).unwrap();
+        assert_eq!(entities.len(), 1);
+    }
+
+    #[test]
+    fn should_escape_special_chars_in_like_query() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        // Query containing LIKE wildcards should not crash or return false positives.
+        let entities = retrieve_relevant_entities(&conn, &ws_id, "100% 未知_词", Some(5)).unwrap();
+        assert!(entities.is_empty());
     }
 }

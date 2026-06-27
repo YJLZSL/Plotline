@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useDragControls } from 'framer-motion';
-import { Play, Pause, RotateCcw, SkipForward, X, Timer, Minus } from 'lucide-react';
+import { Play, Pause, RotateCcw, SkipForward, X, Timer, Minus, Trophy, Medal } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
+import { MOTION_BASE, MOTION_FAST, EASE_STANDARD } from '@/lib/motion';
 import { useI18n } from '@/hooks/useI18n';
 import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { playSoundIfEnabled } from '@/lib/sound';
@@ -16,12 +16,16 @@ import {
   type PomodoroTheme,
 } from '@/stores/pomodoro';
 import { Button } from './Button';
+import { ConfirmDialog } from './Dialog';
 import McHeart from './icons/McHeart';
 import McHunger from './icons/McHunger';
 import { PixelBlock } from './PomodoroTimerBlocks';
 import {
   getBlockType,
   getAchievementBlockType,
+  getRandomRareBlockType,
+  getRandomRareFilledBlockIndex,
+  type BlockType,
 } from './PomodoroTimer.utils';
 
 const THEMES: Array<{ value: PomodoroTheme; labelKey: string }> = [
@@ -58,13 +62,21 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
     reset,
     tick,
     skip,
+    resetAchievements,
   } = usePomodoroStore();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSecondsRef = useRef(secondsLeft);
   const prevPhaseRef = useRef(phase);
+  const prevPhaseForCompleteRef = useRef(phase);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [celebration, setCelebration] = useState(false);
+  const [rareDrop, setRareDrop] = useState<BlockType | null>(null);
+  const [creeperSurprise, setCreeperSurprise] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [sparkleBlockIndex, setSparkleBlockIndex] = useState<number | null>(null);
   const breakParticles = useMemo(() => makeBreakParticles(6), []);
+  const celebrationParticles = useMemo(() => makeConfettiParticles(24), []);
 
   const constraintsRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
@@ -99,32 +111,75 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
   }, [isRunning, tick]);
 
   useEffect(() => {
-    if (prevSecondsRef.current === 1 && secondsLeft === 0) {
-      playSoundIfEnabled(theme === 'mc' ? 'explosion' : 'complete');
-      if (phase === 'focus') {
+    if (
+      prevSecondsRef.current === 1 &&
+      secondsLeft > 1 &&
+      phase !== prevPhaseForCompleteRef.current
+    ) {
+      if (prevPhaseForCompleteRef.current === 'focus') {
+        playSoundIfEnabled(theme === 'mc' ? 'levelup' : 'complete');
         toastSuccess(t('pomodoro.focusComplete'));
-      } else {
+        if (ambient.fancy) {
+          setRareDrop(theme === 'mc' && Math.random() < 0.15 ? getRandomRareBlockType() : null);
+          setCelebration(true);
+          const timer = setTimeout(() => setCelebration(false), 1800);
+          return () => clearTimeout(timer);
+        }
+      } else if (phase === 'focus') {
+        playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
         toastInfo(t('pomodoro.breakComplete'));
       }
     }
     prevSecondsRef.current = secondsLeft;
-  }, [secondsLeft, theme, phase, t]);
+    prevPhaseForCompleteRef.current = phase;
+  }, [secondsLeft, theme, phase, ambient.fancy, t]);
 
   useEffect(() => {
     if (prevPhaseRef.current === phase) return;
     playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
     prevPhaseRef.current = phase;
-    if (!ambient.animate) return;
+    if (!ambient.fancy) return;
     setShowConfetti(true);
     const timer = setTimeout(() => setShowConfetti(false), 1200);
     return () => clearTimeout(timer);
-  }, [phase, theme, ambient.animate]);
+  }, [phase, theme, ambient.fancy]);
 
   const totalSeconds = phase === 'focus' ? 25 * 60 : phase === 'shortBreak' ? 5 * 60 : 15 * 60;
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
 
   const themeClasses = THEME_CLASSES[theme];
   const isPixel = theme === 'mc';
+
+  // MC creeper boom sound + block sparkle easter egg while running.
+  useEffect(() => {
+    if (!isPixel || !ambient.animate) return;
+    if (progress >= 1) {
+      playSoundIfEnabled('explosion');
+    }
+  }, [isPixel, progress, ambient.animate]);
+
+  const handleToggleRun = () => {
+    playSoundIfEnabled(theme === 'mc' ? 'mine' : 'click');
+    if (isRunning) {
+      pause();
+      return;
+    }
+    if (theme === 'mc' && ambient.animate) {
+      const roll = Math.random();
+      if (roll < 0.05) {
+        playSoundIfEnabled('hiss');
+        setCreeperSurprise(true);
+        setTimeout(() => setCreeperSurprise(false), 900);
+      } else if (roll < 0.15) {
+        const rareIndex = getRandomRareFilledBlockIndex(BLOCK_COUNT, progress);
+        if (rareIndex !== null) {
+          setSparkleBlockIndex(rareIndex);
+          window.setTimeout(() => setSparkleBlockIndex(null), 1400);
+        }
+      }
+    }
+    start();
+  };
 
   return (
     <AnimatePresence>
@@ -180,7 +235,7 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                   themeClasses.container,
                 )}
               >
-                {ambient.animate && phase !== 'focus' && (
+                {ambient.fancy && phase !== 'focus' && (
                   <div
                     data-testid="pomodoro-particles"
                     className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -212,7 +267,7 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                 )}
 
                 <AnimatePresence>
-                  {ambient.animate && showConfetti && (
+                  {ambient.fancy && showConfetti && (
                     <motion.div
                       key="confetti"
                       data-testid="pomodoro-confetti"
@@ -241,6 +296,85 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                           transition={{ duration: 0.8, ease: 'easeOut' }}
                         />
                       ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {ambient.fancy && celebration && (
+                    <motion.div
+                      key="celebration"
+                      data-testid="pomodoro-celebration"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 z-20 flex flex-col items-center justify-center overflow-hidden pointer-events-none"
+                      aria-hidden="true"
+                    >
+                      {celebrationParticles.map((p) => (
+                        <motion.div
+                          key={p.id}
+                          className="absolute left-1/2 top-1/2 rounded-[1px]"
+                          style={{
+                            width: p.size,
+                            height: p.size,
+                            backgroundColor: p.color,
+                          }}
+                          initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                          animate={{
+                            x: p.x,
+                            y: p.y,
+                            opacity: 0,
+                            scale: 0,
+                            rotate: p.rotate,
+                          }}
+                          transition={{ duration: 0.9, ease: 'easeOut' }}
+                        />
+                      ))}
+                      <motion.div
+                        initial={{ scale: 0.6, opacity: 0, y: 10 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ duration: 0.35, ease: EASE_STANDARD }}
+                        className={cn(
+                          'relative z-10 flex flex-col items-center gap-2 text-center',
+                          isPixel && 'font-pixel',
+                        )}
+                      >
+                        {isPixel && rareDrop && (
+                          <PixelBlock blockType={rareDrop} size={32} />
+                        )}
+                        {!isPixel && (
+                          <Trophy className="h-8 w-8 text-amber-500" />
+                        )}
+                        <span className="text-lg font-semibold drop-shadow-sm">
+                          {t('pomodoro.focusCompleteCelebration')}
+                        </span>
+                        {isPixel && rareDrop && (
+                          <span className="text-xs text-[var(--accent-cool)]">{t('pomodoro.rareDrop')}</span>
+                        )}
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {ambient.fancy && creeperSurprise && (
+                    <motion.div
+                      key="creeper-surprise"
+                      data-testid="mc-creeper-surprise"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 pointer-events-none bg-black/20"
+                      aria-hidden="true"
+                    >
+                      <div className="mc-creeper-shake">
+                        <CreeperFace />
+                      </div>
+                      <span className="text-xl font-pixel text-red-500 drop-shadow-sm">
+                        {t('pomodoro.creeperSurprise')}
+                      </span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -331,9 +465,9 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                   {theme !== 'mc' && (
                     <div className="w-full mt-4 h-2 rounded-full bg-black/10 overflow-hidden">
                       <motion.div
-                        className="h-full bg-current opacity-80"
-                        initial={{ width: '0%' }}
-                        animate={{ width: `${progress * 100}%` }}
+                        className="h-full w-full origin-left bg-current opacity-80 will-change-transform"
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: progress }}
                         transition={MOTION_FAST}
                       />
                     </div>
@@ -360,6 +494,7 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                           <PixelBlock
                             key={i}
                             blockType={getBlockType(i, BLOCK_COUNT, progress)}
+                            animated={sparkleBlockIndex === i}
                           />
                         ))}
                       </div>
@@ -400,7 +535,7 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
 
                   {theme === 'mc' && completedFocusSessions > 0 && (
                     <div data-testid="mc-achievements" className="mt-3 flex items-center gap-1.5">
-                      <span className="text-[10px] opacity-60 font-pixel">成就:</span>
+                      <span className="text-[10px] opacity-60 font-pixel">{t('pomodoro.achievementsTitle')}:</span>
                       <div className="flex items-center gap-0.5">
                         {Array.from({ length: Math.min(completedFocusSessions, 10) }).map((_, i) => (
                           <AchievementBlock key={i} index={i} />
@@ -415,19 +550,26 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                   <p className="mt-3 text-[11px] opacity-60">
                     {t('pomodoro.completedSessions', { count: completedFocusSessions })}
                   </p>
+
+                  {completedFocusSessions > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="pomodoro-reset-achievements"
+                      aria-label={t('pomodoro.resetAchievements')}
+                      onClick={() => setConfirmResetOpen(true)}
+                      className="mt-2 gap-1.5"
+                    >
+                      <Medal className="h-3.5 w-3.5" />
+                      {t('pomodoro.resetAchievements')}
+                    </Button>
+                  )}
                 </div>
 
                 <div className="px-4 pb-4 flex items-center justify-center gap-2">
                   <Button
                     size="sm"
-                    onClick={() => {
-                      playSoundIfEnabled(theme === 'mc' ? 'mine' : 'click');
-                      if (isRunning) {
-                        pause();
-                      } else {
-                        start();
-                      }
-                    }}
+                    onClick={handleToggleRun}
                     className={cn('gap-1.5 min-w-[88px]', themeClasses.button)}
                   >
                     {isRunning ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -458,6 +600,24 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                     <SkipForward className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+
+                <ConfirmDialog
+                  open={confirmResetOpen}
+                  onOpenChange={setConfirmResetOpen}
+                  title={t('pomodoro.resetAchievementsConfirmTitle')}
+                  description={t('pomodoro.resetAchievementsConfirmDesc')}
+                  confirmText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                  destructive
+                  onConfirm={() => {
+                    playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
+                    setRareDrop(null);
+                    setCelebration(false);
+                    setShowConfetti(false);
+                    setSparkleBlockIndex(null);
+                    resetAchievements();
+                  }}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -523,6 +683,26 @@ function makeBreakParticles(count: number): BreakParticle[] {
     distance: -20 - Math.random() * 40,
     duration: 3 + Math.random() * 2,
     delay: Math.random() * 2,
+  }));
+}
+
+interface CelebrationParticle {
+  id: number;
+  size: number;
+  color: string;
+  x: number;
+  y: number;
+  rotate: number;
+}
+
+function makeConfettiParticles(count: number): CelebrationParticle[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: i,
+    size: 5 + (i % 4) * 2,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length]!,
+    x: (Math.random() - 0.5) * 180,
+    y: (Math.random() - 1) * 140,
+    rotate: (Math.random() - 0.5) * 360,
   }));
 }
 

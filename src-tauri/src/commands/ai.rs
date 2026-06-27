@@ -4,8 +4,8 @@ use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
 use crate::models::{
     AiChatInput, AiChatResult, AiConnectionTestInput, AiConnectionTestResult, AiInsertInput,
-    AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiSession, AiStreamEvent,
-    CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
+    AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiSession, AiShortcutInput,
+    AiShortcutResult, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
 };
 use crate::services::settings::read_settings;
 use crate::AppState;
@@ -288,4 +288,56 @@ pub fn apply_ai_output(
     with_db!(state, |conn| crate::services::ai::apply_output(
         conn, &input
     ))
+}
+
+#[tauri::command]
+pub async fn optimize_event(
+    state: State<'_, AppState>,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+    let settings = read_settings(&db.conn)?;
+    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+}
+
+#[tauri::command]
+pub async fn optimize_timeline_segment(
+    state: State<'_, AppState>,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+    let settings = read_settings(&db.conn)?;
+    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+}
+
+#[tauri::command]
+pub async fn summarize_workspace(
+    state: State<'_, AppState>,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+    let settings = read_settings(&db.conn)?;
+    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+}
+
+#[tauri::command]
+pub async fn check_timeline_consistency(
+    state: State<'_, AppState>,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    let db = state
+        .db
+        .lock()
+        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+    let settings = read_settings(&db.conn)?;
+    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
 }

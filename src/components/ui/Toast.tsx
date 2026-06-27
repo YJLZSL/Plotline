@@ -39,14 +39,13 @@ export function ToastViewport() {
           return (
             <motion.div
               key={t.id}
-              layout
               initial={{ opacity: 0, x: 40, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, scale: 0.95 }}
               transition={MOTION_BASE}
               className={cn(
                 'pointer-events-auto flex items-start gap-3 p-3 pr-2',
-                'border rounded-[8px] shadow-[var(--shadow-card)] bg-bg-surface',
+                'border rounded-[8px] shadow-[var(--shadow-card)] bg-bg-surface will-change-transform',
                 styleMap[t.kind],
               )}
               role="alert"

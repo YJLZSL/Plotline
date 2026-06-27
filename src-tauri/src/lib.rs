@@ -167,6 +167,10 @@ pub fn run() {
             commands::ai::list_ai_models,
             commands::ai::test_ai_connection,
             commands::ai::apply_ai_output,
+            commands::ai::optimize_event,
+            commands::ai::optimize_timeline_segment,
+            commands::ai::summarize_workspace,
+            commands::ai::check_timeline_consistency,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

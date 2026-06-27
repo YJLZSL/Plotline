@@ -6,6 +6,7 @@ import {
   QueryClientProvider,
   type UseMutationResult,
   type UseMutateFunction,
+  type UseMutateAsyncFunction,
 } from '@tanstack/react-query';
 
 import '@/i18n';
@@ -20,11 +21,23 @@ import {
   useAiMessagesQuery,
   useAiSessionsQuery,
   useApplyAiOutput,
+  useCheckTimelineConsistency,
   useCreateAiSession,
   useDeleteAiSession,
+  useOptimizeEvent,
+  useOptimizeTimelineSegment,
+  useSummarizeWorkspace,
 } from '@/features/ai/hooks';
 import { useSettingsQuery } from '@/features/settings/hooks';
-import type { AiInsertInput, AiInsertResult, AiMessage, AiSession, CreateAiSessionInput } from '@/types';
+import type {
+  AiInsertInput,
+  AiInsertResult,
+  AiMessage,
+  AiSession,
+  AiShortcutInput,
+  AiShortcutResult,
+  CreateAiSessionInput,
+} from '@/types';
 
 const applyMutate = vi.fn();
 
@@ -51,6 +64,10 @@ vi.mock('@/features/ai/hooks', () => ({
   useAiKvGet: vi.fn(),
   useApplyAiOutput: vi.fn(),
   useAiConnectionTest: vi.fn(),
+  useOptimizeEvent: vi.fn(),
+  useOptimizeTimelineSegment: vi.fn(),
+  useSummarizeWorkspace: vi.fn(),
+  useCheckTimelineConsistency: vi.fn(),
 }));
 
 vi.mock('@/features/ai/api', () => ({
@@ -84,10 +101,12 @@ function makeSession(overrides: Partial<AiSession> = {}): AiSession {
 
 function makeMutationResult<TData, TVariables>(
   mutate: (vars: TVariables) => void,
-): UseMutationResult<TData, unknown, TVariables, unknown> {
+): UseMutationResult<TData, Error, TVariables, unknown> {
+  const mutateAsync = async (vars: TVariables) =>
+    (mutate as unknown as (vars: TVariables) => Promise<TData>)(vars);
   return {
-    mutate: mutate as UseMutateFunction<TData, unknown, TVariables, unknown>,
-    mutateAsync: vi.fn(),
+    mutate: mutate as UseMutateFunction<TData, Error, TVariables, unknown>,
+    mutateAsync: mutateAsync as UseMutateAsyncFunction<TData, Error, TVariables, unknown>,
     isPending: false,
     isError: false,
     isIdle: true,
@@ -106,7 +125,7 @@ function makeMutationResult<TData, TVariables>(
     reset: vi.fn(),
     isLoading: false,
     isInitialLoading: false,
-  } as UseMutationResult<TData, unknown, TVariables, unknown>;
+  } as UseMutationResult<TData, Error, TVariables, unknown>;
 }
 
 function renderPanel(props: { open?: boolean; workspaceId?: string } = {}) {
@@ -153,6 +172,18 @@ function mockHooks(messages: AiMessage[] = []) {
     error: null,
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof useAiConnectionTest>);
+  vi.mocked(useOptimizeEvent).mockReturnValue(
+    makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
+  );
+  vi.mocked(useOptimizeTimelineSegment).mockReturnValue(
+    makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
+  );
+  vi.mocked(useSummarizeWorkspace).mockReturnValue(
+    makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
+  );
+  vi.mocked(useCheckTimelineConsistency).mockReturnValue(
+    makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
+  );
   vi.mocked(aiChatStream).mockResolvedValue({
     sessionId: 'session-1',
     reply: '',
@@ -232,6 +263,27 @@ describe('AiAssistantPanel', () => {
     expect(useAiContextStore.getState().selection).toBeNull();
   });
 
+  it('renders markdown formatting in assistant messages', () => {
+    vi.mocked(useAiMessagesQuery).mockReturnValue({
+      data: [
+        {
+          id: 'msg-md',
+          sessionId: 'session-1',
+          role: 'assistant',
+          content: '这是 **粗体**、*斜体* 和 `代码`',
+          createdAt: '2026-01-01T00:00:00Z',
+        } satisfies AiMessage,
+      ],
+    } as ReturnType<typeof useAiMessagesQuery>);
+
+    renderPanel();
+
+    expect(screen.getByText('粗体').tagName).toBe('STRONG');
+    expect(screen.getByText('斜体').tagName).toBe('EM');
+    expect(screen.getByText('代码').tagName).toBe('CODE');
+    expect(screen.queryByText('**粗体**')).not.toBeInTheDocument();
+  });
+
   it('renders apply dropdown grouped by current view applicability', async () => {
     const user = userEvent.setup();
     const applyMutate = vi.fn();
@@ -262,5 +314,89 @@ describe('AiAssistantPanel', () => {
 
     await user.click(screen.getByText('插入为事件'));
     expect(applyMutate).toHaveBeenCalledWith({ target: 'event', content: 'Generated content' });
+  });
+
+  it('renders AI capability shortcut chips', () => {
+    renderPanel();
+    expect(screen.getByTestId('ai-capability-chips')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-capability-summarize_workspace')).toHaveTextContent('总结工作区');
+    expect(screen.getByTestId('ai-capability-check_timeline_consistency')).toHaveTextContent('检查逻辑漏洞');
+  });
+
+  it('shows capability helper text and tooltips', () => {
+    renderPanel();
+    expect(screen.getByTestId('ai-capabilities-title')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-capabilities-intro')).toBeInTheDocument();
+    const chip = screen.getByTestId('ai-capability-summarize_workspace');
+    expect(chip).toHaveAttribute('title');
+  });
+
+  it('disables optimize-event chip when no event is selected', () => {
+    useAiContextStore.setState({ view: 'timeline', viewLabel: '时间轴', selection: null });
+    renderPanel();
+    expect(screen.getByTestId('ai-capability-optimize_event')).toBeDisabled();
+  });
+
+  it('calls summarize workspace shortcut with whole_workspace scope', async () => {
+    const user = userEvent.setup();
+    const summarizeMutate = vi.fn().mockResolvedValue({
+      sessionId: 'session-summarize',
+      reply: 'summary',
+      messages: [],
+      cached: false,
+      entities: [],
+    });
+    vi.mocked(useSummarizeWorkspace).mockReturnValue(
+      makeMutationResult<AiShortcutResult, AiShortcutInput>(summarizeMutate),
+    );
+    vi.mocked(collectAiContext).mockResolvedValue({ scope: 'whole_workspace' });
+
+    renderPanel();
+    await user.click(screen.getByTestId('ai-capability-summarize_workspace'));
+
+    await waitFor(() => {
+      expect(summarizeMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'ws-1',
+          action: 'summarize_workspace',
+          context: expect.objectContaining({ scope: 'whole_workspace' }),
+        }),
+      );
+    });
+  });
+
+  it('calls optimize-event shortcut with selected_entity scope when an event is selected', async () => {
+    const user = userEvent.setup();
+    const optimizeMutate = vi.fn().mockResolvedValue({
+      sessionId: 'session-optimize',
+      reply: 'optimized',
+      messages: [],
+      cached: false,
+      entities: [],
+    });
+    vi.mocked(useOptimizeEvent).mockReturnValue(
+      makeMutationResult<AiShortcutResult, AiShortcutInput>(optimizeMutate),
+    );
+    vi.mocked(collectAiContext).mockResolvedValue({ scope: 'selected_entity' });
+
+    useAiContextStore.setState({
+      view: 'timeline',
+      viewLabel: '时间轴',
+      selection: { type: 'event', id: 'e1', label: 'Event One' },
+    });
+
+    renderPanel();
+    await user.click(screen.getByTestId('ai-capability-optimize_event'));
+
+    await waitFor(() => {
+      expect(optimizeMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'ws-1',
+          action: 'optimize_event',
+          context: expect.objectContaining({ scope: 'selected_entity' }),
+          query: 'Event One',
+        }),
+      );
+    });
   });
 });

@@ -9,6 +9,7 @@ import type {
   AiKvEntry,
   AiMessage,
   AiSession,
+  AiShortcutResult,
   AppSettings,
   CreateAiMessageInput,
   CreateAiSessionInput,
@@ -195,6 +196,55 @@ function seedTemplate(db: MockDB, workspaceId: string, template: string): void {
   } else {
     db.tracks.push(mk('主线', '#F4B6C2', 0));
   }
+}
+
+function runAiShortcut(
+  db: MockDB,
+  action: string,
+  input: { workspaceId: string; sessionId?: string | null; query?: string | null },
+): AiShortcutResult {
+  const now = nowISO();
+  let session = input.sessionId
+    ? db.aiSessions.find((s) => s.id === input.sessionId)
+    : undefined;
+  if (!session) {
+    session = {
+      id: uuid(),
+      workspaceId: input.workspaceId,
+      title: `AI ${action}`,
+      summary: '',
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.aiSessions.push(session);
+  }
+  const userContent = input.query ?? `请执行：${action}`;
+  db.aiMessages.push({
+    id: uuid(),
+    sessionId: session.id,
+    role: 'user',
+    content: userContent,
+    createdAt: now,
+  });
+  const reply = `（模拟 ${action} 回复）已根据工作区资料完成分析。`;
+  db.aiMessages.push({
+    id: uuid(),
+    sessionId: session.id,
+    role: 'assistant',
+    content: reply,
+    createdAt: nowISO(),
+  });
+  session.updatedAt = nowISO();
+  const messages = db.aiMessages
+    .filter((m) => m.sessionId === session!.id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return {
+    sessionId: session.id,
+    reply,
+    messages,
+    cached: false,
+    entities: [],
+  };
 }
 
 export async function mockIpc<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -1370,6 +1420,17 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
       );
       db.aiKv.push({ ...entry, updatedAt: now });
       return db.aiKv[db.aiKv.length - 1];
+    }
+    case 'optimize_event':
+    case 'optimize_timeline_segment':
+    case 'summarize_workspace':
+    case 'check_timeline_consistency': {
+      const input = args.input as {
+        workspaceId: string;
+        sessionId?: string | null;
+        query?: string | null;
+      };
+      return runAiShortcut(db, command, input);
     }
 
     // ===== settings =====

@@ -10,6 +10,7 @@ import { SaveStatus } from './SaveStatus';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { PomodoroTimer } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
 import { useWorkspacesQuery } from '@/features/workspace/hooks';
@@ -34,8 +35,8 @@ export function WorkspaceLayout() {
             initial={reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduced ? { opacity: 1 } : { opacity: 0, x: -8 }}
-            transition={reduced ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex-1 min-h-0 flex flex-col"
+            transition={reduced ? { duration: 0 } : MOTION_BASE}
+            className="flex-1 min-h-0 flex flex-col will-change-transform"
           >
             <Outlet />
           </motion.div>

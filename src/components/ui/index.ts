@@ -16,6 +16,7 @@ export type { AppIconProps } from './AppIcon';
 export { BrandMark } from './BrandMark';
 export type { BrandMarkProps } from './BrandMark';
 export { RichEditor } from './RichEditor';
+export { Markdown } from './Markdown';
 export { PomodoroTimer } from './PomodoroTimer';
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';

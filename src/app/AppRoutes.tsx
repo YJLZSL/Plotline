@@ -58,12 +58,14 @@ function ThemeSync() {
 function MotionSync() {
   const { data: settings } = useSettingsQuery();
   const setAnimationsEnabled = useMotionStore((s) => s.setAnimationsEnabled);
+  const applyFancyToDOM = useMotionStore((s) => s.applyFancyToDOM);
 
   useEffect(() => {
     if (settings) {
       setAnimationsEnabled(settings.animationsEnabled ?? true);
+      applyFancyToDOM(useMotionStore.getState().fancyAnimationsEnabled);
     }
-  }, [settings, setAnimationsEnabled]);
+  }, [settings, setAnimationsEnabled, applyFancyToDOM]);
 
   return null;
 }
@@ -91,7 +93,7 @@ function AnimatedRoutes() {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
         transition={MOTION_FAST}
-        className="h-screen w-screen"
+        className="h-screen w-screen will-change-transform"
       >
         <Routes location={location}>
           <Route path="/" element={<WorkspaceSelector />} />

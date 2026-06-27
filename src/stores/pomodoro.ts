@@ -28,6 +28,7 @@ interface PomodoroState {
   setPosition: (position: { x: number; y: number } | null) => void;
   setMinimized: (minimized: boolean) => void;
   toggleMinimized: () => void;
+  resetAchievements: () => void;
 }
 
 function phaseSeconds(phase: PomodoroPhase): number {
@@ -103,6 +104,13 @@ export const usePomodoroStore = create<PomodoroState>()(
       setPosition: (position) => set({ position }),
       setMinimized: (minimized) => set({ minimized }),
       toggleMinimized: () => set((state) => ({ minimized: !state.minimized })),
+      resetAchievements: () =>
+        set({
+          phase: 'focus',
+          secondsLeft: phaseSeconds('focus'),
+          isRunning: false,
+          completedFocusSessions: 0,
+        }),
     }),
     {
       name: 'plotline:pomodoro',

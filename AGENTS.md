@@ -44,17 +44,19 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.6.2 已发布：修复 v2.6.1 Rust 测试编译错误，UI/UX 与 AI 助手改进保持不变）
-- **时间轴布局修复**：重写 `TimelineView.tsx` 的 `MultiSelectDropdown`，使用 `@radix-ui/react-popover` + Portal + 碰撞检测，解决下拉框被截断/偏移问题；为 "今天" 参考线标签增加边界保护，避免与轨道列重叠；增大事件卡片最小宽度并合并 "相对" 标签与状态点为单一徽章，避免标题行拥挤；统一筛选栏按钮高度与垂直对齐。
-- **动画与切换优化**：`WorkspaceLayout` 与 `SettingsView` 统一使用 `AnimatePresence mode="wait"`，视图/标签切换时长统一为 200–250ms，缓动统一为 `[0.16, 1, 0.3, 1]`；为主题卡片选中、设置标签切换增加 scale/opacity 反馈。
-- **设置页视觉重构**：主题卡片改为 2×2 网格布局，选中态使用 `ring-accent ring-2` 增强对比；字体主题选项拆分为 "无衬线 / 等宽 / 得意黑 / 像素"，得意黑（Smiley Sans）与像素字体栈解耦；设置项使用 `Card` 分组，提升扫描效率。
-- **AI 助手可用性改进**：`src/features/ai/components/AiSettingsSection.tsx` 新增连接状态卡片（未配置/配置中/成功/失败）与 "测试连接" 按钮；后端新增 `test_ai_connection` 命令；API Key 输入框增加可见性切换与格式校验提示；模型下拉增加空状态/错误提示；AI 面板右上角显示连接状态指示灯。
-- **调研与审计**：输出 `docs/v2.6.1-ui-audit.md` 与 `docs/v2.6.1-community-research.md`，汇总真实截图分析、Playwright 复现与中文社区/竞品设计惯例。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.6.2`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.6.2 状态。
-- **发布说明**：v2.6.2 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
-- **v2.6.1 说明**：v2.6.1 tag 已推送但 CI/Release workflow 因 `src-tauri/src/services/ai.rs` 测试编译错误失败，未发布可用 Release；问题在 v2.6.2 修复。
+### 当前迭代状态（v2.7.0 已发布：全面打磨与 AI 增强）
+- **Markdown 渲染修复**：AI 助手消息流启用 Markdown 解析，`src/components/ui/Markdown.tsx` 封装 `react-markdown` + `remark-breaks` + `rehype-sanitize`；`AiAssistantPanel.tsx` 对助手消息使用 `<Markdown />` 渲染，解决 `**`、`*` 裸星号问题。
+- **动画性能与视觉打磨**：全局动画时长统一为 150–250ms，缓动 `[0.16, 1, 0.3, 1]`；核心视图切换迁移到 `transform`/`opacity` GPU 加速，移除冗余 `layout` 重排；新增“炫技微动画”开关与可选粒子/波纹效果；修复 sans/mono/pixel/得意黑字体回退栈。
+- **时间轴交互与 UI 重构**：`src/features/timeline/timelineLayout.ts` 新增 `computeEventDragConstraints()` 与 `clampTimelineScroll()`，限制事件卡片与画布左边界；优化轨道头部、事件卡片、筛选栏间距与对齐；视图/折叠/筛选增加明确的 `AnimatePresence` 入场/退场动画；新增 `TimelineEmptyIllustration` 空状态插画。
+- **AI 助手能力明确化与架构升级**：`AiAssistantPanel.tsx` 顶部新增“能力快捷栏”（优化当前事件、优化当前片段、总结工作区、检查逻辑漏洞）；扩展 `AiChatContext` 支持“当前选中实体 / 当前视图 / 整个工作区”三种范围；后端新增 `ai_cache` 与 `ai_conversation_history` 表实现 KV Cache；新增关键词 RAG 检索，按角色/地点/事件/大纲组装 prompt；新增 `ai_prompts.rs` 与四个对应 Tauri 命令。
+- **番茄钟与 MC 主题趣味化**：`pomodoro.ts` 新增 `resetAchievements` action；`PomodoroTimer.tsx` 新增“重置成就”按钮与完成庆祝动画（粒子爆裂 + 奖杯/稀有矿石弹窗）；MC 主题增加 Creeper 惊喜彩蛋与稀有矿石随机掉落；改进像素方块高光/阴影质感。
+- **调研与规划**：输出 `docs/v2.7.0-research.md`、`docs/v2.7.0-research-competitors.md`、`docs/v2.7.0-research-community.md`，汇总截图分析、竞品设计惯例与中文社区反馈。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.7.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.7.0 状态。
+- **发布说明**：v2.7.0 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+- **GitHub Release v2.7.0**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.0>
 
-### 上一版本（v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+### 上一版本（v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+- v2.6.2：修复 v2.6.1 Rust 测试编译错误，UI/UX 与 AI 助手改进完整保留。
 - v2.6.1：时间轴布局修复、动画与设置页质感提升、AI 连接状态可见性（tag 已推送，但 Release 因 Rust 测试编译错误失败，功能由 v2.6.2 完整发布）。
 - v2.6.0：AI 风格模板 chips、AI apply-to-doc、时间轴筛选折叠、模板向导空状态。
 - v2.5.4：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强。
@@ -336,4 +338,4 @@ docs(agents): 补充 IPC 调用规范
 ---
 
 > 文档版本：v0.5.6  
-> 最后更新：2026-06-26（v2.5.4 已发布：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强）
+> 最后更新：2026-06-27（v2.7.0 已发布：全面打磨与 AI 增强）

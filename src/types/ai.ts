@@ -62,6 +62,14 @@ export interface AiChatNoteItem {
   summary?: string;
 }
 
+export type AiContextScope = 'selected_entity' | 'current_view' | 'whole_workspace';
+
+export type AiActionType =
+  | 'optimize_event'
+  | 'optimize_timeline_segment'
+  | 'summarize_workspace'
+  | 'check_timeline_consistency';
+
 export interface AiChatContextSelectedEntity {
   type: string;
   id: string;
@@ -78,6 +86,7 @@ export interface AiChatContext {
   notes?: AiChatNoteItem[];
   selectedEntity?: AiChatContextSelectedEntity | null;
   systemPromptOverride?: string;
+  scope?: AiContextScope;
 }
 
 export interface AiChatInput {
@@ -92,6 +101,30 @@ export interface AiChatResult {
   sessionId: string;
   reply: string;
   messages: AiMessage[];
+}
+
+export interface AiScoredEntity {
+  id: string;
+  entityType: string;
+  name: string;
+  summary: string;
+  score: number;
+}
+
+export interface AiShortcutInput {
+  workspaceId: string;
+  sessionId?: string | null;
+  action: AiActionType;
+  context?: AiChatContext;
+  query?: string;
+}
+
+export interface AiShortcutResult {
+  sessionId: string;
+  reply: string;
+  messages: AiMessage[];
+  cached: boolean;
+  entities: AiScoredEntity[];
 }
 
 export interface AiChunk {

@@ -3,7 +3,7 @@
  * 不依赖任何外部音频文件，避免版权风险。
  */
 
-export type SoundType = 'click' | 'switch' | 'complete' | 'explosion' | 'mine' | 'place' | 'levelup';
+export type SoundType = 'click' | 'switch' | 'complete' | 'explosion' | 'mine' | 'place' | 'levelup' | 'hiss';
 
 let audioCtx: AudioContext | null = null;
 
@@ -118,6 +118,11 @@ export function playSound(type: SoundType) {
       [880, 1109, 1319, 1760].forEach((f, i) =>
         setTimeout(() => playTone({ frequency: f, duration: 0.1, type: 'square', volume: 0.04 }), i * 60),
       );
+      break;
+    case 'hiss':
+      // 苦力怕嘶嘶声：短促白噪声+高频下滑
+      playNoise({ duration: 0.2, volume: 0.04 });
+      playTone({ frequency: 900, duration: 0.2, type: 'sawtooth', volume: 0.03, slide: 200 });
       break;
   }
 }

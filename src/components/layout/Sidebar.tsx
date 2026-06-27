@@ -54,8 +54,9 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
       transition={MOTION_FAST}
       className={cn(
         'flex flex-col bg-bg-surface border-r border-border',
-        'flex-shrink-0 overflow-hidden',
+        'flex-shrink-0 overflow-hidden will-change-width',
       )}
+      style={{ backfaceVisibility: 'hidden' }}
       data-tauri-drag-region
     >
       <div className="flex items-center gap-2 h-12 px-3 border-b border-border">
@@ -89,14 +90,13 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
             >
               {active && (
                 <motion.span
-                  layoutId={`sidebar-active-${item.to}`}
                   animate={ambient.animate ? { opacity: [1, 0.55, 1] } : { opacity: 1 }}
                   transition={
                     ambient.animate
-                      ? { layout: MOTION_FAST, opacity: { repeat: Infinity, duration: 2, ease: 'easeInOut' } }
+                      ? { opacity: { repeat: Infinity, duration: 2, ease: 'easeInOut' } }
                       : MOTION_FAST
                   }
-                  className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-accent shadow-[0_0_10px_var(--accent)]"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r bg-accent shadow-[0_0_10px_var(--accent)] will-change-opacity"
                 />
               )}
               <AppIcon size="sm" tone={active ? 'accent' : 'muted'}>

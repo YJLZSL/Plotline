@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import type { AppSettings, FontTheme, Theme } from '@/types';
+import { FONT_STACKS } from '@/lib/fonts';
 
 interface UIState {
   sidebarCollapsed: boolean;
@@ -32,11 +33,11 @@ export const useUIStore = create<UIState>()(
   ),
 );
 
-const FONT_STACKS: Record<FontTheme, string> = {
-  sans: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
-  mono: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-  pixel: '"Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
-  smiley: '"Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+const THEME_FONT_STACKS: Record<FontTheme, string> = {
+  sans: FONT_STACKS.sans,
+  mono: FONT_STACKS.mono,
+  pixel: FONT_STACKS.pixel,
+  smiley: FONT_STACKS.smiley,
 };
 
 interface ThemeState {
@@ -46,7 +47,7 @@ interface ThemeState {
   setTheme: (theme: Theme) => void;
   setAccentColor: (color: string) => void;
   setFontTheme: (fontTheme: FontTheme) => void;
-  applyToDOM: (settings: Partial<AppSettings>) => void;
+  applyToDOM: (settings: Partial<AppSettings> & { pixelFont?: string; smileyFont?: string }) => void;
 }
 
 export const useThemeStore = create<ThemeState>()((set, get) => ({
@@ -63,9 +64,14 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   },
   setFontTheme: (fontTheme) => {
     set({ fontTheme });
-    const uiFont = FONT_STACKS[fontTheme];
-    const editorFont = fontTheme === 'pixel' ? FONT_STACKS.pixel : FONT_STACKS.mono;
-    get().applyToDOM({ uiFont, editorFont });
+    const uiFont = THEME_FONT_STACKS[fontTheme];
+    const editorFont = fontTheme === 'pixel' ? THEME_FONT_STACKS.pixel : THEME_FONT_STACKS.mono;
+    get().applyToDOM({
+      uiFont,
+      editorFont,
+      pixelFont: THEME_FONT_STACKS.pixel,
+      smileyFont: THEME_FONT_STACKS.smiley,
+    });
   },
   applyToDOM: (settings) => {
     if (typeof document === 'undefined') return;
@@ -85,6 +91,12 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
     }
     if (settings.editorFont) {
       root.style.setProperty('--font-mono', settings.editorFont);
+    }
+    if (settings.pixelFont) {
+      root.style.setProperty('--font-pixel', settings.pixelFont);
+    }
+    if (settings.smileyFont) {
+      root.style.setProperty('--font-smiley', settings.smileyFont);
     }
     if (typeof settings.animationsEnabled === 'boolean') {
       root.style.setProperty('--motion-enabled', settings.animationsEnabled ? '1' : '0');

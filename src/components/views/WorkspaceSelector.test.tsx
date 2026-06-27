@@ -60,7 +60,8 @@ function renderSelector() {
 describe('WorkspaceSelector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useMotionStore.setState({ animationsEnabled: true });
+    localStorage.clear();
+    useMotionStore.setState({ animationsEnabled: true, fancyAnimationsEnabled: false });
     vi.mocked(useWorkspacesQuery).mockReturnValue({
       data: [makeWorkspace()],
       isLoading: false,

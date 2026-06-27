@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod ai_prompts;
 pub mod backup;
 pub mod character;
 pub mod consistency;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
@@ -7,6 +7,7 @@ import {
   Calendar,
   ChevronDown,
   Clapperboard,
+  HelpCircle,
   ListTree,
   Loader2,
   MapPin,
@@ -15,13 +16,14 @@ import {
   PanelRightClose,
   Search,
   Send,
+  ShieldCheck,
   Sparkles,
   StickyNote,
   User,
   X,
 } from 'lucide-react';
 
-import { Button, EmptyState, Input, Textarea } from '@/components/ui';
+import { Button, EmptyState, Input, Markdown, Textarea } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
@@ -44,14 +46,27 @@ import {
   useAiMessagesQuery,
   useAiSessionsQuery,
   useApplyAiOutput,
+  useCheckTimelineConsistency,
   useCreateAiSession,
   useDeleteAiSession,
+  useOptimizeEvent,
+  useOptimizeTimelineSegment,
+  useSummarizeWorkspace,
 } from '@/features/ai/hooks';
 import {
   AI_STYLE_TEMPLATES,
   type AiStyleTemplate,
 } from '@/features/ai/promptTemplates';
-import type { AiChatContext, AiInsertTarget, AiMessage, AiSession } from '@/types';
+import type {
+  AiActionType,
+  AiChatContext,
+  AiContextScope,
+  AiInsertTarget,
+  AiMessage,
+  AiSession,
+  AiShortcutInput,
+  AiShortcutResult,
+} from '@/types';
 import type { AiSelection } from '@/stores/aiContext';
 
 interface AiAssistantPanelProps {
@@ -91,6 +106,10 @@ export function AiAssistantPanel({
   const deleteSession = useDeleteAiSession(workspaceId);
   const indexWorkspace = useAiIndexWorkspace(workspaceId);
   const { data: summary } = useAiKvGet(workspaceId, 'workspace_summary');
+  const optimizeEvent = useOptimizeEvent(workspaceId);
+  const optimizeTimelineSegment = useOptimizeTimelineSegment(workspaceId);
+  const summarizeWorkspace = useSummarizeWorkspace(workspaceId);
+  const checkTimelineConsistency = useCheckTimelineConsistency(workspaceId);
 
   useEffect(() => {
     if (open && sessions.length > 0 && !currentSessionId) {
@@ -196,6 +215,141 @@ export function AiAssistantPanel({
     setSelectedTemplateId(template.id);
     setInput(template.template);
   };
+
+  const runShortcut = async (
+    action: AiActionType,
+    scope: AiContextScope,
+    mutation: UseMutationResult<AiShortcutResult, Error, AiShortcutInput>,
+  ) => {
+    if (!enabled || isStreaming || isCollectingContext || mutation.isPending) return;
+    setIsCollectingContext(true);
+    try {
+      let context = await collectAiContext(
+        workspaceId,
+        aiContext.enabledSources,
+        aiContext.selection,
+        scope,
+      );
+      if (summary?.value && scope !== 'selected_entity') {
+        context = { ...context, workspaceSummary: summary.value };
+      }
+      const result = await mutation.mutateAsync({
+        workspaceId,
+        sessionId: currentSessionId,
+        action,
+        context,
+        query: aiContext.selection?.label,
+      });
+      setCurrentSessionId(result.sessionId);
+    } catch {
+      // 错误由 mutation 的 onError 处理
+    } finally {
+      setIsCollectingContext(false);
+    }
+  };
+
+  interface CapabilityConfig {
+    action: AiActionType;
+    scope: AiContextScope;
+    icon: React.ReactNode;
+    labelKey: string;
+    hintKey: string;
+    available: boolean;
+  }
+
+  const capabilities: CapabilityConfig[] = [
+    {
+      action: 'optimize_event',
+      scope: 'selected_entity',
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      labelKey: 'ai.optimizeEvent',
+      hintKey: 'ai.capabilityHintEvent',
+      available: aiContext.selection?.type === 'event',
+    },
+    {
+      action: 'optimize_timeline_segment',
+      scope: 'current_view',
+      icon: <Calendar className="h-3.5 w-3.5" />,
+      labelKey: 'ai.optimizeTimelineSegment',
+      hintKey: 'ai.capabilityHintTimeline',
+      available: aiContext.view === 'timeline',
+    },
+    {
+      action: 'summarize_workspace',
+      scope: 'whole_workspace',
+      icon: <BookOpen className="h-3.5 w-3.5" />,
+      labelKey: 'ai.summarizeWorkspace',
+      hintKey: 'ai.capabilityHintSummary',
+      available: true,
+    },
+    {
+      action: 'check_timeline_consistency',
+      scope: 'whole_workspace',
+      icon: <ShieldCheck className="h-3.5 w-3.5" />,
+      labelKey: 'ai.checkTimelineConsistency',
+      hintKey: 'ai.capabilityHintConsistency',
+      available: aiContext.view === 'timeline',
+    },
+  ];
+
+  const mutationFor: Record<AiActionType, UseMutationResult<AiShortcutResult, Error, AiShortcutInput>> = {
+    optimize_event: optimizeEvent,
+    optimize_timeline_segment: optimizeTimelineSegment,
+    summarize_workspace: summarizeWorkspace,
+    check_timeline_consistency: checkTimelineConsistency,
+  };
+
+  function CapabilityChips() {
+    return (
+      <div
+        data-testid="ai-capability-chips"
+        className="flex-shrink-0 border-b border-border bg-bg-base px-3 py-2 overflow-x-auto scrollbar-thin"
+      >
+        <div className="flex items-center gap-1.5 mb-1.5 min-w-min">
+          <Sparkles className="h-3 w-3 text-accent" />
+          <span className="text-xs font-medium text-text-primary" data-testid="ai-capabilities-title">
+            {t('ai.capabilitiesTitle')}
+          </span>
+          <span
+            data-testid="ai-capabilities-intro"
+            className="inline-flex items-center gap-0.5 text-[10px] text-text-secondary"
+            title={t('ai.capabilitiesIntro')}
+          >
+            {t('ai.capabilitiesShortIntro')}
+            <HelpCircle className="h-3 w-3" />
+          </span>
+        </div>
+        <div className="flex items-center gap-2 min-w-min">
+          {capabilities.map((cap) => {
+            const mutation = mutationFor[cap.action];
+            const busy = isCollectingContext || mutation.isPending;
+            const disabled = !cap.available || busy;
+            const tooltip = cap.available ? t(cap.hintKey) : `${t(cap.hintKey)} · ${t('ai.capabilityDisabledHint')}`;
+            return (
+              <button
+                key={cap.action}
+                type="button"
+                data-testid={`ai-capability-${cap.action}`}
+                disabled={disabled}
+                title={tooltip}
+                onClick={() => void runShortcut(cap.action, cap.scope, mutation)}
+                className={cn(
+                  'flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-colors disabled:opacity-60',
+                  cap.available
+                    ? 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary hover:border-accent/50 hover:bg-bg-surface'
+                    : 'cursor-not-allowed bg-bg-elevated/70 border-border/70 text-text-secondary/80',
+                )}
+              >
+                <span className={cn('transition-colors', cap.available && 'text-accent')}>{cap.icon}</span>
+                {t(cap.labelKey)}
+                {!cap.available && <HelpCircle className="h-3 w-3 opacity-60" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -338,6 +492,7 @@ export function AiAssistantPanel({
                 </div>
 
                 <section className="flex-1 min-w-0 flex flex-col">
+                  <CapabilityChips />
                   <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3" data-testid="ai-message-area">
                     {messages.length === 0 && !isStreaming && (
                       <EmptyState
@@ -806,13 +961,13 @@ function MessageBubble({
     <div className={cn('flex flex-col', isUser ? 'items-end' : 'items-start')}>
       <div
         className={cn(
-          'max-w-[85%] rounded-[12px] px-3 py-2 text-sm whitespace-pre-wrap',
+          'max-w-[85%] rounded-[12px] px-3 py-2 text-sm',
           isUser
-            ? 'bg-accent text-white rounded-tr-sm'
+            ? 'bg-accent text-white rounded-tr-sm whitespace-pre-wrap'
             : 'bg-bg-elevated text-text-primary border border-border rounded-tl-sm',
         )}
       >
-        {message.content}
+        {isUser ? message.content : <Markdown content={message.content} />}
       </div>
       {!isUser && (
         <ApplyDropdown

@@ -89,6 +89,21 @@ describe('pomodoro store', () => {
     expect(state.isRunning).toBe(false);
   });
 
+  it('should reset achievements and return to focus', () => {
+    usePomodoroStore.setState({
+      phase: 'shortBreak',
+      secondsLeft: 5 * 60,
+      isRunning: true,
+      completedFocusSessions: 7,
+    });
+    usePomodoroStore.getState().resetAchievements();
+    const state = usePomodoroStore.getState();
+    expect(state.phase).toBe('focus');
+    expect(state.secondsLeft).toBe(25 * 60);
+    expect(state.isRunning).toBe(false);
+    expect(state.completedFocusSessions).toBe(0);
+  });
+
   it('should format time as mm:ss', () => {
     expect(formatPomodoroTime(0)).toBe('00:00');
     expect(formatPomodoroTime(65)).toBe('01:05');

@@ -38,4 +38,11 @@ describe('motion tokens', () => {
     expect(MOTION_TOKENS.base).toBe(MOTION_BASE);
     expect(MOTION_TOKENS.slow).toBe(MOTION_SLOW);
   });
+
+  it('should keep all token durations within the 150-250ms performance window', () => {
+    Object.values(MOTION_TOKENS).forEach((token) => {
+      expect(token.duration).toBeGreaterThanOrEqual(0.15);
+      expect(token.duration).toBeLessThanOrEqual(0.25);
+    });
+  });
 });

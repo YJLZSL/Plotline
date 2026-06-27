@@ -1,5 +1,5 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion, type PanInfo } from 'framer-motion';
 import {
   Plus,
   Eye,
@@ -8,11 +8,12 @@ import {
   Pencil,
   ZoomIn,
   ZoomOut,
-  Clock4,
   Link2,
   ShieldCheck,
   GanttChart as GanttIcon,
   CalendarRange,
+  CalendarDays,
+  Bookmark,
   Network,
   List,
   Image as ImageIcon,
@@ -69,7 +70,8 @@ import { useCharactersQuery } from '@/features/characters/hooks';
 import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
 import { useTimelineFilters, filterEvents } from '@/features/timeline/useTimelineFilters';
-import { clampTodayLabelX, computeAddButtonLeft } from '@/features/timeline/timelineLayout';
+import { clampTodayLabelX, computeAddButtonLeft, computeEventDragConstraints, clampTimelineScroll } from '@/features/timeline/timelineLayout';
+import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useUIStore } from '@/stores/ui';
@@ -115,6 +117,7 @@ interface TimelineViewProps {
 
 export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) {
   const { t } = useI18n();
+  const reducedMotion = useReducedMotion();
   const { data: tracks = [] } = useTracksQuery(workspaceId);
   const { data: events = [] } = useEventsQuery(workspaceId);
   const { data: characters = [] } = useCharactersQuery(workspaceId);
@@ -593,7 +596,16 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         />
       )}
 
-      {viewMode === 'gantt' ? (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={viewMode}
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={reducedMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
+          transition={reducedMotion ? { duration: 0 } : MOTION_BASE}
+          className="flex flex-1 min-h-0 overflow-hidden will-change-transform"
+        >
+          {viewMode === 'gantt' ? (
         <GanttChart
           tracks={tracks}
           events={events}
@@ -708,17 +720,23 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
             } else if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
               e.preventDefault();
               el.scrollLeft += e.deltaY * 0.8;
+              el.scrollLeft = clampTimelineScroll(el.scrollLeft, el.scrollWidth - el.clientWidth);
             }
           }}
           onScroll={(e) => {
             const el = e.currentTarget;
-            setScrollLeft(el.scrollLeft);
+            const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+            const clamped = clampTimelineScroll(el.scrollLeft, maxScroll);
+            if (clamped !== el.scrollLeft) {
+              el.scrollLeft = clamped;
+            }
+            setScrollLeft(clamped);
             setViewportWidth(el.clientWidth);
           }}
         >
           {visibleTracks.length === 0 ? (
             <EmptyState
-              icon={<Clock4 className="h-10 w-10" />}
+              icon={<TimelineEmptyIllustration className="h-20 w-auto text-text-secondary" />}
               title={t('timeline.title')}
               description={t('timeline.emptyTrack')}
               action={
@@ -855,6 +873,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         </div>
       </div>
       )}
+        </motion.div>
+      </AnimatePresence>
 
       <EventEditDialog
         open={eventDialogOpen}
@@ -1314,28 +1334,27 @@ function TrackLane({
     [eventXs, totalWidth],
   );
 
+  const targetHeight = collapsed ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <motion.div
           ref={containerRef}
           initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ ...MOTION_BASE, delay: Math.min(index * 0.04, 0.2) }}
-      className={cn(
-        'group relative border-b border-border/40',
-        index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
-      )}
-      style={{
-        height: collapsed ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT,
-        minWidth: totalWidth,
-      }}
-      onDoubleClick={(e) => {
-        if (collapsed) return;
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (rect) onCanvasDoubleClick(e.clientX - rect.left + (containerRef.current?.parentElement?.scrollLeft ?? 0));
-      }}
-    >
+          animate={{ opacity: 1, x: 0, height: targetHeight }}
+          transition={{ ...MOTION_BASE, delay: Math.min(index * 0.04, 0.2), height: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } }}
+          className={cn(
+            'group relative border-b border-border/40 overflow-hidden will-change-transform',
+            index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
+          )}
+          style={{ minWidth: totalWidth, height: targetHeight }}
+          onDoubleClick={(e) => {
+            if (collapsed) return;
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect) onCanvasDoubleClick(e.clientX - rect.left + (containerRef.current?.parentElement?.scrollLeft ?? 0));
+          }}
+        >
       {/* 轨道左侧色标 */}
       <div
         className="absolute left-0 top-0 bottom-0 w-1"
@@ -1357,65 +1376,75 @@ function TrackLane({
         <div
           className="absolute inset-0 opacity-20 pointer-events-none"
           style={{
-            backgroundImage: `repeating-linear-gradient(90deg, transparent 0, transparent ${
-              ZOOM_UNIT_WIDTH[zoom]
-            }px, var(--border) ${ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
-              ZOOM_UNIT_WIDTH[zoom] + 1
+            backgroundImage: `repeating-linear-gradient(90deg, transparent ${LEFT_PADDING}px, transparent ${
+              LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]
+            }px, var(--border) ${LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
+              LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom] + 1
             }px)`,
           }}
         />
       )}
 
       {/* 事件卡片 */}
-      {!collapsed && (
-      <div className="absolute inset-0 px-6">
-        <AnimatePresence>
-          {visibleEvents.map((ev, i) => {
-            const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-            return (
-              <EventCard
-                key={ev.id}
-                event={ev}
-                track={track}
-                index={i}
-                x={x}
-                selected={ev.id === selectedEventId}
-                pendingConnection={pendingConnection === ev.id}
-                isConflict={conflictEventIds.has(ev.id)}
-                isNew={newEventIds.has(ev.id)}
-                eventElementRegistry={eventElementRegistry}
-                onClick={() => onSelectEvent(ev.id)}
-                onDoubleClick={() => onEditEvent(ev)}
-                onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
-                onStartConnection={() => onStartConnection(ev.id)}
-                onDuplicate={() => onDuplicateEvent(ev)}
-                onAskAi={() => onAskAiEvent(ev)}
-                onDelete={() => onDeleteEvent(ev.id)}
-                onChangeStatus={(status) => onUpdateEventStatus(ev.id, status)}
-                onDragStart={() => onDragStart(ev.id)}
-                onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
-                onDragEndNotify={() => onDragEndNotify()}
-              />
-            );
-          })}
-        </AnimatePresence>
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key={`${track.id}-content`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute inset-0"
+          >
+            <AnimatePresence>
+              {visibleEvents.map((ev, i) => {
+                const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
+                return (
+                  <EventCard
+                    key={ev.id}
+                    event={ev}
+                    track={track}
+                    index={i}
+                    x={x}
+                    totalWidth={totalWidth}
+                    selected={ev.id === selectedEventId}
+                    pendingConnection={pendingConnection === ev.id}
+                    isConflict={conflictEventIds.has(ev.id)}
+                    isNew={newEventIds.has(ev.id)}
+                    eventElementRegistry={eventElementRegistry}
+                    onClick={() => onSelectEvent(ev.id)}
+                    onDoubleClick={() => onEditEvent(ev)}
+                    onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
+                    onStartConnection={() => onStartConnection(ev.id)}
+                    onDuplicate={() => onDuplicateEvent(ev)}
+                    onAskAi={() => onAskAiEvent(ev)}
+                    onDelete={() => onDeleteEvent(ev.id)}
+                    onChangeStatus={(status) => onUpdateEventStatus(ev.id, status)}
+                    onDragStart={() => onDragStart(ev.id)}
+                    onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
+                    onDragEndNotify={() => onDragEndNotify()}
+                  />
+                );
+              })}
+            </AnimatePresence>
 
-        {/* 添加按钮 */}
-        <button
-          onClick={onAddEvent}
-          data-testid="add-event-btn"
-          className={cn(
-            'absolute top-3 z-10 flex items-center justify-center gap-1',
-            'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
-            'hover:border-accent hover:text-accent transition-colors',
-          )}
-          style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
-          title={t('timeline.addEvent')}
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
-      )}
+            {/* 添加按钮 */}
+            <button
+              onClick={onAddEvent}
+              data-testid="add-event-btn"
+              className={cn(
+                'absolute top-3 z-10 flex items-center justify-center gap-1',
+                'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
+                'hover:border-accent hover:text-accent transition-colors',
+              )}
+              style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
+              title={t('timeline.addEvent')}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
         </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -1468,6 +1497,7 @@ function EventCard({
   track,
   index,
   x,
+  totalWidth,
   selected,
   pendingConnection,
   isConflict,
@@ -1489,6 +1519,7 @@ function EventCard({
   track: Track;
   index: number;
   x: number;
+  totalWidth: number;
   selected: boolean;
   pendingConnection: boolean;
   isConflict: boolean;
@@ -1525,6 +1556,7 @@ function EventCard({
     : { opacity: 0, scale: 0.9, y: 8 };
   const animate = { opacity: 1, scale: 1, y: 0 };
   const whileHover = ambient.animate ? { scale: 1.02, y: -2 } : { y: -2 };
+  const whileTap = ambient.fancy ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 };
   const transition = { ...ambient.transition, delay: Math.min(index * 0.015, 0.1) };
 
   return (
@@ -1543,6 +1575,7 @@ function EventCard({
       drag="x"
       dragMomentum={false}
       dragElastic={0}
+      dragConstraints={computeEventDragConstraints(EVENT_MIN_WIDTH, totalWidth)}
       onDragStart={onDragStart}
       onDrag={(_, info) => onDrag(info, info.offset.x)}
       onDragEnd={(_, info) => {
@@ -1552,12 +1585,13 @@ function EventCard({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       whileHover={whileHover}
+      whileTap={whileTap}
       title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
       className={cn(
         'absolute top-3 cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
         'rounded-[8px] overflow-hidden',
         'shadow-[var(--shadow-card)] transition-shadow',
-        'border-2 backdrop-blur-sm',
+        'border-2 backdrop-blur-sm will-change-transform fancy-ripple',
         selected
           ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
           : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
@@ -1581,10 +1615,10 @@ function EventCard({
         />
       )}
 
-      <div className="px-3 py-2 flex flex-col gap-1 min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <div className="px-3.5 py-2 flex flex-col gap-1 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           {isRelative ? (
-            <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
+            <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
               <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
               {t('timeline.relativeBadge')}
             </span>
@@ -1600,15 +1634,20 @@ function EventCard({
               e.stopPropagation();
               onStartConnection();
             }}
-            className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-all flex-shrink-0"
+            className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-colors flex-shrink-0"
             title={t('timeline.startConnection')}
           >
             <Link2 className="h-3 w-3" />
           </button>
         </div>
         {event.dateValue && (
-          <span className="text-[10px] text-text-secondary truncate">
-            {event.dateType === 'absolute' ? '📅' : '🔖'} {event.dateValue}
+          <span className="flex items-center gap-1 text-[10px] text-text-secondary truncate">
+            {event.dateType === 'absolute' ? (
+              <CalendarDays className="h-3 w-3 flex-shrink-0" />
+            ) : (
+              <Bookmark className="h-3 w-3 flex-shrink-0" />
+            )}
+            {event.dateValue}
           </span>
         )}
         {event.characterIds.length > 0 && (
@@ -1715,19 +1754,19 @@ function TrackRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="group flex items-center gap-2 px-3 py-2 hover:bg-bg-elevated transition-colors">
+        <div className="group flex items-center gap-2.5 px-3 py-2.5 min-h-11 hover:bg-bg-elevated transition-colors">
       <span
         className="h-3 w-3 rounded-sm flex-shrink-0 shadow-sm"
         style={{ backgroundColor: track.color }}
       />
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-text-primary truncate">{track.name}</div>
-        <div className="text-[10px] text-text-secondary">{eventCount} 个事件</div>
+        <div className="text-sm text-text-primary truncate leading-tight">{track.name}</div>
+        <div className="text-[10px] text-text-secondary/80 mt-0.5">{eventCount} 个事件</div>
       </div>
       <button
         onClick={onToggleCollapse}
         className={cn(
-          'text-text-secondary hover:text-text-primary p-1 rounded transition-all',
+          'text-text-secondary hover:text-text-primary p-1 rounded transition-colors',
           collapsed && 'text-accent',
         )}
         title={collapsed ? t('contextMenu.expandTrack') : t('contextMenu.collapseTrack')}
@@ -1736,21 +1775,21 @@ function TrackRow({
       </button>
       <button
         onClick={onToggleVisible}
-        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-all"
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
         title={track.isVisible ? t('contextMenu.hide') : t('contextMenu.show')}
       >
         {track.isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
       </button>
       <button
         onClick={onRename}
-        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-all"
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
         title={t('contextMenu.rename')}
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-500 p-1 rounded transition-all"
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-500 p-1 rounded transition-colors"
         title={t('contextMenu.delete')}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -2067,7 +2106,7 @@ function EventEditDialog({
                         key={c.id}
                         onClick={() => toggleCharacter(c.id)}
                         className={cn(
-                          'flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all',
+                          'flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors',
                           selected
                             ? 'border-accent bg-accent/15 text-accent'
                             : 'border-border text-text-secondary hover:bg-bg-surface',
@@ -2103,7 +2142,7 @@ function EventEditDialog({
                         key={loc.id}
                         onClick={() => setLocationId(selected ? null : loc.id)}
                         className={cn(
-                          'flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-all',
+                          'flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs transition-colors',
                           selected
                             ? 'border-accent bg-accent/15 text-accent'
                             : 'border-border text-text-secondary hover:bg-bg-surface',
@@ -2314,8 +2353,8 @@ function FilterBar({
   ] as const;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-bg-surface/80 backdrop-blur-sm">
-      <div className="flex items-center gap-1.5 text-text-secondary text-xs h-8">
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2 min-h-11 border-b border-border bg-bg-surface/80 backdrop-blur-sm">
+      <div className="flex items-center gap-1.5 text-text-secondary text-xs h-8 shrink-0">
         <Filter className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">{t('timeline.filter')}</span>
       </div>
@@ -2367,20 +2406,21 @@ function FilterBar({
         </Button>
       )}
 
-      <div className="w-px h-5 bg-border hidden sm:block" />
-
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={allCollapsed ? onExpandAll : onCollapseAll}
-        className="h-8 text-xs gap-1.5"
-        title={allCollapsed ? t('timeline.expandAllTracks') : t('timeline.collapseAllTracks')}
-      >
-        <ChevronsUpDown className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">
-          {allCollapsed ? t('timeline.expandAllTracks') : t('timeline.collapseAllTracks')}
-        </span>
-      </Button>
+      <div className="ml-auto hidden sm:flex items-center gap-2">
+        <div className="w-px h-5 bg-border" />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={allCollapsed ? onExpandAll : onCollapseAll}
+          className="h-8 text-xs gap-1.5"
+          title={allCollapsed ? t('timeline.expandAllTracks') : t('timeline.collapseAllTracks')}
+        >
+          <ChevronsUpDown className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">
+            {allCollapsed ? t('timeline.expandAllTracks') : t('timeline.collapseAllTracks')}
+          </span>
+        </Button>
+      </div>
     </div>
   );
 }

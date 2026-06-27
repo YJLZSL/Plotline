@@ -4,11 +4,11 @@ import { Sun, Moon, BookOpen, Box, Check, RotateCcw, RefreshCw, Upload, External
 
 const FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
   { labelKey: 'settings.fontPresetDefault', value: '' },
-  { labelKey: 'settings.fontPresetInter', value: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
-  { labelKey: 'settings.fontPresetSans', value: '"PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
-  { labelKey: 'settings.fontPresetMono', value: '"JetBrains Mono", "Cascadia Code", Consolas, monospace' },
-  { labelKey: 'settings.fontPresetPixel', value: '"Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace' },
-  { labelKey: 'settings.fontPresetSmiley', value: '"Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif' },
+  { labelKey: 'settings.fontPresetInter', value: FONT_STACKS.sans },
+  { labelKey: 'settings.fontPresetSans', value: '"PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif' },
+  { labelKey: 'settings.fontPresetMono', value: FONT_STACKS.mono },
+  { labelKey: 'settings.fontPresetPixel', value: FONT_STACKS.pixel },
+  { labelKey: 'settings.fontPresetSmiley', value: FONT_STACKS.smiley },
 ];
 
 function FontPicker({
@@ -72,12 +72,15 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_FAST } from '@/lib/motion';
+import { FONT_STACKS } from '@/lib/fonts';
 import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
 import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/types';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { importFont, listImportedFonts, loadImportedFontFaces } from '@/features/font/api';
 import { useThemeStore } from '@/stores/ui';
+import { useMotionStore } from '@/stores/motion';
+import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { useAiModelsQuery } from '@/features/ai/hooks';
 import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
 import { APP_VERSION } from '@/lib/version';
@@ -118,20 +121,20 @@ const FONT_THEMES: Array<{ value: FontTheme; labelKey: string; previewClass: str
 
 const FONT_THEME_STACKS: Record<FontTheme, { ui: string; editor: string }> = {
   sans: {
-    ui: '"Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
-    editor: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+    ui: FONT_STACKS.sans,
+    editor: FONT_STACKS.mono,
   },
   mono: {
-    ui: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-    editor: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+    ui: FONT_STACKS.mono,
+    editor: FONT_STACKS.mono,
   },
   pixel: {
-    ui: '"Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
-    editor: '"Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace',
+    ui: FONT_STACKS.pixel,
+    editor: FONT_STACKS.pixel,
   },
   smiley: {
-    ui: '"Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
-    editor: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+    ui: FONT_STACKS.smiley,
+    editor: FONT_STACKS.mono,
   },
 };
 
@@ -140,6 +143,9 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const { data: settings } = useSettingsQuery();
   const update = useUpdateSettings();
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
+  const ambient = useAmbientAnimation();
+  const fancyAnimationsEnabled = useMotionStore((s) => s.fancyAnimationsEnabled);
+  const setFancyAnimationsEnabled = useMotionStore((s) => s.setFancyAnimationsEnabled);
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -168,8 +174,8 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const applyImportedFont = (family: string, target: 'ui' | 'editor') => {
     const fallback =
       target === 'ui'
-        ? `"${family}", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`
-        : `"${family}", "JetBrains Mono", "Cascadia Code", Consolas, monospace`;
+        ? `"${family}", ${FONT_STACKS.sans.replace(/^"Inter",\s*/, '')}`
+        : `"${family}", ${FONT_STACKS.mono}`;
     set(target === 'ui' ? { uiFont: fallback } : { editorFont: fallback });
   };
 
@@ -282,7 +288,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-2xl mx-auto"
+              className="max-w-2xl mx-auto will-change-transform"
             >
             {tab === 'appearance' && (
               <div className="flex flex-col gap-5">
@@ -301,9 +307,9 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                             key={th.value}
                             data-testid={`theme-${th.value}`}
                             onClick={() => set({ theme: th.value })}
-                            whileTap={{ scale: 0.98 }}
+                            whileTap={ambient.fancy ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
                             className={cn(
-                              'group relative flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-all overflow-hidden',
+                              'group relative flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-[colors,box-shadow] overflow-hidden will-change-transform fancy-ripple',
                               active
                                 ? 'border-accent bg-accent/10 ring-2 ring-accent ring-offset-1 ring-offset-bg-surface'
                                 : 'border-border hover:bg-bg-elevated hover:border-accent/30',
@@ -380,7 +386,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                           }}
                           data-testid={`lang-${lng}`}
                           className={cn(
-                            'h-10 px-4 rounded-[6px] border text-sm transition-all',
+                            'h-10 px-4 rounded-[6px] border text-sm transition-colors',
                             draft.language === lng
                               ? 'border-accent bg-accent/10 text-accent ring-1 ring-accent'
                               : 'border-border text-text-secondary hover:bg-bg-elevated',
@@ -413,9 +419,9 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                                 editorFont: FONT_THEME_STACKS[ft.value].editor,
                               })
                             }
-                            whileTap={{ scale: 0.98 }}
+                            whileTap={ambient.fancy ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
                             className={cn(
-                              'flex flex-col items-start gap-1.5 p-3 rounded-[8px] border-2 text-left transition-all',
+                              'flex flex-col items-start gap-1.5 p-3 rounded-[8px] border-2 text-left transition-[colors,box-shadow] will-change-transform fancy-ripple',
                               active
                                 ? 'border-accent bg-accent/10 ring-2 ring-accent ring-offset-1 ring-offset-bg-surface'
                                 : 'border-border hover:bg-bg-elevated hover:border-accent/30',
@@ -444,7 +450,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     <CardTitle>{t('settings.animationsEnabled')}</CardTitle>
                     <CardDescription>{t('settings.animationsEnabledDescription')}</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-3">
                     <div className="flex items-start gap-3">
                       <Switch
                         checked={draft.animationsEnabled}
@@ -455,6 +461,18 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                         data-testid="animations-enabled-toggle"
                       />
                       <p className="text-xs text-text-secondary">{t('settings.animationsEnabledDescription')}</p>
+                    </div>
+                    <div className="flex items-start gap-3 pl-0">
+                      <Switch
+                        checked={fancyAnimationsEnabled && draft.animationsEnabled}
+                        onCheckedChange={(checked) => setFancyAnimationsEnabled(checked)}
+                        disabled={!draft.animationsEnabled}
+                        data-testid="fancy-animations-toggle"
+                      />
+                      <div className="text-xs text-text-secondary">
+                        <p className="font-medium text-text-primary">{t('settings.fancyAnimations')}</p>
+                        <p>{t('settings.fancyAnimationsDescription')}</p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -725,7 +743,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                               set(patch);
                             }}
                             className={cn(
-                              'flex items-center gap-2 rounded-[8px] border px-3 py-2.5 text-left transition-all',
+                              'flex items-center gap-2 rounded-[8px] border px-3 py-2.5 text-left transition-colors',
                               active
                                 ? 'border-accent bg-accent/10 text-text-primary ring-1 ring-accent'
                                 : 'border-border bg-bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary',

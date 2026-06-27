@@ -559,11 +559,12 @@ function TreeView({
       <AnimatePresence initial={false}>
         {isExpanded && hasChildren && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0, scaleY: 0 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            exit={{ opacity: 0, scaleY: 0 }}
             transition={MOTION_FAST}
-            className="overflow-hidden"
+            style={{ originY: 0 }}
+            className="overflow-hidden will-change-transform"
           >
             {node.children.map((child) => (
               <TreeView
@@ -691,7 +692,6 @@ function OutlineCard({
 
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={MOTION_FAST}

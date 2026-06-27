@@ -209,5 +209,128 @@ describe('contextCollector', () => {
       expect(first!.title).toBe('设定');
       expect(first!.summary).toHaveLength(201);
     });
+
+    it('should respect selected_entity scope', async () => {
+      vi.mocked(timelineApi.listTracks).mockResolvedValue([]);
+      vi.mocked(eventApi.listEvents).mockResolvedValue([]);
+      vi.mocked(charactersApi.listCharacters).mockResolvedValue([
+        {
+          id: 'c1',
+          workspaceId: 'ws',
+          name: '艾莉丝',
+          description: '',
+          aliases: [],
+          appearance: '',
+          backstory: '',
+          goals: '',
+          conflicts: '',
+          arc: '',
+          tags: [],
+          color: '',
+          avatar: '',
+          eventIds: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]);
+
+      const context = await collectAiContext(
+        'ws',
+        [],
+        { type: 'event', id: 'e1', label: '开场' },
+        'selected_entity',
+      );
+
+      expect(context.scope).toBe('selected_entity');
+      expect(context.timeline).toBeUndefined();
+      expect(context.characters).toBeUndefined();
+      expect(context.selectedEntity).toEqual({
+        type: 'event',
+        id: 'e1',
+        label: '开场',
+        content: undefined,
+      });
+    });
+
+    it('should respect current_view scope', async () => {
+      vi.mocked(timelineApi.listTracks).mockResolvedValue([
+        {
+          id: 't1',
+          workspaceId: 'ws',
+          name: '主线',
+          color: '#000',
+          sortOrder: 0,
+          isVisible: true,
+          createdAt: '',
+        },
+      ]);
+      vi.mocked(eventApi.listEvents).mockResolvedValue([
+        {
+          id: 'e1',
+          workspaceId: 'ws',
+          trackId: 't1',
+          title: '开场',
+          description: '',
+          dateType: 'absolute',
+          dateValue: 'Day 1',
+          sortOrder: 0,
+          status: 'draft',
+          color: null,
+          locationId: null,
+          imageUrls: [],
+          characterIds: [],
+          connectedEventIds: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]);
+      vi.mocked(charactersApi.listCharacters).mockResolvedValue([]);
+
+      const context = await collectAiContext(
+        'ws',
+        [],
+        { type: 'event', id: 'e1', label: '开场' },
+        'current_view',
+      );
+
+      expect(context.scope).toBe('current_view');
+      expect(context.timeline).toHaveLength(1);
+      expect(context.characters).toBeUndefined();
+      expect(context.selectedEntity).toBeDefined();
+    });
+
+    it('should respect whole_workspace scope', async () => {
+      vi.mocked(charactersApi.listCharacters).mockResolvedValue([
+        {
+          id: 'c1',
+          workspaceId: 'ws',
+          name: '艾莉丝',
+          description: '',
+          aliases: [],
+          appearance: '',
+          backstory: '',
+          goals: '',
+          conflicts: '',
+          arc: '',
+          tags: [],
+          color: '',
+          avatar: '',
+          eventIds: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]);
+      vi.mocked(mapApi.listLocations).mockResolvedValue([]);
+      vi.mocked(outlineApi.listOutlineNodes).mockResolvedValue([]);
+      vi.mocked(notebookApi.listNotes).mockResolvedValue([]);
+      vi.mocked(timelineApi.listTracks).mockResolvedValue([]);
+      vi.mocked(eventApi.listEvents).mockResolvedValue([]);
+
+      const context = await collectAiContext('ws', [], null, 'whole_workspace');
+
+      expect(context.scope).toBe('whole_workspace');
+      expect(context.characters).toHaveLength(1);
+      expect(context.selectedEntity).toBeUndefined();
+    });
   });
 });

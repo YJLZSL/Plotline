@@ -12,8 +12,10 @@
   --shadow-color: rgba(58, 46, 38, 0.08);
   --shadow-card-soft: 0 2px 8px var(--shadow-color);
   --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
-  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
-  --font-smiley: "Smiley Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "SFMono-Regular", "Noto Sans Mono CJK SC", "Microsoft YaHei", "Noto Sans Mono SC", monospace;
+  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Noto Sans CJK SC", "Microsoft YaHei", "Noto Sans SC", monospace;
+  --font-smiley: "Smiley Sans", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", system-ui, -apple-system, sans-serif;
   --motion-enabled: 1;
   --motion-duration: calc(var(--motion-enabled) * 0.25s);
 }
@@ -94,7 +96,8 @@
   --shadow-color: rgba(0, 0, 0, 0.35);
   --shadow-card-soft: 0 2px 8px var(--shadow-color);
   --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
-  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Microsoft YaHei", monospace;
+  --font-sans: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Noto Sans CJK SC", "Microsoft YaHei", "Noto Sans SC", monospace;
+  --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Noto Sans CJK SC", "Microsoft YaHei", "Noto Sans SC", monospace;
 
   /* CSS/SVG 像素纹理（不使用受版权保护的 Minecraft 素材） */
   --mc-pattern-dirt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%236D4C33'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3Crect x='10' y='6' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3Crect x='6' y='10' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3Crect x='12' y='12' width='2' height='2' fill='%235D4037' opacity='0.6'/%3E%3C/svg%3E");
@@ -119,7 +122,7 @@
 }
 
 [data-theme="mc"] body {
-  font-family: var(--font-pixel);
+  font-family: var(--font-sans);
   background-color: var(--bg-base);
   background-image: var(--mc-pattern-dirt);
 }
@@ -557,6 +560,71 @@ html.mc-easter body {
 html.mc-easter [data-theme] {
   --accent: #5b8c39;
   --accent-soft: #8fb36f;
+}
+
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}
+
+.will-change-width {
+  will-change: width;
+}
+
+/* MC 像素块闪光/ sparkle 动画 */
+.mc-block-glint {
+  animation: mc-glint 2.2s ease-in-out infinite;
+}
+
+.mc-block-sparkle {
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9) 0%, transparent 35%);
+  animation: mc-sparkle 1.6s ease-in-out infinite;
+}
+
+@keyframes mc-glint {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
+@keyframes mc-sparkle {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.fancy-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.fancy-ripple::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  opacity: 0;
+  transform: scale(0);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+[data-fancy-animations='true'] .fancy-ripple:active::after {
+  opacity: 0.12;
+  transform: scale(2.5);
 }
 
 /* 尊重系统减少动效设置 */
