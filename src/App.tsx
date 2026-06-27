@@ -8,7 +8,20 @@ import { ConfirmDialog } from './components/ui/Dialog';
 import { useI18n } from './hooks/useI18n';
 import { checkForUpdates } from './features/settings/updater';
 import { toastError, toastInfo } from './stores/toast';
+import { useUIStore } from './stores/ui';
 import { APP_VERSION } from './lib/version';
+
+function EnhancedAnimationSync() {
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute(
+      'data-enhanced-animations',
+      enhancedAnimations ? 'true' : 'false',
+    );
+  }, [enhancedAnimations]);
+  return null;
+}
 
 function BeforeUnloadGuard() {
   const isMutating = useIsMutating();
@@ -72,6 +85,7 @@ function UpdatePrompt() {
 export default function App() {
   return (
     <AppProviders>
+      <EnhancedAnimationSync />
       <BeforeUnloadGuard />
       <SplashOverlay />
       <UpdatePrompt />

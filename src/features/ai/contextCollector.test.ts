@@ -7,7 +7,7 @@ import * as outlineApi from '@/features/outline/api';
 import * as timelineApi from '@/features/timeline/api';
 import * as eventApi from '@/features/timeline/eventApi';
 
-import { collectAiContext, truncateText } from './contextCollector';
+import { collectAiContext, estimateContextBudget, truncateText } from './contextCollector';
 
 vi.mock('@/features/characters/api', () => ({
   listCharacters: vi.fn(),
@@ -180,7 +180,7 @@ describe('contextCollector', () => {
           workspaceId: 'ws',
           folderId: null,
           title: '设定',
-          content: 'a'.repeat(300),
+          content: 'a'.repeat(900),
           tags: [],
           isFolder: false,
           sortOrder: 0,
@@ -207,7 +207,49 @@ describe('contextCollector', () => {
       const first = context.notes?.[0];
       expect(first).toBeDefined();
       expect(first!.title).toBe('设定');
-      expect(first!.summary).toHaveLength(201);
+      expect(first!.summary).toHaveLength(801);
+      expect(first!.summary?.endsWith('…')).toBe(true);
+    });
+
+    it('should truncate long descriptions to MAX_DESC_LENGTH', async () => {
+      vi.mocked(eventApi.listEvents).mockResolvedValue([
+        {
+          id: 'e1',
+          workspaceId: 'ws',
+          trackId: 't1',
+          title: '开场',
+          description: 'a'.repeat(900),
+          dateType: 'absolute',
+          dateValue: 'Day 1',
+          sortOrder: 0,
+          status: 'draft',
+          color: null,
+          locationId: null,
+          imageUrls: [],
+          characterIds: [],
+          connectedEventIds: [],
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]);
+      vi.mocked(timelineApi.listTracks).mockResolvedValue([
+        {
+          id: 't1',
+          workspaceId: 'ws',
+          name: '主线',
+          color: '#000',
+          sortOrder: 0,
+          isVisible: true,
+          createdAt: '',
+        },
+      ]);
+
+      const context = await collectAiContext('ws', ['timeline']);
+
+      const first = context.timeline?.[0];
+      expect(first).toBeDefined();
+      expect(first!.description).toHaveLength(801);
+      expect(first!.description?.endsWith('…')).toBe(true);
     });
 
     it('should respect selected_entity scope', async () => {
@@ -331,6 +373,41 @@ describe('contextCollector', () => {
       expect(context.scope).toBe('whole_workspace');
       expect(context.characters).toHaveLength(1);
       expect(context.selectedEntity).toBeUndefined();
+    });
+  });
+
+  describe('estimateContextBudget', () => {
+    it('should count entities and characters', () => {
+      const budget = estimateContextBudget({
+        workspaceSummary: 'summary',
+        timeline: [
+          {
+            id: 'e1',
+            title: '开场',
+            dateValue: 'Day 1',
+            trackName: '主线',
+            description: '艾莉丝醒来',
+          },
+        ],
+        characters: [
+          { id: 'c1', name: '艾莉丝', description: '女主角', role: '主角' },
+        ],
+        selectedEntity: {
+          type: 'event',
+          id: 'e1',
+          label: '开场',
+          content: '内容',
+        },
+      });
+
+      expect(budget.entities).toBe(4);
+      expect(budget.chars).toBeGreaterThan(0);
+    });
+
+    it('should return zero for empty context', () => {
+      const budget = estimateContextBudget({});
+      expect(budget.entities).toBe(0);
+      expect(budget.chars).toBe(0);
     });
   });
 });

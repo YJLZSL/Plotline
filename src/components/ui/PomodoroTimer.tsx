@@ -50,30 +50,35 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
     theme,
     secondsLeft,
     isRunning,
+    phaseCompleted,
     completedFocusSessions,
+    achievements,
     position,
     minimized,
+    mcEasterEggsEnabled,
+    mcEasterEggTriggeredThisSession,
     setTheme,
     setPhase,
     setPosition,
     toggleMinimized,
     start,
     pause,
-    reset,
     tick,
+    finishPhase,
     skip,
     resetAchievements,
+    resetTimer,
+    setMcEasterEggTriggeredThisSession,
   } = usePomodoroStore();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const prevSecondsRef = useRef(secondsLeft);
   const prevPhaseRef = useRef(phase);
-  const prevPhaseForCompleteRef = useRef(phase);
   const [showConfetti, setShowConfetti] = useState(false);
   const [celebration, setCelebration] = useState(false);
   const [rareDrop, setRareDrop] = useState<BlockType | null>(null);
   const [creeperSurprise, setCreeperSurprise] = useState(false);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [confirmResetTimerOpen, setConfirmResetTimerOpen] = useState(false);
   const [sparkleBlockIndex, setSparkleBlockIndex] = useState<number | null>(null);
   const breakParticles = useMemo(() => makeBreakParticles(6), []);
   const celebrationParticles = useMemo(() => makeConfettiParticles(24), []);
@@ -90,6 +95,13 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
       setPosition(getDefaultPomodoroPosition());
     }
   }, [position, setPosition]);
+
+  // When a phase completes, wait for the celebration then move to the next phase.
+  useEffect(() => {
+    if (!phaseCompleted) return;
+    const timer = setTimeout(() => finishPhase(), 1800);
+    return () => clearTimeout(timer);
+  }, [phaseCompleted, finishPhase]);
 
   const handleDragEnd = () => {
     setPosition({ x: x.get(), y: y.get() });
@@ -111,38 +123,28 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
   }, [isRunning, tick]);
 
   useEffect(() => {
-    if (
-      prevSecondsRef.current === 1 &&
-      secondsLeft > 1 &&
-      phase !== prevPhaseForCompleteRef.current
-    ) {
-      if (prevPhaseForCompleteRef.current === 'focus') {
-        playSoundIfEnabled(theme === 'mc' ? 'levelup' : 'complete');
-        toastSuccess(t('pomodoro.focusComplete'));
-        if (ambient.fancy) {
-          setRareDrop(theme === 'mc' && Math.random() < 0.15 ? getRandomRareBlockType() : null);
-          setCelebration(true);
-          const timer = setTimeout(() => setCelebration(false), 1800);
-          return () => clearTimeout(timer);
-        }
-      } else if (phase === 'focus') {
-        playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
-        toastInfo(t('pomodoro.breakComplete'));
-      }
-    }
-    prevSecondsRef.current = secondsLeft;
-    prevPhaseForCompleteRef.current = phase;
-  }, [secondsLeft, theme, phase, ambient.fancy, t]);
+    if (!phaseCompleted || phase !== 'focus') return;
+    playSoundIfEnabled(theme === 'mc' ? 'levelup' : 'complete');
+    toastSuccess(t('pomodoro.focusComplete'));
+    if (!ambient.fancy) return;
+    setRareDrop(theme === 'mc' && Math.random() < 0.15 ? getRandomRareBlockType() : null);
+    setCelebration(true);
+    const timer = setTimeout(() => setCelebration(false), 1800);
+    return () => clearTimeout(timer);
+  }, [phaseCompleted, phase, theme, ambient.fancy, t]);
 
   useEffect(() => {
     if (prevPhaseRef.current === phase) return;
     playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
+    if (phase === 'focus' && prevPhaseRef.current !== 'focus') {
+      toastInfo(t('pomodoro.breakComplete'));
+    }
     prevPhaseRef.current = phase;
     if (!ambient.fancy) return;
     setShowConfetti(true);
     const timer = setTimeout(() => setShowConfetti(false), 1200);
     return () => clearTimeout(timer);
-  }, [phase, theme, ambient.fancy]);
+  }, [phase, theme, ambient.fancy, t]);
 
   const totalSeconds = phase === 'focus' ? 25 * 60 : phase === 'shortBreak' ? 5 * 60 : 15 * 60;
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
@@ -164,7 +166,12 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
       pause();
       return;
     }
-    if (theme === 'mc' && ambient.animate) {
+    if (
+      theme === 'mc' &&
+      ambient.animate &&
+      mcEasterEggsEnabled &&
+      !mcEasterEggTriggeredThisSession
+    ) {
       const roll = Math.random();
       if (roll < 0.05) {
         playSoundIfEnabled('hiss');
@@ -177,6 +184,7 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
           window.setTimeout(() => setSparkleBlockIndex(null), 1400);
         }
       }
+      setMcEasterEggTriggeredThisSession(true);
     }
     start();
   };
@@ -366,13 +374,14 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.25, ease: EASE_STANDARD }}
                       className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 pointer-events-none bg-black/20"
                       aria-hidden="true"
                     >
                       <div className="mc-creeper-shake">
                         <CreeperFace />
                       </div>
-                      <span className="text-xl font-pixel text-red-500 drop-shadow-sm">
+                      <span className="text-xl font-pixel text-[var(--accent-hot)] drop-shadow-sm">
                         {t('pomodoro.creeperSurprise')}
                       </span>
                     </motion.div>
@@ -505,6 +514,8 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                     <motion.div
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25, ease: EASE_STANDARD }}
                       className="mt-3 relative h-14 w-full flex items-center justify-center"
                     >
                       <div className="mc-explosion absolute">
@@ -515,8 +526,9 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                       <motion.span
                         initial={{ scale: 0.5, opacity: 0 }}
                         animate={{ scale: 1.2, opacity: 1 }}
-                        transition={{ delay: 0.1, duration: 0.3 }}
-                        className="relative z-10 text-xl font-pixel text-red-500 drop-shadow-sm"
+                        exit={{ opacity: 0 }}
+                        transition={{ delay: 0.1, duration: 0.3, ease: EASE_STANDARD }}
+                        className="relative z-10 text-xl font-pixel text-[var(--accent-hot)] drop-shadow-sm"
                       >
                         {t('pomodoro.boom')}
                       </motion.span>
@@ -550,6 +562,16 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                   <p className="mt-3 text-[11px] opacity-60">
                     {t('pomodoro.completedSessions', { count: completedFocusSessions })}
                   </p>
+                  {(achievements.count > 0 || achievements.streak > 0) && (
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] opacity-60">
+                      {achievements.count > 0 && (
+                        <span>{t('pomodoro.todayCount', { count: achievements.count })}</span>
+                      )}
+                      {achievements.streak > 0 && (
+                        <span>{t('pomodoro.streakCount', { count: achievements.streak })}</span>
+                      )}
+                    </div>
+                  )}
 
                   {completedFocusSessions > 0 && (
                     <Button
@@ -578,14 +600,12 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                   <Button
                     variant="outline"
                     size="sm"
-                    aria-label={t('pomodoro.reset')}
-                    onClick={() => {
-                      playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
-                      reset();
-                    }}
+                    aria-label={t('pomodoro.resetTimer')}
+                    onClick={() => setConfirmResetTimerOpen(true)}
                     className="gap-1.5 px-2.5"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
+                    {t('pomodoro.resetTimer')}
                   </Button>
                   <Button
                     variant="outline"
@@ -616,6 +636,19 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                     setShowConfetti(false);
                     setSparkleBlockIndex(null);
                     resetAchievements();
+                  }}
+                />
+
+                <ConfirmDialog
+                  open={confirmResetTimerOpen}
+                  onOpenChange={setConfirmResetTimerOpen}
+                  title={t('pomodoro.resetTimerConfirmTitle')}
+                  description={t('pomodoro.resetTimerConfirmDesc')}
+                  confirmText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                  onConfirm={() => {
+                    playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
+                    resetTimer();
                   }}
                 />
               </motion.div>
@@ -719,10 +752,10 @@ const THEME_CLASSES: Record<
   },
   mc: {
     container:
-      'bg-bg-surface text-text-primary border-border font-pixel mc-plank mc-block mc-shadow',
+      'bg-bg-surface text-text-primary border-border font-pixel mc-plank mc-block mc-shadow mc-textured',
     chip:
-      'bg-bg-surface text-text-primary border-border font-pixel mc-plank mc-block mc-shadow',
-    button: 'bg-accent hover:brightness-110 text-white mc-block',
+      'bg-bg-surface text-text-primary border-border font-pixel mc-plank mc-block mc-shadow mc-textured',
+    button: 'bg-accent hover:brightness-110 text-white mc-block mc-button',
   },
   minimal: {
     container: 'bg-bg-surface text-text-primary border-border',

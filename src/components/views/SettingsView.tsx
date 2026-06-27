@@ -1,6 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, BookOpen, Box, Check, RotateCcw, RefreshCw, Upload, ExternalLink } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  Switch,
+  Textarea,
+} from '@/components/ui';
+import { Toolbar } from '@/components/layout/Toolbar';
+import { useI18n } from '@/hooks/useI18n';
+import { cn } from '@/lib/utils';
+import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
+import { FONT_STACKS } from '@/lib/fonts';
+import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
+import { useThemeStore, useUIStore } from '@/stores/ui';
+import { useAiModelsQuery } from '@/features/ai/hooks';
+import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
+import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
+import { checkForUpdates } from '@/features/settings/updater';
+import { importFont, listImportedFonts, loadImportedFontFaces } from '@/features/font/api';
+import { APP_VERSION } from '@/lib/version';
+import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/types';
 
 const FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
   { labelKey: 'settings.fontPresetDefault', value: '' },
@@ -23,6 +49,9 @@ function FontPicker({
   const { t } = useI18n();
   const matched = FONT_PRESETS.find((p) => p.value === value);
   const mode = matched ? matched.value : '__custom__';
+  const previewStyle: CSSProperties & { '--preview-font'?: string } = {
+    '--preview-font': value || 'inherit',
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -49,41 +78,15 @@ function FontPicker({
           placeholder={t('settings.fontCustomPlaceholder')}
         />
       )}
-      <p className="text-xs text-text-secondary" style={{ fontFamily: value || undefined }}>
+      <p
+        className="text-xs text-text-secondary [font-family:var(--preview-font)]"
+        style={previewStyle}
+      >
         {t('settings.fontPreview')}
       </p>
     </div>
   );
 }
-
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Label,
-  Switch,
-  Textarea,
-} from '@/components/ui';
-import { Toolbar } from '@/components/layout/Toolbar';
-import { useI18n } from '@/hooks/useI18n';
-import { cn } from '@/lib/utils';
-import { MOTION_FAST } from '@/lib/motion';
-import { FONT_STACKS } from '@/lib/fonts';
-import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
-import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/types';
-import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
-import { checkForUpdates } from '@/features/settings/updater';
-import { importFont, listImportedFonts, loadImportedFontFaces } from '@/features/font/api';
-import { useThemeStore } from '@/stores/ui';
-import { useMotionStore } from '@/stores/motion';
-import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
-import { useAiModelsQuery } from '@/features/ai/hooks';
-import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
-import { APP_VERSION } from '@/lib/version';
 
 interface SettingsViewProps {
   workspaceId: string;
@@ -143,9 +146,8 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const { data: settings } = useSettingsQuery();
   const update = useUpdateSettings();
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
-  const ambient = useAmbientAnimation();
-  const fancyAnimationsEnabled = useMotionStore((s) => s.fancyAnimationsEnabled);
-  const setFancyAnimationsEnabled = useMotionStore((s) => s.setFancyAnimationsEnabled);
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+  const setEnhancedAnimations = useUIStore((s) => s.setEnhancedAnimations);
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -281,14 +283,14 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
         </aside>
 
         <div className="flex-1 overflow-auto p-6">
-          <AnimatePresence mode="wait">
+          <AnimatePresence>
             <motion.div
               key={tab}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-2xl mx-auto will-change-transform"
+              exit={{ opacity: 0, y: -3 }}
+              transition={MOTION_BASE}
+              className="max-w-2xl mx-auto"
             >
             {tab === 'appearance' && (
               <div className="flex flex-col gap-5">
@@ -307,9 +309,10 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                             key={th.value}
                             data-testid={`theme-${th.value}`}
                             onClick={() => set({ theme: th.value })}
-                            whileTap={ambient.fancy ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
+                            whileTap={enhancedAnimations ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
                             className={cn(
-                              'group relative flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-[colors,box-shadow] overflow-hidden will-change-transform fancy-ripple',
+                              'group relative flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-[colors,box-shadow] overflow-hidden fancy-ripple',
+                              enhancedAnimations && 'ambient-scale',
                               active
                                 ? 'border-accent bg-accent/10 ring-2 ring-accent ring-offset-1 ring-offset-bg-surface'
                                 : 'border-border hover:bg-bg-elevated hover:border-accent/30',
@@ -419,9 +422,10 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                                 editorFont: FONT_THEME_STACKS[ft.value].editor,
                               })
                             }
-                            whileTap={ambient.fancy ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
+                            whileTap={enhancedAnimations ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
                             className={cn(
-                              'flex flex-col items-start gap-1.5 p-3 rounded-[8px] border-2 text-left transition-[colors,box-shadow] will-change-transform fancy-ripple',
+                              'flex flex-col items-start gap-1.5 p-3 rounded-[8px] border-2 text-left transition-[colors,box-shadow] fancy-ripple',
+                              enhancedAnimations && 'ambient-scale',
                               active
                                 ? 'border-accent bg-accent/10 ring-2 ring-accent ring-offset-1 ring-offset-bg-surface'
                                 : 'border-border hover:bg-bg-elevated hover:border-accent/30',
@@ -464,14 +468,14 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
                     </div>
                     <div className="flex items-start gap-3 pl-0">
                       <Switch
-                        checked={fancyAnimationsEnabled && draft.animationsEnabled}
-                        onCheckedChange={(checked) => setFancyAnimationsEnabled(checked)}
+                        checked={enhancedAnimations && draft.animationsEnabled}
+                        onCheckedChange={(checked) => setEnhancedAnimations(checked)}
                         disabled={!draft.animationsEnabled}
-                        data-testid="fancy-animations-toggle"
+                        data-testid="enhanced-animations-toggle"
                       />
                       <div className="text-xs text-text-secondary">
-                        <p className="font-medium text-text-primary">{t('settings.fancyAnimations')}</p>
-                        <p>{t('settings.fancyAnimationsDescription')}</p>
+                        <p className="font-medium text-text-primary">{t('settings.enhancedAnimations')}</p>
+                        <p>{t('settings.enhancedAnimationsDescription')}</p>
                       </div>
                     </div>
                   </CardContent>

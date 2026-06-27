@@ -16,6 +16,7 @@
   --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "SFMono-Regular", "Noto Sans Mono CJK SC", "Microsoft YaHei", "Noto Sans Mono SC", monospace;
   --font-pixel: "Fusion Pixel 10px", "Zpix", "站酷快乐体", "Noto Sans CJK SC", "Microsoft YaHei", "Noto Sans SC", monospace;
   --font-smiley: "Smiley Sans", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --bg-base-gradient: linear-gradient(180deg, var(--bg-base) 0%, var(--bg-elevated) 100%);
   --motion-enabled: 1;
   --motion-duration: calc(var(--motion-enabled) * 0.25s);
 }
@@ -36,8 +37,16 @@
   opacity: var(--motion-enabled);
 }
 
-.animate-ambient-bob {
+.ambient-float {
   animation: ambient-bob calc(var(--motion-enabled) * 2.5s) ease-in-out infinite;
+}
+
+.ambient-scale {
+  transition: transform calc(var(--motion-enabled) * 0.25s) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ambient-scale:hover {
+  transform: scale(1.02);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -45,8 +54,16 @@
     --motion-enabled: 0;
   }
 
-  .animate-ambient-bob {
+  .ambient-float {
     animation: none;
+  }
+
+  .ambient-scale {
+    transition: none;
+  }
+
+  .ambient-scale:hover {
+    transform: none;
   }
 }
 
@@ -62,6 +79,7 @@
   --shadow-color: rgba(0, 0, 0, 0.4);
   --shadow-card-soft: 0 2px 8px var(--shadow-color);
   --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
+  --bg-base-gradient: linear-gradient(180deg, #1e1a16 0%, #2a241f 100%);
 }
 
 [data-theme="sepia"] {
@@ -76,6 +94,7 @@
   --shadow-color: rgba(74, 57, 39, 0.1);
   --shadow-card-soft: 0 2px 8px var(--shadow-color);
   --shadow-elevated-soft: 0 8px 24px var(--shadow-color);
+  --bg-base-gradient: linear-gradient(180deg, #f2e8d5 0%, #e7d7b6 100%);
 }
 
 [data-theme="mc"] {
@@ -138,21 +157,23 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-[data-theme="mc"] button:not(.rounded-full):not([class*="rounded-full"]) {
+/* MC 纹理只应用到显式 .mc-textured / .mc-button 元素，避免全局类名匹配污染其他组件 */
+[data-theme="mc"] .mc-button,
+[data-theme="mc"] button.mc-button {
+  background-color: var(--bg-surface);
   background-image: var(--mc-pattern-planks);
+  background-blend-mode: overlay;
   border: 3px solid #7D5A3A;
   box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.2), inset 2px 2px 0 rgba(255, 255, 255, 0.15);
 }
 
-[data-theme="mc"] button[data-variant="danger"],
-[data-theme="mc"] [class*="bg-red-"] {
+[data-theme="mc"] button.mc-button[data-variant="danger"],
+[data-theme="mc"] .mc-button.mc-tnt {
   background-image: var(--mc-pattern-tnt);
   border-color: #B05045;
 }
 
-[data-theme="mc"] [class*="bg-bg-surface"],
-[data-theme="mc"] [role="tabpanel"],
-[data-theme="mc"] .card {
+[data-theme="mc"] .mc-textured {
   background-color: var(--bg-surface);
   background-image: var(--mc-pattern-planks);
   background-blend-mode: overlay;
@@ -161,13 +182,13 @@
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
 }
 
-[data-theme="mc"] [class*="bg-bg-elevated"] {
+[data-theme="mc"] .mc-textured-cobble {
   background-image: var(--mc-pattern-cobble);
   background-blend-mode: overlay;
 }
 
-[data-theme="mc"] [role="dialog"] > div,
-[data-theme="mc"] [class*="dialog"] > div:first-child {
+[data-theme="mc"] [role="dialog"].mc-textured > div,
+[data-theme="mc"] [class*="dialog"].mc-textured > div:first-child {
   background-color: var(--bg-cobble);
   background-image: var(--mc-pattern-stone);
   border: 3px solid #5A6A72;
@@ -179,9 +200,9 @@
   background-blend-mode: overlay;
 }
 
-[data-theme="mc"] input,
-[data-theme="mc"] textarea,
-[data-theme="mc"] select {
+[data-theme="mc"] .mc-textured input,
+[data-theme="mc"] .mc-textured textarea,
+[data-theme="mc"] .mc-textured select {
   border-radius: 0;
   background-color: var(--bg-cobble);
   background-image: var(--mc-pattern-cobble);
@@ -191,9 +212,9 @@
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
 }
 
-[data-theme="mc"] input:focus,
-[data-theme="mc"] textarea:focus,
-[data-theme="mc"] select:focus {
+[data-theme="mc"] .mc-textured input:focus,
+[data-theme="mc"] .mc-textured textarea:focus,
+[data-theme="mc"] .mc-textured select:focus {
   border-color: var(--accent);
   box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.25), inset -3px -3px 0 rgba(255, 255, 255, 0.1), 0 0 0 2px var(--accent);
 }
@@ -622,7 +643,7 @@ html.mc-easter [data-theme] {
   pointer-events: none;
 }
 
-[data-fancy-animations='true'] .fancy-ripple:active::after {
+[data-enhanced-animations='true'] .fancy-ripple:active::after {
   opacity: 0.12;
   transform: scale(2.5);
 }

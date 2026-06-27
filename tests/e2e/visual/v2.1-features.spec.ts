@@ -85,10 +85,10 @@ test.describe('Plotline v2.1 功能可视化回归', () => {
     await expect(page.locator('[data-testid^="ai-suggestion-"]').first()).toBeVisible();
     await page.screenshot({ path: 'test-results/visual/13-ai-panel.png', fullPage: true });
 
-    // 点击第一个建议，观察输入框被填充
+    // 点击第一个建议，直接发送消息并清空输入框
     const firstSuggestion = page.locator('[data-testid^="ai-suggestion-"]').first();
     await firstSuggestion.click();
-    await expect(page.locator('textarea')).toHaveValue(/./);
+    await expect(page.locator('textarea')).toHaveValue('');
     await page.screenshot({ path: 'test-results/visual/14-ai-suggestion.png', fullPage: true });
   });
 

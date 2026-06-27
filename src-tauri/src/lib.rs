@@ -162,6 +162,8 @@ pub fn run() {
             commands::ai::ai_chat,
             commands::ai::ai_chat_stream,
             commands::ai::ai_index_workspace,
+            commands::ai::search_ai_chunks,
+            commands::ai::clear_ai_cache,
             commands::ai::ai_kv_get,
             commands::ai::ai_kv_set,
             commands::ai::list_ai_models,

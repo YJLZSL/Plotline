@@ -24,6 +24,7 @@ import {
   aiKvSet as apiKvSet,
   applyAiOutput as apiApplyOutput,
   checkTimelineConsistency as apiCheckTimelineConsistency,
+  clearAiCache as apiClearAiCache,
   createAiSession as apiCreateSession,
   deleteAiSession as apiDeleteSession,
   listAiMessages as apiListMessages,
@@ -31,6 +32,7 @@ import {
   listAiSessions as apiListSessions,
   optimizeEvent as apiOptimizeEvent,
   optimizeTimelineSegment as apiOptimizeTimelineSegment,
+  searchAiChunks as apiSearchAiChunks,
   summarizeWorkspace as apiSummarizeWorkspace,
   testAiConnection as apiTestAiConnection,
 } from './api';
@@ -121,6 +123,33 @@ export function useAiIndexWorkspace(workspaceId: string) {
       qc.invalidateQueries({
         queryKey: aiKvKey(workspaceId, 'workspace_summary'),
       });
+    },
+    onError: toastError,
+  });
+}
+
+export const aiRagSearchKey = (workspaceId: string, query: string) =>
+  ['aiRagSearch', workspaceId, query] as const;
+
+export function useAiRagSearch(
+  workspaceId: string,
+  query: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: aiRagSearchKey(workspaceId, query),
+    queryFn: () => apiSearchAiChunks(workspaceId, query, 5),
+    enabled: enabled && workspaceId.length > 0 && query.trim().length > 0,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useClearAiCache(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClearAiCache(workspaceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: aiRagSearchKey(workspaceId, '') });
     },
     onError: toastError,
   });

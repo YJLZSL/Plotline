@@ -122,6 +122,15 @@ pub struct AiChatContextSelectedEntity {
     pub content: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiRagChunk {
+    pub source_type: String,
+    pub source_id: String,
+    pub content: String,
+    pub score: i64,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiChatInput {
@@ -130,6 +139,7 @@ pub struct AiChatInput {
     pub message: String,
     pub use_rag: Option<bool>,
     pub context: Option<AiChatContext>,
+    pub rag_chunks: Option<Vec<AiRagChunk>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +148,7 @@ pub struct AiChatResult {
     pub session_id: String,
     pub reply: String,
     pub messages: Vec<AiMessage>,
+    pub retrieved_chunks: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -297,4 +308,5 @@ pub struct AiShortcutResult {
     pub messages: Vec<AiMessage>,
     pub cached: bool,
     pub entities: Vec<AiScoredEntity>,
+    pub retrieved_chunks: usize,
 }

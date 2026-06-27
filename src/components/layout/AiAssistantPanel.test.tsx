@@ -12,7 +12,7 @@ import {
 import '@/i18n';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { useAiContextStore, type AiContextState } from '@/stores/aiContext';
-import { aiChatStream } from '@/features/ai/api';
+import { aiChatStream, searchAiChunks } from '@/features/ai/api';
 import { collectAiContext } from '@/features/ai/contextCollector';
 import {
   useAiConnectionTest,
@@ -22,6 +22,7 @@ import {
   useAiSessionsQuery,
   useApplyAiOutput,
   useCheckTimelineConsistency,
+  useClearAiCache,
   useCreateAiSession,
   useDeleteAiSession,
   useOptimizeEvent,
@@ -68,15 +69,23 @@ vi.mock('@/features/ai/hooks', () => ({
   useOptimizeTimelineSegment: vi.fn(),
   useSummarizeWorkspace: vi.fn(),
   useCheckTimelineConsistency: vi.fn(),
+  useClearAiCache: vi.fn(),
 }));
 
 vi.mock('@/features/ai/api', () => ({
   aiChatStream: vi.fn(),
+  searchAiChunks: vi.fn(),
 }));
 
-vi.mock('@/features/ai/contextCollector', () => ({
-  collectAiContext: vi.fn(),
-}));
+vi.mock('@/features/ai/contextCollector', async () => {
+  const actual = await vi.importActual<typeof import('@/features/ai/contextCollector')>(
+    '@/features/ai/contextCollector',
+  );
+  return {
+    ...actual,
+    collectAiContext: vi.fn(),
+  };
+});
 
 vi.mock('@/features/ai/providers', () => ({
   getProviderPreset: vi.fn(() => ({ color: '#000000', icon: null })),
@@ -184,11 +193,16 @@ function mockHooks(messages: AiMessage[] = []) {
   vi.mocked(useCheckTimelineConsistency).mockReturnValue(
     makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
   );
+  vi.mocked(useClearAiCache).mockReturnValue(
+    makeMutationResult<void, void>(vi.fn().mockResolvedValue(undefined)),
+  );
   vi.mocked(aiChatStream).mockResolvedValue({
     sessionId: 'session-1',
     reply: '',
     messages: [],
+    retrievedChunks: 0,
   });
+  vi.mocked(searchAiChunks).mockResolvedValue([]);
   vi.mocked(collectAiContext).mockResolvedValue({});
 }
 
@@ -398,5 +412,87 @@ describe('AiAssistantPanel', () => {
         }),
       );
     });
+  });
+
+  it('runs /whole-workspace command by indexing and passing chunks to chat', async () => {
+    const user = userEvent.setup();
+    const indexMutate = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useAiIndexWorkspace).mockReturnValue(
+      makeMutationResult<void, void>(indexMutate),
+    );
+    vi.mocked(searchAiChunks).mockResolvedValue([
+      {
+        sourceType: 'event',
+        sourceId: 'e1',
+        content: '艾莉丝醒来',
+        score: 0.95,
+      },
+    ]);
+
+    renderPanel();
+    const textarea = screen.getByPlaceholderText('输入消息，按 Enter 发送…');
+    await user.type(textarea, '/whole-workspace analyze');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(indexMutate).toHaveBeenCalled();
+    });
+    expect(searchAiChunks).toHaveBeenCalledWith('ws-1', 'analyze', 5);
+    await waitFor(() => {
+      expect(aiChatStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'analyze',
+          ragChunks: [
+            expect.objectContaining({
+              sourceType: 'event',
+              content: '艾莉丝醒来',
+            }),
+          ],
+        }),
+        expect.any(Function),
+      );
+    });
+  });
+
+  it('displays context budget after collecting context', async () => {
+    const user = userEvent.setup();
+    vi.mocked(collectAiContext).mockResolvedValue({
+      workspaceSummary: '测试工作区摘要',
+      timeline: [
+        {
+          id: 'e1',
+          title: '开场',
+          dateValue: 'Day 1',
+          trackName: '主线',
+          description: '艾莉丝醒来',
+        },
+      ],
+      characters: [{ id: 'c1', name: '艾莉丝', description: '女主角' }],
+    });
+
+    renderPanel();
+    const textarea = screen.getByPlaceholderText('输入消息，按 Enter 发送…');
+    await user.type(textarea, 'hello');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-context-budget')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('ai-context-budget')).toHaveTextContent('3');
+  });
+
+  it('shows slash command menu when typing / and selects whole-workspace', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    const textarea = screen.getByPlaceholderText('输入消息，按 Enter 发送…');
+    await user.type(textarea, '/');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-slash-menu')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('ai-slash-command-whole_workspace')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('ai-slash-command-whole_workspace'));
+    expect(textarea).toHaveValue('/whole-workspace ');
   });
 });

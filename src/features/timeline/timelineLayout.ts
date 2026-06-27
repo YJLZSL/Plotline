@@ -1,3 +1,25 @@
+const EVENT_CARD_MIN_WIDTH = 200;
+const EVENT_CARD_MAX_WIDTH = 360;
+
+/**
+ * 根据标题长度估算事件卡片宽度，限制在 200px~360px。
+ */
+export function getEventCardWidth(title: string, minWidth = EVENT_CARD_MIN_WIDTH, maxWidth = EVENT_CARD_MAX_WIDTH): number {
+  const charWidth = /[\u4e00-\u9fa5]/.test(title) ? 14 : 8;
+  return Math.min(maxWidth, Math.max(minWidth, 80 + title.length * charWidth));
+}
+
+/**
+ * 估算标尺标签宽度，用于主刻度防重叠采样。
+ */
+export function estimateLabelWidth(label: string): number {
+  let width = 0;
+  for (const char of label) {
+    width += /[\u4e00-\u9fa5]/.test(char) ? 13 : 7;
+  }
+  return width + 16;
+}
+
 /**
  * 将 Today 标签的横坐标限制在画布安全区域内，防止靠近左右边缘时被裁切。
  */
@@ -35,19 +57,21 @@ export interface EventDragConstraints {
 
 /**
  * 计算事件卡片在 Framer Motion `dragConstraints` 中的边界。
- * Framer Motion 将数值约束解释为元素相对于父容器的可拖动位置范围，
- * 因此 `left` 直接限制卡片 `left` 的最小值（防止越过轨道左边缘），
- * `right` 限制 `left` 的最大值（防止右侧超出轨道右边缘）。
- * `lanePadding` 用于保留轨道左侧色标空间，默认 4px。
+ * 由于卡片已经绝对定位在 `left: x`，Framer Motion 的数值约束作用于 drag 偏移量，
+ * 因此约束应基于卡片的最终目标位置：
+ * - 最左可拖到 `lanePadding`
+ * - 最右可拖到 `totalWidth - cardWidth`
+ * 返回的 `left`/`right` 是允许 drag 偏移量的最小/最大值。
  */
 export function computeEventDragConstraints(
   cardWidth: number,
   totalWidth?: number,
+  x = 0,
   lanePadding = 4,
 ): EventDragConstraints {
-  const constraints: EventDragConstraints = { left: lanePadding };
+  const constraints: EventDragConstraints = { left: lanePadding - x };
   if (totalWidth !== undefined) {
-    constraints.right = totalWidth - cardWidth;
+    constraints.right = totalWidth - cardWidth - x;
   }
   return constraints;
 }

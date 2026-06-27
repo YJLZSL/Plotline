@@ -64,6 +64,13 @@ export interface AiChatNoteItem {
 
 export type AiContextScope = 'selected_entity' | 'current_view' | 'whole_workspace';
 
+export interface AiRagChunk {
+  sourceType: string;
+  sourceId: string;
+  content: string;
+  score: number;
+}
+
 export type AiActionType =
   | 'optimize_event'
   | 'optimize_timeline_segment'
@@ -95,12 +102,14 @@ export interface AiChatInput {
   message: string;
   useRag?: boolean;
   context?: AiChatContext;
+  ragChunks?: AiRagChunk[];
 }
 
 export interface AiChatResult {
   sessionId: string;
   reply: string;
   messages: AiMessage[];
+  retrievedChunks?: number;
 }
 
 export interface AiScoredEntity {
@@ -125,6 +134,7 @@ export interface AiShortcutResult {
   messages: AiMessage[];
   cached: boolean;
   entities: AiScoredEntity[];
+  retrievedChunks?: number;
 }
 
 export interface AiChunk {

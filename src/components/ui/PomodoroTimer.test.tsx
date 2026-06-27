@@ -12,6 +12,7 @@ import {
 } from './PomodoroTimer.utils';
 import { usePomodoroStore, getDefaultPomodoroPosition } from '@/stores/pomodoro';
 import { useMotionStore } from '@/stores/motion';
+import { useUIStore } from '@/stores/ui';
 import * as sound from '@/lib/sound';
 
 describe('PomodoroTimer', () => {
@@ -21,9 +22,11 @@ describe('PomodoroTimer', () => {
     localStorage.clear();
     localStorage.setItem(
       'plotline:motion',
-      JSON.stringify({ state: { animationsEnabled: true, fancyAnimationsEnabled: true } }),
+      JSON.stringify({ state: { animationsEnabled: true } }),
     );
     await useMotionStore.persist.rehydrate();
+    await usePomodoroStore.persist.rehydrate();
+    useUIStore.setState({ enhancedAnimations: true });
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -39,9 +42,13 @@ describe('PomodoroTimer', () => {
       theme: 'warm',
       secondsLeft: 25 * 60,
       isRunning: false,
+      phaseCompleted: false,
       completedFocusSessions: 0,
+      achievements: { date: new Date().toISOString().slice(0, 10), count: 0, streak: 0 },
       position: null,
       minimized: false,
+      mcEasterEggsEnabled: true,
+      mcEasterEggTriggeredThisSession: false,
     });
   });
 
@@ -79,13 +86,13 @@ describe('PomodoroTimer', () => {
   });
 
   it('shows boom text and creeper face when MC focus completes', () => {
-    usePomodoroStore.setState({ theme: 'mc', secondsLeft: 0 });
+    usePomodoroStore.setState({ theme: 'mc', secondsLeft: 0, phaseCompleted: true });
     render(<PomodoroTimer open onClose={() => {}} />);
     expect(screen.getByText('Boom!')).toBeInTheDocument();
     expect(screen.getByLabelText('creeper')).toBeInTheDocument();
   });
 
-  it('renders emerald and enchanted achievement blocks', () => {
+  it('renders diamond achievement blocks at every 4th session milestone', () => {
     usePomodoroStore.setState({ theme: 'mc', completedFocusSessions: 8 });
     render(<PomodoroTimer open onClose={() => {}} />);
     const achievements = screen.getByTestId('mc-achievements');
@@ -93,8 +100,8 @@ describe('PomodoroTimer', () => {
     expect(blocks).toHaveLength(8);
     const session4Rect = blocks.item(3)!.querySelector('rect');
     const session8Rect = blocks.item(7)!.querySelector('rect');
-    expect(session4Rect).toHaveAttribute('fill', '#3E9E5C');
-    expect(session8Rect).toHaveAttribute('fill', '#1A1030');
+    expect(session4Rect).toHaveAttribute('fill', '#73A8B5');
+    expect(session8Rect).toHaveAttribute('fill', '#73A8B5');
   });
 
   it('returns correct block type progression', () => {
@@ -125,9 +132,16 @@ describe('PomodoroTimer', () => {
   it('resets timer', () => {
     usePomodoroStore.setState({ secondsLeft: 100, isRunning: true });
     render(<PomodoroTimer open onClose={() => {}} />);
-    fireEvent.click(screen.getByLabelText('重置'));
+    fireEvent.click(screen.getByText('重置计时器'));
+    fireEvent.click(screen.getByText('确认'));
     expect(usePomodoroStore.getState().secondsLeft).toBe(25 * 60);
     expect(usePomodoroStore.getState().isRunning).toBe(false);
+  });
+
+  it('shows confirmation dialog before resetting timer', () => {
+    render(<PomodoroTimer open onClose={() => {}} />);
+    fireEvent.click(screen.getByText('重置计时器'));
+    expect(screen.getByText('重置计时器？')).toBeInTheDocument();
   });
 
   it('skips phase', () => {
@@ -154,8 +168,8 @@ describe('PomodoroTimer', () => {
     expect(screen.queryByTestId('pomodoro-particles')).not.toBeInTheDocument();
   });
 
-  it('does not render break particles when fancy animations are disabled', () => {
-    useMotionStore.setState({ fancyAnimationsEnabled: false });
+  it('does not render break particles when enhanced animations are disabled', () => {
+    useUIStore.setState({ enhancedAnimations: false });
     usePomodoroStore.setState({ phase: 'shortBreak' });
     render(<PomodoroTimer open onClose={() => {}} />);
     expect(screen.queryByTestId('pomodoro-particles')).not.toBeInTheDocument();
@@ -174,8 +188,8 @@ describe('PomodoroTimer', () => {
     expect(screen.queryByTestId('pomodoro-confetti')).not.toBeInTheDocument();
   });
 
-  it('does not render confetti when fancy animations are disabled', () => {
-    useMotionStore.setState({ fancyAnimationsEnabled: false });
+  it('does not render confetti when enhanced animations are disabled', () => {
+    useUIStore.setState({ enhancedAnimations: false });
     render(<PomodoroTimer open onClose={() => {}} />);
     fireEvent.click(screen.getByLabelText('跳过'));
     expect(screen.queryByTestId('pomodoro-confetti')).not.toBeInTheDocument();
@@ -227,14 +241,21 @@ describe('PomodoroTimer', () => {
   });
 
   it('resets achievements after confirming the dialog', () => {
-    usePomodoroStore.setState({ completedFocusSessions: 5, phase: 'shortBreak', secondsLeft: 5 * 60 });
+    usePomodoroStore.setState({
+      completedFocusSessions: 5,
+      phase: 'shortBreak',
+      secondsLeft: 5 * 60,
+      achievements: { date: new Date().toISOString().slice(0, 10), count: 5, streak: 2 },
+    });
     render(<PomodoroTimer open onClose={() => {}} />);
     fireEvent.click(screen.getByTestId('pomodoro-reset-achievements'));
     fireEvent.click(screen.getByText('确认'));
     const state = usePomodoroStore.getState();
     expect(state.completedFocusSessions).toBe(0);
-    expect(state.phase).toBe('focus');
-    expect(state.secondsLeft).toBe(25 * 60);
+    expect(state.achievements.count).toBe(0);
+    expect(state.achievements.streak).toBe(0);
+    expect(state.phase).toBe('shortBreak');
+    expect(state.secondsLeft).toBe(5 * 60);
     expect(screen.queryByTestId('pomodoro-reset-achievements')).not.toBeInTheDocument();
   });
 
@@ -258,7 +279,7 @@ describe('PomodoroTimer', () => {
 
   it('plays explosion sound when MC creeper boom appears', () => {
     const soundSpy = vi.spyOn(sound, 'playSoundIfEnabled');
-    usePomodoroStore.setState({ theme: 'mc', secondsLeft: 0 });
+    usePomodoroStore.setState({ theme: 'mc', secondsLeft: 0, phaseCompleted: true });
     render(<PomodoroTimer open onClose={() => {}} />);
     expect(screen.getByText('Boom!')).toBeInTheDocument();
     expect(soundSpy).toHaveBeenCalledWith('explosion');
@@ -285,6 +306,41 @@ describe('PomodoroTimer', () => {
     expect(Object.keys(counts).length).toBeGreaterThanOrEqual(5);
     // Enchanted should be the rarest
     expect((counts.enchanted ?? 0)).toBeLessThan(counts.diamond ?? 0);
+  });
+
+  it('displays completed sessions count and achievement blocks', () => {
+    usePomodoroStore.setState({
+      theme: 'mc',
+      completedFocusSessions: 3,
+      achievements: { date: new Date().toISOString().slice(0, 10), count: 3, streak: 5 },
+    });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(screen.getByText('已完成 3 个番茄')).toBeInTheDocument();
+    expect(screen.getByTestId('mc-achievements')).toBeInTheDocument();
+  });
+
+  it('displays today count and streak', () => {
+    usePomodoroStore.setState({
+      achievements: { date: new Date().toISOString().slice(0, 10), count: 3, streak: 5 },
+    });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    expect(screen.getByText('今日 3 个')).toBeInTheDocument();
+    expect(screen.getByText(/连续 5 天/)).toBeInTheDocument();
+  });
+
+  it('limits creeper surprise to once per focus session', () => {
+    const soundSpy = vi.spyOn(sound, 'playSoundIfEnabled');
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.04);
+    usePomodoroStore.setState({ theme: 'mc' });
+    render(<PomodoroTimer open onClose={() => {}} />);
+    fireEvent.click(screen.getByText('开始'));
+    expect(soundSpy).toHaveBeenCalledWith('hiss');
+    soundSpy.mockClear();
+    fireEvent.click(screen.getByText('暂停'));
+    fireEvent.click(screen.getByText('开始'));
+    expect(soundSpy).not.toHaveBeenCalledWith('hiss');
+    randomSpy.mockRestore();
+    soundSpy.mockRestore();
   });
 });
 

@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQueryClient, type UseMutationResult } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
   Bot,
   Calendar,
   ChevronDown,
+  ChevronUp,
   Clapperboard,
+  Command,
+  Database,
   HelpCircle,
   ListTree,
   Loader2,
@@ -19,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   StickyNote,
+  Trash2,
   User,
   X,
 } from 'lucide-react';
@@ -28,13 +32,15 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { useSettingsQuery } from '@/features/settings/hooks';
-import { toastError } from '@/stores/toast';
+import { getWorkspace } from '@/features/workspace/api';
+import { toastError, toastSuccess } from '@/stores/toast';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useEditorSelectionStore } from '@/stores/editorSelection';
 import { getProviderPreset } from '@/features/ai/providers';
-import { aiChatStream } from '@/features/ai/api';
+import { aiChatStream, searchAiChunks } from '@/features/ai/api';
 import {
   collectAiContext,
+  estimateContextBudget,
   type AiContextSource,
 } from '@/features/ai/contextCollector';
 import {
@@ -47,6 +53,7 @@ import {
   useAiSessionsQuery,
   useApplyAiOutput,
   useCheckTimelineConsistency,
+  useClearAiCache,
   useCreateAiSession,
   useDeleteAiSession,
   useOptimizeEvent,
@@ -57,12 +64,14 @@ import {
   AI_STYLE_TEMPLATES,
   type AiStyleTemplate,
 } from '@/features/ai/promptTemplates';
+import { isBalancedMarkdown } from '@/components/ui/markdownUtils';
 import type {
   AiActionType,
   AiChatContext,
   AiContextScope,
   AiInsertTarget,
   AiMessage,
+  AiRagChunk,
   AiSession,
   AiShortcutInput,
   AiShortcutResult,
@@ -74,6 +83,52 @@ interface AiAssistantPanelProps {
   onClose: () => void;
   workspaceId: string;
 }
+
+interface SlashCommand {
+  id: string;
+  labelKey: string;
+  descriptionKey: string;
+  action: AiActionType | 'ask' | 'whole_workspace';
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  {
+    id: 'optimize_event',
+    labelKey: 'ai.commandOptimizeEvent',
+    descriptionKey: 'ai.commandDescriptionOptimizeEvent',
+    action: 'optimize_event',
+  },
+  {
+    id: 'optimize_timeline_segment',
+    labelKey: 'ai.commandOptimizeTimeline',
+    descriptionKey: 'ai.commandDescriptionOptimizeTimeline',
+    action: 'optimize_timeline_segment',
+  },
+  {
+    id: 'summarize_workspace',
+    labelKey: 'ai.commandSummarize',
+    descriptionKey: 'ai.commandDescriptionSummarize',
+    action: 'summarize_workspace',
+  },
+  {
+    id: 'check_timeline_consistency',
+    labelKey: 'ai.commandCheckConsistency',
+    descriptionKey: 'ai.commandDescriptionCheckConsistency',
+    action: 'check_timeline_consistency',
+  },
+  {
+    id: 'whole_workspace',
+    labelKey: 'ai.wholeWorkspaceAction',
+    descriptionKey: 'ai.commandDescriptionWholeWorkspace',
+    action: 'whole_workspace',
+  },
+  {
+    id: 'ask',
+    labelKey: 'ai.slashAsk',
+    descriptionKey: 'ai.slashDescriptionAsk',
+    action: 'ask',
+  },
+];
 
 export function AiAssistantPanel({
   open,
@@ -89,6 +144,12 @@ export function AiAssistantPanel({
     settings?.aiProvider ?? '',
     Boolean(settings?.aiEnabled) && open,
   );
+  const { data: workspace } = useQuery({
+    queryKey: ['workspace', workspaceId],
+    queryFn: () => getWorkspace(workspaceId),
+    enabled: !!workspaceId,
+    staleTime: 60_000,
+  });
   const qc = useQueryClient();
   const { data: sessions = [] } = useAiSessionsQuery(workspaceId);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -99,7 +160,15 @@ export function AiAssistantPanel({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [sessionSearch, setSessionSearch] = useState('');
   const [showSessionsMobile, setShowSessionsMobile] = useState(false);
+  const [showCapabilitiesPanel, setShowCapabilitiesPanel] = useState(false);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [retrievedChunksCount, setRetrievedChunksCount] = useState<number | null>(null);
+  const [contextBudget, setContextBudget] = useState<{ entities: number; chars: number } | null>(
+    null,
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
 
   const { data: messages = [] } = useAiMessagesQuery(currentSessionId);
   const createSession = useCreateAiSession(workspaceId);
@@ -110,6 +179,17 @@ export function AiAssistantPanel({
   const optimizeTimelineSegment = useOptimizeTimelineSegment(workspaceId);
   const summarizeWorkspace = useSummarizeWorkspace(workspaceId);
   const checkTimelineConsistency = useCheckTimelineConsistency(workspaceId);
+  const clearCache = useClearAiCache(workspaceId);
+
+  const mutationForAction = (action: AiActionType): UseMutationResult<AiShortcutResult, Error, AiShortcutInput> => {
+    const mutationMap: Record<AiActionType, UseMutationResult<AiShortcutResult, Error, AiShortcutInput>> = {
+      optimize_event: optimizeEvent,
+      optimize_timeline_segment: optimizeTimelineSegment,
+      summarize_workspace: summarizeWorkspace,
+      check_timeline_consistency: checkTimelineConsistency,
+    };
+    return mutationMap[action];
+  };
 
   useEffect(() => {
     if (open && sessions.length > 0 && !currentSessionId) {
@@ -121,6 +201,40 @@ export function AiAssistantPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming, streamingContent]);
 
+  const aiContext = useAiContextStore();
+
+  const slashQuery = useMemo(() => {
+    if (!input.startsWith('/')) return '';
+    return input.slice(1).toLowerCase();
+  }, [input]);
+
+  const filteredSlashCommands = useMemo(() => {
+    if (!showSlashMenu) return [];
+    if (!slashQuery) return SLASH_COMMANDS;
+    return SLASH_COMMANDS.filter((cmd) =>
+      t(cmd.labelKey).toLowerCase().includes(slashQuery),
+    );
+  }, [showSlashMenu, slashQuery, t]);
+
+  useEffect(() => {
+    if (filteredSlashCommands.length === 0) {
+      setShowSlashMenu(false);
+      return;
+    }
+    setSlashIndex((prev) => Math.min(prev, filteredSlashCommands.length - 1));
+  }, [filteredSlashCommands.length]);
+
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [slashQuery]);
+
+  useEffect(() => {
+    if (!open) {
+      setShowSlashMenu(false);
+      setShowCapabilitiesPanel(false);
+    }
+  }, [open]);
+
   const handleNewSession = async () => {
     const session = await createSession.mutateAsync({
       workspaceId,
@@ -128,8 +242,6 @@ export function AiAssistantPanel({
     });
     setCurrentSessionId(session.id);
   };
-
-  const aiContext = useAiContextStore();
 
   const toggleSource = (source: AiContextSource) => {
     const next = aiContext.enabledSources.includes(source)
@@ -140,13 +252,15 @@ export function AiAssistantPanel({
 
   const enabled = settings?.aiEnabled ?? false;
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, ragChunks?: AiRagChunk[]) => {
     const trimmed = text.trim();
     if (!trimmed || isStreaming || isCollectingContext) return;
     setInput('');
+    setShowSlashMenu(false);
     setIsStreaming(true);
     setIsCollectingContext(true);
     setStreamingContent('');
+    setRetrievedChunksCount(null);
 
     let context: AiChatContext | undefined;
     try {
@@ -164,6 +278,7 @@ export function AiAssistantPanel({
           context = { ...context, systemPromptOverride: template.systemPrompt };
         }
       }
+      setContextBudget(estimateContextBudget(context ?? {}));
     } catch {
       // 上下文收集失败时仍然发送消息，只是不带上下文
     } finally {
@@ -178,6 +293,7 @@ export function AiAssistantPanel({
           message: trimmed,
           useRag: true,
           context,
+          ragChunks,
         },
         (event) => {
           if (event.type === 'delta') {
@@ -188,6 +304,9 @@ export function AiAssistantPanel({
         },
       );
       setCurrentSessionId(result.sessionId);
+      setRetrievedChunksCount(
+        (result.retrievedChunks ?? 0) + (ragChunks?.length ?? 0),
+      );
       qc.setQueryData<AiMessage[]>(aiMessagesKey(result.sessionId), result.messages);
       qc.invalidateQueries({ queryKey: aiSessionsKey(workspaceId) });
     } catch {
@@ -200,7 +319,34 @@ export function AiAssistantPanel({
   };
 
   const handleSend = () => {
+    if (showSlashMenu && filteredSlashCommands.length > 0) {
+      const cmd = filteredSlashCommands[slashIndex];
+      if (cmd) {
+        executeSlashCommand(cmd);
+        return;
+      }
+    }
+    if (input.startsWith('/whole-workspace')) {
+      void runWholeWorkspace(input);
+      return;
+    }
     void sendMessage(input);
+  };
+
+  const executeSlashCommand = (cmd: SlashCommand) => {
+    setShowSlashMenu(false);
+    if (cmd.action === 'ask') {
+      setInput('/ask ');
+      return;
+    }
+    if (cmd.action === 'whole_workspace') {
+      setInput('/whole-workspace ');
+      return;
+    }
+    const action = cmd.action;
+    const scope = scopeForAction(action);
+    const mutation = mutationForAction(action);
+    void runShortcut(action, scope, mutation);
   };
 
   const handleSuggestionClick = (prompt: string) => {
@@ -223,6 +369,7 @@ export function AiAssistantPanel({
   ) => {
     if (!enabled || isStreaming || isCollectingContext || mutation.isPending) return;
     setIsCollectingContext(true);
+    setRetrievedChunksCount(null);
     try {
       let context = await collectAiContext(
         workspaceId,
@@ -233,6 +380,7 @@ export function AiAssistantPanel({
       if (summary?.value && scope !== 'selected_entity') {
         context = { ...context, workspaceSummary: summary.value };
       }
+      setContextBudget(estimateContextBudget(context ?? {}));
       const result = await mutation.mutateAsync({
         workspaceId,
         sessionId: currentSessionId,
@@ -241,6 +389,7 @@ export function AiAssistantPanel({
         query: aiContext.selection?.label,
       });
       setCurrentSessionId(result.sessionId);
+      setRetrievedChunksCount(result.retrievedChunks ?? null);
     } catch {
       // 错误由 mutation 的 onError 处理
     } finally {
@@ -248,13 +397,33 @@ export function AiAssistantPanel({
     }
   };
 
+  const runWholeWorkspace = async (text: string) => {
+    if (!enabled || isStreaming || isCollectingContext) return;
+    const query = text.replace(/^\/whole-workspace\s*/, '').trim();
+    const finalQuery = query || t('ai.wholeWorkspaceDefaultQuery');
+    setInput('');
+    setShowSlashMenu(false);
+    setIsCollectingContext(true);
+    try {
+      await indexWorkspace.mutateAsync();
+      const chunks = await searchAiChunks(workspaceId, finalQuery, 5);
+      setRetrievedChunksCount(chunks.length);
+      await sendMessage(finalQuery, chunks);
+    } catch {
+      // 错误由 mutation / toast 处理
+    } finally {
+      setIsCollectingContext(false);
+    }
+  };
+
   interface CapabilityConfig {
-    action: AiActionType;
+    action: AiActionType | 'whole_workspace';
     scope: AiContextScope;
     icon: React.ReactNode;
     labelKey: string;
     hintKey: string;
     available: boolean;
+    onClick?: () => void;
   }
 
   const capabilities: CapabilityConfig[] = [
@@ -290,14 +459,54 @@ export function AiAssistantPanel({
       hintKey: 'ai.capabilityHintConsistency',
       available: aiContext.view === 'timeline',
     },
+    {
+      action: 'whole_workspace',
+      scope: 'whole_workspace',
+      icon: <Database className="h-3.5 w-3.5" />,
+      labelKey: 'ai.wholeWorkspaceAction',
+      hintKey: 'ai.capabilityHintWholeWorkspace',
+      available: true,
+      onClick: () => void runWholeWorkspace(t('ai.wholeWorkspaceDefaultQuery')),
+    },
   ];
 
-  const mutationFor: Record<AiActionType, UseMutationResult<AiShortcutResult, Error, AiShortcutInput>> = {
-    optimize_event: optimizeEvent,
-    optimize_timeline_segment: optimizeTimelineSegment,
-    summarize_workspace: summarizeWorkspace,
-    check_timeline_consistency: checkTimelineConsistency,
-  };
+  function CapabilityPanel() {
+    if (!showCapabilitiesPanel) return null;
+    return (
+      <div
+        data-testid="ai-capability-panel"
+        className="border-b border-border bg-bg-base px-3 py-2 text-xs"
+      >
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="font-medium text-text-primary">{t('ai.capabilitiesTitle')}</span>
+          <button
+            type="button"
+            onClick={() => setShowCapabilitiesPanel(false)}
+            className="p-0.5 rounded hover:bg-border text-text-secondary"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+        <ul className="space-y-1 text-text-secondary">
+          {capabilities.map((cap) => (
+            <li key={cap.action} className="flex items-start gap-1.5">
+              <span className={cn('mt-0.5', cap.available ? 'text-accent' : 'text-text-secondary/60')}>
+                {cap.icon}
+              </span>
+              <span>
+                <span className="font-medium text-text-primary">{t(cap.labelKey)}</span>
+                <span className="mx-1">·</span>
+                <span>{t(cap.hintKey)}</span>
+                {!cap.available && (
+                  <span className="ml-1 text-text-secondary/60">({t('ai.capabilityDisabledHint')})</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
 
   function CapabilityChips() {
     return (
@@ -310,19 +519,28 @@ export function AiAssistantPanel({
           <span className="text-xs font-medium text-text-primary" data-testid="ai-capabilities-title">
             {t('ai.capabilitiesTitle')}
           </span>
-          <span
+          <button
+            type="button"
             data-testid="ai-capabilities-intro"
-            className="inline-flex items-center gap-0.5 text-[10px] text-text-secondary"
+            onClick={() => setShowCapabilitiesPanel((v) => !v)}
+            className="inline-flex items-center gap-0.5 text-[10px] text-text-secondary hover:text-text-primary"
             title={t('ai.capabilitiesIntro')}
           >
             {t('ai.capabilitiesShortIntro')}
-            <HelpCircle className="h-3 w-3" />
-          </span>
+            {showCapabilitiesPanel ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <HelpCircle className="h-3 w-3" />
+            )}
+          </button>
         </div>
         <div className="flex items-center gap-2 min-w-min">
           {capabilities.map((cap) => {
-            const mutation = mutationFor[cap.action];
-            const busy = isCollectingContext || mutation.isPending;
+            const isWholeWorkspace = cap.action === 'whole_workspace';
+            const mutation = isWholeWorkspace
+              ? null
+              : mutationForAction(cap.action as AiActionType);
+            const busy = isCollectingContext || (mutation?.isPending ?? false);
             const disabled = !cap.available || busy;
             const tooltip = cap.available ? t(cap.hintKey) : `${t(cap.hintKey)} · ${t('ai.capabilityDisabledHint')}`;
             return (
@@ -332,17 +550,27 @@ export function AiAssistantPanel({
                 data-testid={`ai-capability-${cap.action}`}
                 disabled={disabled}
                 title={tooltip}
-                onClick={() => void runShortcut(cap.action, cap.scope, mutation)}
+                onClick={() => {
+                  if (cap.onClick) {
+                    cap.onClick();
+                  } else if (mutation) {
+                    void runShortcut(cap.action as AiActionType, cap.scope, mutation);
+                  }
+                }}
                 className={cn(
-                  'flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-colors disabled:opacity-60',
+                  'flex-shrink-0 inline-flex flex-col items-start px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-60 text-left',
                   cap.available
                     ? 'bg-bg-elevated border-border text-text-secondary hover:text-text-primary hover:border-accent/50 hover:bg-bg-surface'
                     : 'cursor-not-allowed bg-bg-elevated/70 border-border/70 text-text-secondary/80',
                 )}
               >
-                <span className={cn('transition-colors', cap.available && 'text-accent')}>{cap.icon}</span>
-                {t(cap.labelKey)}
-                {!cap.available && <HelpCircle className="h-3 w-3 opacity-60" />}
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={cn('transition-colors', cap.available && 'text-accent')}>{cap.icon}</span>
+                  {t(cap.labelKey)}
+                </span>
+                <span className="text-[10px] text-text-secondary/80 mt-0.5 leading-tight">
+                  {t(cap.hintKey)}
+                </span>
               </button>
             );
           })}
@@ -352,9 +580,43 @@ export function AiAssistantPanel({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showSlashMenu) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashIndex((prev) => (prev + 1) % filteredSlashCommands.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashIndex((prev) =>
+          prev === 0 ? filteredSlashCommands.length - 1 : prev - 1,
+        );
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSlashMenu(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+      return;
+    }
+
+    if (e.key === '/' && input.length === 0) {
+      setShowSlashMenu(true);
+    }
+  };
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    if (value.startsWith('/')) {
+      setShowSlashMenu(true);
+    } else {
+      setShowSlashMenu(false);
     }
   };
 
@@ -407,6 +669,19 @@ export function AiAssistantPanel({
                   title={t('ai.index')}
                 >
                   <Sparkles className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    void clearCache.mutateAsync().then(() => {
+                      toastSuccess(t('ai.clearCacheSuccess'));
+                    })
+                  }
+                  loading={clearCache.isPending}
+                  title={t('ai.clearCache')}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -493,6 +768,7 @@ export function AiAssistantPanel({
 
                 <section className="flex-1 min-w-0 flex flex-col">
                   <CapabilityChips />
+                  <CapabilityPanel />
                   <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3" data-testid="ai-message-area">
                     {messages.length === 0 && !isStreaming && (
                       <EmptyState
@@ -514,6 +790,7 @@ export function AiAssistantPanel({
                         message={{ id: 'streaming', role: 'assistant', content: streamingContent }}
                         workspaceId={workspaceId}
                         currentView={aiContext.view}
+                        streaming
                       />
                     )}
                     {isStreaming && !streamingContent && (
@@ -562,10 +839,10 @@ export function AiAssistantPanel({
                       disabled={isStreaming || isCollectingContext}
                     />
 
-                    <div className="p-3 flex items-end gap-2">
+                    <div className="p-3 flex items-end gap-2 relative">
                       <Textarea
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={(e) => handleInputChange(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder={t('ai.placeholder')}
                         rows={1}
@@ -579,7 +856,45 @@ export function AiAssistantPanel({
                       >
                         <Send className="h-4 w-4" />
                       </Button>
+
+                      {showSlashMenu && filteredSlashCommands.length > 0 && (
+                        <div
+                          ref={slashMenuRef}
+                          data-testid="ai-slash-menu"
+                          className="absolute left-3 right-[58px] bottom-full mb-1 max-h-60 overflow-y-auto rounded-[8px] border border-border bg-bg-surface shadow-[var(--shadow-elevated-soft)] py-1 z-20"
+                        >
+                          {filteredSlashCommands.map((cmd, index) => (
+                            <button
+                              key={cmd.id}
+                              type="button"
+                              data-testid={`ai-slash-command-${cmd.id}`}
+                              onClick={() => executeSlashCommand(cmd)}
+                              className={cn(
+                                'w-full text-left px-3 py-2 flex items-start gap-2 transition-colors',
+                                index === slashIndex
+                                  ? 'bg-bg-elevated text-text-primary'
+                                  : 'text-text-secondary hover:bg-bg-elevated/50 hover:text-text-primary',
+                              )}
+                            >
+                              <Command className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <div className="text-xs font-medium">{t(cmd.labelKey)}</div>
+                                <div className="text-[10px] text-text-secondary/80">{t(cmd.descriptionKey)}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
+                    <ContextBudget budget={contextBudget} />
+
+                    <ContextSummary
+                      workspaceName={workspace?.name}
+                      selection={aiContext.selection}
+                      enabledSources={aiContext.enabledSources}
+                      retrievedChunksCount={retrievedChunksCount}
+                    />
                   </div>
                 </section>
               </div>
@@ -588,6 +903,71 @@ export function AiAssistantPanel({
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+function ContextBudget({
+  budget,
+}: {
+  budget: { entities: number; chars: number } | null;
+}) {
+  const { t } = useI18n();
+  if (!budget) return null;
+  return (
+    <div
+      data-testid="ai-context-budget"
+      className="px-3 py-1 border-t border-border flex items-center gap-1 text-[10px] text-text-secondary"
+    >
+      <Database className="h-3 w-3" />
+      {t('ai.contextBudget', {
+        entities: budget.entities,
+        chars: budget.chars,
+      })}
+    </div>
+  );
+}
+
+function ContextSummary({
+  workspaceName,
+  selection,
+  enabledSources,
+  retrievedChunksCount,
+}: {
+  workspaceName?: string;
+  selection: AiSelection | null;
+  enabledSources: AiContextSource[];
+  retrievedChunksCount: number | null;
+}) {
+  const { t } = useI18n();
+  return (
+    <div
+      data-testid="ai-context-summary"
+      className="px-3 py-1.5 border-t border-border flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-text-secondary"
+    >
+      {workspaceName && (
+        <span className="inline-flex items-center gap-1">
+          <BookOpen className="h-3 w-3" />
+          {workspaceName}
+        </span>
+      )}
+      {selection && (
+        <span className="inline-flex items-center gap-1 truncate max-w-[140px]">
+          <Sparkles className="h-3 w-3" />
+          {selection.label}
+        </span>
+      )}
+      <span className="inline-flex items-center gap-1">
+        {enabledSources.length > 0
+          ? t('ai.contextSummarySources', { count: enabledSources.length })
+          : t('ai.contextSummaryNoSources')}
+      </span>
+      {retrievedChunksCount !== null && (
+        <span className="inline-flex items-center gap-1 text-accent">
+          <Search className="h-3 w-3" />
+          {t('ai.contextSummaryRetrieved', { count: retrievedChunksCount })}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -831,6 +1211,19 @@ function capitalize(value: AiContextSource): string {
   return map[value];
 }
 
+function scopeForAction(action: AiActionType): AiContextScope {
+  switch (action) {
+    case 'optimize_event':
+      return 'selected_entity';
+    case 'optimize_timeline_segment':
+      return 'current_view';
+    case 'summarize_workspace':
+    case 'check_timeline_consistency':
+    default:
+      return 'whole_workspace';
+  }
+}
+
 const APPLY_TARGETS: Array<{
   target: AiInsertTarget;
   mode?: 'insert' | 'replace';
@@ -949,13 +1342,16 @@ function MessageBubble({
   message,
   workspaceId,
   currentView,
+  streaming = false,
 }: {
   message: { id: string; role: string; content: string };
   workspaceId: string;
   currentView: string;
+  streaming?: boolean;
 }) {
   const isUser = message.role === 'user';
   const apply = useApplyAiOutput(workspaceId);
+  const shouldRenderMarkdown = !isUser && (!streaming || isBalancedMarkdown(message.content));
 
   return (
     <div className={cn('flex flex-col', isUser ? 'items-end' : 'items-start')}>
@@ -967,7 +1363,11 @@ function MessageBubble({
             : 'bg-bg-elevated text-text-primary border border-border rounded-tl-sm',
         )}
       >
-        {isUser ? message.content : <Markdown content={message.content} />}
+        {shouldRenderMarkdown ? (
+          <Markdown content={message.content} />
+        ) : (
+          <span className="whitespace-pre-wrap">{message.content}</span>
+        )}
       </div>
       {!isUser && (
         <ApplyDropdown

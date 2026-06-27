@@ -1,24 +1,29 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/ui';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   hover?: boolean;
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, hover = false, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(
-        'bg-bg-surface border border-border rounded-[8px] shadow-[var(--shadow-card)]',
-        hover &&
-          'transition-transform duration-200 ease-out hover:scale-[1.01] hover:shadow-[var(--shadow-elevated)] will-change-transform',
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, hover = false, ...props }, ref) => {
+    const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'bg-bg-surface border border-border rounded-[8px] shadow-[var(--shadow-card)]',
+          hover &&
+            'transition-transform duration-200 ease-out hover:scale-[1.01] hover:shadow-[var(--shadow-elevated)]',
+          enhancedAnimations && hover && 'ambient-scale',
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 Card.displayName = 'Card';
 

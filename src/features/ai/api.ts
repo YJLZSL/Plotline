@@ -4,7 +4,6 @@ import { invoke, isWebMode } from '@/lib/ipc';
 import type {
   AiChatInput,
   AiChatResult,
-  AiChunk,
   AiConnectionTestInput,
   AiConnectionTestResult,
   AiInsertInput,
@@ -12,6 +11,7 @@ import type {
   AiKvEntry,
   AiMessage,
   AiModelInfo,
+  AiRagChunk,
   AiSession,
   AiShortcutInput,
   AiShortcutResult,
@@ -76,12 +76,16 @@ export function aiKvSet(entry: AiKvEntry): Promise<AiKvEntry> {
   return invoke<AiKvEntry>('ai_kv_set', { entry });
 }
 
-export function aiSearchChunks(
+export function searchAiChunks(
   workspaceId: string,
   query: string,
   limit?: number,
-): Promise<AiChunk[]> {
-  return invoke<AiChunk[]>('ai_search_chunks', { workspaceId, query, limit });
+): Promise<AiRagChunk[]> {
+  return invoke<AiRagChunk[]>('search_ai_chunks', { workspaceId, query, limit });
+}
+
+export function clearAiCache(workspaceId: string): Promise<void> {
+  return invoke<void>('clear_ai_cache', { workspaceId });
 }
 
 export function listAiModels(input: ListAiModelsInput): Promise<AiModelInfo[]> {

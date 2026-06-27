@@ -44,18 +44,21 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.7.0 已发布：全面打磨与 AI 增强）
-- **Markdown 渲染修复**：AI 助手消息流启用 Markdown 解析，`src/components/ui/Markdown.tsx` 封装 `react-markdown` + `remark-breaks` + `rehype-sanitize`；`AiAssistantPanel.tsx` 对助手消息使用 `<Markdown />` 渲染，解决 `**`、`*` 裸星号问题。
-- **动画性能与视觉打磨**：全局动画时长统一为 150–250ms，缓动 `[0.16, 1, 0.3, 1]`；核心视图切换迁移到 `transform`/`opacity` GPU 加速，移除冗余 `layout` 重排；新增“炫技微动画”开关与可选粒子/波纹效果；修复 sans/mono/pixel/得意黑字体回退栈。
-- **时间轴交互与 UI 重构**：`src/features/timeline/timelineLayout.ts` 新增 `computeEventDragConstraints()` 与 `clampTimelineScroll()`，限制事件卡片与画布左边界；优化轨道头部、事件卡片、筛选栏间距与对齐；视图/折叠/筛选增加明确的 `AnimatePresence` 入场/退场动画；新增 `TimelineEmptyIllustration` 空状态插画。
-- **AI 助手能力明确化与架构升级**：`AiAssistantPanel.tsx` 顶部新增“能力快捷栏”（优化当前事件、优化当前片段、总结工作区、检查逻辑漏洞）；扩展 `AiChatContext` 支持“当前选中实体 / 当前视图 / 整个工作区”三种范围；后端新增 `ai_cache` 与 `ai_conversation_history` 表实现 KV Cache；新增关键词 RAG 检索，按角色/地点/事件/大纲组装 prompt；新增 `ai_prompts.rs` 与四个对应 Tauri 命令。
-- **番茄钟与 MC 主题趣味化**：`pomodoro.ts` 新增 `resetAchievements` action；`PomodoroTimer.tsx` 新增“重置成就”按钮与完成庆祝动画（粒子爆裂 + 奖杯/稀有矿石弹窗）；MC 主题增加 Creeper 惊喜彩蛋与稀有矿石随机掉落；改进像素方块高光/阴影质感。
-- **调研与规划**：输出 `docs/v2.7.0-research.md`、`docs/v2.7.0-research-competitors.md`、`docs/v2.7.0-research-community.md`，汇总截图分析、竞品设计惯例与中文社区反馈。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.7.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.7.0 状态。
-- **发布说明**：v2.7.0 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
-- **GitHub Release v2.7.0**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.0>
+### 当前迭代状态（v2.7.2 已发布：v2.7.0 体验问题深度修复）
+- **Markdown 渲染深度修复**：`src/components/ui/Markdown.tsx` 引入 `remark-gfm` 并重构 `normalizeMarkdown`，处理全角星号、HTML 实体、双重转义、跨行标记与流式输出闭合等待；新增 `isBalancedMarkdown` 时排除列表标记与孤立星号，避免合法列表被误判为未闭合；移除 `remark-breaks`，改用 CSS `white-space: pre-wrap`，彻底解决裸星号与格式异常。
+- **动画性能再优化**：`src/lib/motion.ts` 新增 `MOTION_FAST`（120ms），统一核心视图为 120–200ms 动效；减少 `AnimatePresence mode="wait"` 嵌套，压缩 stagger delay，移除滥用 `will-change-transform`；`WorkspaceLayout`、`SettingsView`、`TimelineView` 切换更跟手、更少掉帧。
+- **时间轴交互与 UI 全面打磨**：修正 `computeEventDragConstraints` 为基于目标位置的约束，同步阻止画布越界滚动并增加 CSS overscroll 控制；重构工具栏与筛选栏层级，事件卡片采用主题表面色 + 轨道色条、宽度自适应；日期标尺防重叠、连线降噪、“今天”参考线主题化。
+- **AI 助手能力再明确化**：`AiAssistantPanel.tsx` 增加能力说明折叠面板、`/` 命令菜单与上下文摘要显示；默认启用更多上下文源；`contextCollector.ts` 提升上下文上限并新增“读取整个工作区”模式；KV Cache 键加入上下文哈希与工作区版本，RAG 中文分词与 chunk 利用率提升，前端显示检索到的资料数量。
+- **番茄钟成就系统修复**：`pomodoro.ts` 拆分 `resetAchievements` 与 `resetTimer`，新增 `achievements`（今日 count / 连续 streak）结构；完成动画延迟阶段切换，确保庆祝/爆炸效果可被感知；MC 彩蛋增加开关与频率限制。
+- **MC 主题与字体兼容性**：收紧 MC 纹理选择器避免全局污染，补全各主题 `--bg-base-gradient`，`@font-face` 增加 `local()` 源；设置页移除内联字体预览 style，修复导入顺序与 tab 动画。
+- **调研文档**：输出 `docs/v2.7.2-research.md`，深度汇总竞品、AI 助手设计惯例、中文社区反馈与动画前端效果建议。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.7.2`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.7.2 状态。
+- **发布说明**：v2.7.2 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+- **GitHub Release v2.7.2**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.2>
 
-### 上一版本（v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+### 上一版本（v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+- v2.7.0：全面打磨与 AI 增强（Markdown 渲染、动画性能、时间轴交互、AI 能力快捷栏、KV Cache/RAG、番茄钟成就重置、MC 主题趣味化）。
+- GitHub Release v2.7.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.0>
 - v2.6.2：修复 v2.6.1 Rust 测试编译错误，UI/UX 与 AI 助手改进完整保留。
 - v2.6.1：时间轴布局修复、动画与设置页质感提升、AI 连接状态可见性（tag 已推送，但 Release 因 Rust 测试编译错误失败，功能由 v2.6.2 完整发布）。
 - v2.6.0：AI 风格模板 chips、AI apply-to-doc、时间轴筛选折叠、模板向导空状态。
@@ -337,5 +340,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.6  
-> 最后更新：2026-06-27（v2.7.0 已发布：全面打磨与 AI 增强）
+> 文档版本：v0.5.7  
+> 最后更新：2026-06-27（v2.7.2 已发布：v2.7.0 体验问题深度修复）

@@ -45,8 +45,7 @@ export function getBlockType(
 }
 
 export function getAchievementBlockType(sessionNumber: number): BlockType {
-  if (sessionNumber % 8 === 0) return 'enchanted';
-  if (sessionNumber % 4 === 0) return 'emerald';
+  if (sessionNumber % 4 === 0) return 'diamond';
   if (sessionNumber <= 3) return 'dirt';
   if (sessionNumber <= 6) return 'cobble';
   if (sessionNumber <= 8) return 'iron';

@@ -244,6 +244,7 @@ function runAiShortcut(
     messages,
     cached: false,
     entities: [],
+    retrievedChunks: 0,
   };
 }
 

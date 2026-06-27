@@ -8,12 +8,14 @@ interface UIState {
   sidebarCollapsed: boolean;
   detailPanelOpen: boolean;
   aiPanelOpen: boolean;
+  enhancedAnimations: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleDetailPanel: () => void;
   setDetailPanelOpen: (open: boolean) => void;
   toggleAiPanel: () => void;
   setAiPanelOpen: (open: boolean) => void;
+  setEnhancedAnimations: (enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -22,12 +24,14 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       detailPanelOpen: false,
       aiPanelOpen: false,
+      enhancedAnimations: false,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleDetailPanel: () => set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
       setDetailPanelOpen: (open) => set({ detailPanelOpen: open }),
       toggleAiPanel: () => set((s) => ({ aiPanelOpen: !s.aiPanelOpen })),
       setAiPanelOpen: (open) => set({ aiPanelOpen: open }),
+      setEnhancedAnimations: (enabled) => set({ enhancedAnimations: enabled }),
     }),
     { name: 'plotline:ui' },
   ),

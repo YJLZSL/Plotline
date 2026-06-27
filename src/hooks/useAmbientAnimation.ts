@@ -3,6 +3,7 @@ import type { Transition } from 'framer-motion';
 
 import { MOTION_BASE } from '@/lib/motion';
 import { useMotionStore } from '@/stores/motion';
+import { useUIStore } from '@/stores/ui';
 
 interface AmbientAnimation {
   transition: Transition;
@@ -13,7 +14,7 @@ interface AmbientAnimation {
 
 export function useAmbientAnimation(): AmbientAnimation {
   const animationsEnabled = useMotionStore((s) => s.animationsEnabled);
-  const fancyAnimationsEnabled = useMotionStore((s) => s.fancyAnimationsEnabled);
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
   const reduced = useReducedMotion();
 
   const enabled = animationsEnabled && !reduced;
@@ -23,7 +24,7 @@ export function useAmbientAnimation(): AmbientAnimation {
       transition: MOTION_BASE,
       animate: true,
       enabled: true,
-      fancy: fancyAnimationsEnabled,
+      fancy: enhancedAnimations,
     };
   }
 

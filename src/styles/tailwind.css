@@ -2,7 +2,15 @@
 
 @font-face {
   font-family: "Fusion Pixel 10px";
-  src: url("/fonts/fusion-pixel-10px-monospaced-zh_hans.otf") format("opentype");
+  src:
+    local("Fusion Pixel 10px"),
+    local("FusionPixel10px"),
+    local("Fusion Pixel 10px Monospaced"),
+    local("FusionPixel10pxMonospaced"),
+    local("Fusion Pixel 10px monospaced"),
+    local("Fusion Pixel 10px Monospaced ZH"),
+    local("FusionPixel10pxMonospacedZH"),
+    url("/fonts/fusion-pixel-10px-monospaced-zh_hans.otf") format("opentype");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -10,7 +18,12 @@
 
 @font-face {
   font-family: "Smiley Sans";
-  src: url("/fonts/SmileySans-Oblique.ttf") format("truetype");
+  src:
+    local("Smiley Sans"),
+    local("SmileySans"),
+    local("Smiley Sans Oblique"),
+    local("SmileySans-Oblique"),
+    url("/fonts/SmileySans-Oblique.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
   font-display: swap;

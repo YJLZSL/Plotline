@@ -4,7 +4,7 @@ use crate::commands::with_db;
 use crate::error::{AppError, AppResult};
 use crate::models::{
     AiChatInput, AiChatResult, AiConnectionTestInput, AiConnectionTestResult, AiInsertInput,
-    AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiSession, AiShortcutInput,
+    AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRagChunk, AiSession, AiShortcutInput,
     AiShortcutResult, AiStreamEvent, CreateAiMessageInput, CreateAiSessionInput, ListAiModelsInput,
 };
 use crate::services::settings::read_settings;
@@ -101,7 +101,7 @@ pub async fn ai_chat(state: State<'_, AppState>, input: AiChatInput) -> AppResul
         )?;
 
         let use_rag = input.use_rag.unwrap_or(true) && settings.ai_rag_enabled;
-        let chunks = if use_rag {
+        let mut chunks = if use_rag {
             crate::services::ai::search_chunks(
                 &db.conn,
                 &input.workspace_id,
@@ -111,6 +111,9 @@ pub async fn ai_chat(state: State<'_, AppState>, input: AiChatInput) -> AppResul
         } else {
             Vec::new()
         };
+        if let Some(rag) = input.rag_chunks.as_ref().filter(|c| !c.is_empty()) {
+            chunks.extend(crate::services::ai::rag_chunks_to_search_results(rag));
+        }
 
         let history = crate::services::ai::list_messages(
             &db.conn,
@@ -147,6 +150,7 @@ pub async fn ai_chat(state: State<'_, AppState>, input: AiChatInput) -> AppResul
         session_id,
         reply,
         messages,
+        retrieved_chunks: chunks.len(),
     })
 }
 
@@ -195,7 +199,7 @@ pub async fn ai_chat_stream(
         )?;
 
         let use_rag = input.use_rag.unwrap_or(true) && settings.ai_rag_enabled;
-        let chunks = if use_rag {
+        let mut chunks = if use_rag {
             crate::services::ai::search_chunks(
                 &db.conn,
                 &input.workspace_id,
@@ -205,6 +209,9 @@ pub async fn ai_chat_stream(
         } else {
             Vec::new()
         };
+        if let Some(rag) = input.rag_chunks.as_ref().filter(|c| !c.is_empty()) {
+            chunks.extend(crate::services::ai::rag_chunks_to_search_results(rag));
+        }
 
         let history = crate::services::ai::list_messages(
             &db.conn,
@@ -242,6 +249,7 @@ pub async fn ai_chat_stream(
         session_id,
         reply,
         messages,
+        retrieved_chunks: chunks.len(),
     })
 }
 
@@ -249,6 +257,34 @@ pub async fn ai_chat_stream(
 pub fn ai_index_workspace(state: State<'_, AppState>, workspace_id: String) -> AppResult<()> {
     with_db!(state, |conn| {
         crate::services::ai::index_workspace(conn, &workspace_id)
+    })
+}
+
+#[tauri::command]
+pub fn search_ai_chunks(
+    state: State<'_, AppState>,
+    workspace_id: String,
+    query: String,
+    limit: Option<usize>,
+) -> AppResult<Vec<AiRagChunk>> {
+    with_db!(state, |conn| {
+        let results = crate::services::ai::search_chunks(conn, &workspace_id, &query, limit)?;
+        Ok(results
+            .into_iter()
+            .map(|r| AiRagChunk {
+                source_type: r.chunk.source_type,
+                source_id: r.chunk.source_id,
+                content: r.chunk.content,
+                score: r.score,
+            })
+            .collect())
+    })
+}
+
+#[tauri::command]
+pub fn clear_ai_cache(state: State<'_, AppState>, workspace_id: String) -> AppResult<()> {
+    with_db!(state, |conn| {
+        crate::services::ai::invalidate_ai_cache_for_workspace(conn, &workspace_id)
     })
 }
 
@@ -295,12 +331,7 @@ pub async fn optimize_event(
     state: State<'_, AppState>,
     input: AiShortcutInput,
 ) -> AppResult<AiShortcutResult> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
-    let settings = read_settings(&db.conn)?;
-    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+    run_ai_shortcut(state, input).await
 }
 
 #[tauri::command]
@@ -308,12 +339,7 @@ pub async fn optimize_timeline_segment(
     state: State<'_, AppState>,
     input: AiShortcutInput,
 ) -> AppResult<AiShortcutResult> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
-    let settings = read_settings(&db.conn)?;
-    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+    run_ai_shortcut(state, input).await
 }
 
 #[tauri::command]
@@ -321,12 +347,7 @@ pub async fn summarize_workspace(
     state: State<'_, AppState>,
     input: AiShortcutInput,
 ) -> AppResult<AiShortcutResult> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
-    let settings = read_settings(&db.conn)?;
-    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+    run_ai_shortcut(state, input).await
 }
 
 #[tauri::command]
@@ -334,10 +355,63 @@ pub async fn check_timeline_consistency(
     state: State<'_, AppState>,
     input: AiShortcutInput,
 ) -> AppResult<AiShortcutResult> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
-    let settings = read_settings(&db.conn)?;
-    crate::services::ai::run_shortcut(&db.conn, &settings, input).await
+    run_ai_shortcut(state, input).await
+}
+
+async fn run_ai_shortcut(
+    state: State<'_, AppState>,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    let action = input.action;
+    let context = input.context.clone();
+    let (settings, prep) = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+        let settings = read_settings(&db.conn)?;
+        if !settings.ai_enabled {
+            return Err(AppError::Forbidden(
+                "AI 助手未启用，请先在设置中开启".into(),
+            ));
+        }
+        let prep = crate::services::ai::prepare_shortcut(&db.conn, &settings, input)?;
+        (settings, prep)
+    };
+
+    match prep {
+        crate::services::ai::ShortcutPrep::Cached(result) => Ok(result),
+        crate::services::ai::ShortcutPrep::NeedApi {
+            session_id,
+            user_message,
+            history,
+            entities,
+            retrieved_chunks,
+            cache_key,
+        } => {
+            let reply = crate::services::ai::call_shortcut_api(
+                &settings,
+                action,
+                &history,
+                &user_message,
+                &entities,
+                context.as_ref(),
+            )
+            .await?;
+            let db = state
+                .db
+                .lock()
+                .map_err(|e| AppError::Internal(format!("db lock poisoned: {e}")))?;
+            crate::services::ai::save_shortcut_result(
+                &db.conn,
+                &session_id,
+                &cache_key,
+                action,
+                &reply,
+                entities,
+                retrieved_chunks,
+                &user_message,
+            )
+        }
+    }
 }

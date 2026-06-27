@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { clampTodayLabelX, computeAddButtonLeft, computeEventDragConstraints, clampTimelineScroll } from './timelineLayout';
+import {
+  clampTodayLabelX,
+  computeAddButtonLeft,
+  computeEventDragConstraints,
+  clampTimelineScroll,
+  getEventCardWidth,
+  estimateLabelWidth,
+} from './timelineLayout';
 
 describe('clampTodayLabelX', () => {
   it('keeps the center position when far from edges', () => {
@@ -50,11 +57,16 @@ describe('computeEventDragConstraints', () => {
   });
 
   it('allows custom lane padding to be configured', () => {
-    expect(computeEventDragConstraints(220, 1000, 12)).toEqual({ left: 12, right: 780 });
+    expect(computeEventDragConstraints(220, 1000, 0, 12)).toEqual({ left: 12, right: 780 });
   });
 
   it('keeps the right boundary calculated based on total width', () => {
     expect(computeEventDragConstraints(220, 500)).toEqual({ left: 4, right: 280 });
+  });
+
+  it('adjusts constraints relative to the current card position', () => {
+    expect(computeEventDragConstraints(220, 1000, 100)).toEqual({ left: -96, right: 680 });
+    expect(computeEventDragConstraints(220, 1000, 900)).toEqual({ left: -896, right: -120 });
   });
 });
 
@@ -78,5 +90,40 @@ describe('clampTimelineScroll', () => {
 
   it('clamps positive scrollLeft back to 0 when there is no overflow', () => {
     expect(clampTimelineScroll(50, 0)).toBe(0);
+  });
+});
+
+describe('getEventCardWidth', () => {
+  it('returns the minimum width for very short titles', () => {
+    expect(getEventCardWidth('')).toBe(200);
+    expect(getEventCardWidth('A')).toBe(200);
+  });
+
+  it('returns the maximum width for very long titles', () => {
+    expect(getEventCardWidth('a'.repeat(100))).toBe(360);
+  });
+
+  it('estimates wider cards for Chinese titles than ASCII titles', () => {
+    const chinese = getEventCardWidth('这是一个比较长的中文标题');
+    const ascii = getEventCardWidth('abc');
+    expect(chinese).toBeGreaterThan(ascii);
+  });
+
+  it('scales width with title length', () => {
+    expect(getEventCardWidth('Short')).toBeLessThan(getEventCardWidth('A much longer event title'));
+  });
+});
+
+describe('estimateLabelWidth', () => {
+  it('adds padding to the raw character width', () => {
+    expect(estimateLabelWidth('')).toBe(16);
+  });
+
+  it('estimates wider labels for Chinese characters', () => {
+    expect(estimateLabelWidth('一月')).toBeGreaterThan(estimateLabelWidth('ab'));
+  });
+
+  it('estimates ASCII characters narrower than Chinese characters', () => {
+    expect(estimateLabelWidth('Jan')).toBe(16 + 3 * 7);
   });
 });

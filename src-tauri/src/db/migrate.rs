@@ -19,6 +19,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (13, include_str!("../../migrations/013_vn_sprites.sql")),
     (14, include_str!("../../migrations/014_reduce_motion.sql")),
     (15, include_str!("../../migrations/015_ai_cache.sql")),
+    (16, include_str!("../../migrations/016_ai_cache_invalidation_triggers.sql")),
 ];
 
 /// 创建 schema_migrations 表并依次执行迁移。
@@ -75,7 +76,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 15, "迁移 001-015 均应已应用");
+        assert_eq!(v, 16, "迁移 001-016 均应已应用");
     }
 
     #[test]
@@ -114,7 +115,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 15, "重复执行迁移不应改变版本号");
+        assert_eq!(v, 16, "重复执行迁移不应改变版本号");
     }
 
     #[test]
@@ -154,7 +155,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(v, 15, "迁移 015 应使版本号变为 15");
+        assert_eq!(v, 16, "迁移 016 应使版本号变为 16");
         // 验证 locations 表存在
         conn.execute(
             "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",
@@ -183,5 +184,40 @@ mod tests {
             .query_row("SELECT name FROM locations WHERE id='l1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(name, "城");
+    }
+
+    #[test]
+    fn child_entity_change_clears_ai_cache() {
+        let conn = test_conn();
+        conn.execute(
+            "INSERT INTO workspaces (id, name, created_at, updated_at) VALUES ('w1', 'w', 't', 't')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ai_cache (key, value, created_at, expires_at) \
+             VALUES ('ai:cache:w1:action:abc', 'cached', 't', '2099-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO tracks (id, workspace_id, name, color, sort_order, is_visible, created_at) \
+             VALUES ('t1', 'w1', '主线', '#F4B6C2', 0, 1, 't')",
+            [],
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ai_cache WHERE key = 'ai:cache:w1:action:abc'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "子实体插入应通过触发器清除对应工作区的 AI 缓存"
+        );
     }
 }

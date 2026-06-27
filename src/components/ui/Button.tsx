@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 
 import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/ui';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type Size = 'sm' | 'md' | 'lg' | 'icon';
@@ -47,11 +48,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref,
   ) => {
+    const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
     const classes = cn(
       'inline-flex items-center justify-center font-medium rounded-[6px] transition-colors',
       'relative overflow-hidden fancy-ripple',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
       'disabled:opacity-50 disabled:pointer-events-none select-none active:scale-[0.98]',
+      enhancedAnimations && 'ambient-scale',
       variants[variant],
       sizes[size],
       className,

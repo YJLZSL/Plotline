@@ -12,8 +12,6 @@ import {
   ShieldCheck,
   GanttChart as GanttIcon,
   CalendarRange,
-  CalendarDays,
-  Bookmark,
   Network,
   List,
   Image as ImageIcon,
@@ -25,6 +23,7 @@ import {
   Search,
   ChevronDown,
   ChevronsUpDown,
+  MoreHorizontal,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
@@ -51,7 +50,7 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE } from '@/lib/motion';
+import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
 import {
   useCreateEvent,
@@ -70,9 +69,15 @@ import { useCharactersQuery } from '@/features/characters/hooks';
 import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
 import { useTimelineFilters, filterEvents } from '@/features/timeline/useTimelineFilters';
-import { clampTodayLabelX, computeAddButtonLeft, computeEventDragConstraints, clampTimelineScroll } from '@/features/timeline/timelineLayout';
+import {
+  clampTodayLabelX,
+  computeAddButtonLeft,
+  computeEventDragConstraints,
+  clampTimelineScroll,
+  getEventCardWidth,
+  estimateLabelWidth,
+} from '@/features/timeline/timelineLayout';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
-import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useUIStore } from '@/stores/ui';
 import { toastError, toastInfo, toastWarning } from '@/stores/toast';
@@ -85,13 +90,14 @@ import * as Popover from '@radix-ui/react-popover';
 const TRACK_HEIGHT = 92;
 const TRACK_COLLAPSED_HEIGHT = 24;
 const TRACK_GAP = 6;
-const EVENT_MIN_WIDTH = 220;
+const EVENT_CARD_MAX_WIDTH = 360;
 const ADD_EVENT_BUTTON_WIDTH = 64;
 const EVENT_HEIGHT = 64;
 const RULER_HEIGHT = 44;
 const LEFT_PADDING = 24;
 const DAY_MS = 24 * 3600 * 1000;
 const ZOOM_LEVELS = ['hour', 'day', 'month', 'year'] as const;
+
 const EVENT_COLOR_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
 
 // 每个缩放级别下，单位宽度（像素 / 单位）
@@ -152,6 +158,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<Track | null>(null);
   const [newTrackName, setNewTrackName] = useState('');
   const [showConnections, setShowConnections] = useState(true);
+  const [onlySelectedConnections, setOnlySelectedConnections] = useState(false);
   const [checkingConsistency, setCheckingConsistency] = useState(false);
   const [conflictEventIds, setConflictEventIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'timeline' | 'gantt' | 'tree' | 'text'>('timeline');
@@ -160,7 +167,6 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(0);
-  const eventElementRegistry = useRef(new Map<string, HTMLElement>());
   const [draggingEvent, setDraggingEvent] = useState<{ id: string; offsetX: number } | null>(null);
   const connectEvents = useConnectEvents(workspaceId);
   const disconnectEvents = useDisconnectEvents(workspaceId);
@@ -241,19 +247,23 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     if (absoluteEvents.length > 0) {
       const times = absoluteEvents.map((e) => new Date(e.dateValue).getTime()).filter((n) => !Number.isNaN(n));
       if (times.length > 0) {
-        minTime = Math.min(...times);
-        maxTime = Math.max(...times);
-        // 留一些边距
-        const span = maxTime - minTime || 365 * DAY_MS;
-        minTime -= span * 0.1;
-        maxTime += span * 0.15;
+        const firstTime = Math.min(...times);
+        const lastTime = Math.max(...times);
+        const span = lastTime - firstTime || 365 * DAY_MS;
+        // 左边缘对齐到第一个事件，右侧保留 15% 边距；无事件时使用默认边距
+        minTime = firstTime;
+        maxTime = lastTime + span * 0.15;
       }
+    } else {
+      const span = 365 * DAY_MS;
+      minTime -= span * 0.05;
+      maxTime += span * 0.1;
     }
     return createTimeScale(minTime, maxTime, zoom, LEFT_PADDING, ZOOM_UNIT_WIDTH[zoom]);
   }, [filteredEvents, zoom]);
 
   const totalWidth = useMemo(
-    () => Math.max(800, timeScale.timeToX(timeScale.max) + LEFT_PADDING + EVENT_MIN_WIDTH),
+    () => Math.max(800, timeScale.timeToX(timeScale.max) + LEFT_PADDING + EVENT_CARD_MAX_WIDTH),
     [timeScale],
   );
 
@@ -331,8 +341,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   };
 
   const handleEventDragEnd = async (ev: Event, track: Track, _info: PanInfo, finalX: number) => {
+    const cardWidth = getEventCardWidth(ev.title);
+    const lanePadding = 4;
+    const clampedX = Math.max(lanePadding, Math.min(totalWidth - cardWidth, finalX));
+
     if (ev.dateType === 'absolute') {
-      const newTime = timeScale.xToTime(finalX);
+      const newTime = timeScale.xToTime(clampedX);
       await updateEvent.mutateAsync({
         id: ev.id,
         dateType: 'absolute',
@@ -341,7 +355,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       });
     } else {
       const trackEvents = eventsByTrack.get(track.id) ?? [];
-      const newSort = computeNewSortOrder(ev, finalX, trackEvents, eventPositions, timeScale);
+      const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, timeScale);
       if (newSort !== ev.sortOrder) {
         await updateEvent.mutateAsync({
           id: ev.id,
@@ -460,117 +474,37 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         workspaceName={workspaceName}
         right={
           <div className="flex items-center gap-1">
-            <div className="flex bg-bg-elevated rounded-[6px] p-0.5 mr-1">
-              <button
-                onClick={() => setViewMode('timeline')}
-                className={cn(
-                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
-                  viewMode === 'timeline'
-                    ? 'bg-bg-surface text-text-primary shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-                title={t('timeline.title')}
-              >
-                <CalendarRange className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('timeline.title')}</span>
-              </button>
-              <button
-                onClick={() => setViewMode('gantt')}
-                className={cn(
-                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
-                  viewMode === 'gantt'
-                    ? 'bg-bg-surface text-text-primary shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-                title={t('gantt.title')}
-              >
-                <GanttIcon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('gantt.title')}</span>
-              </button>
-              <button
-                onClick={() => setViewMode('tree')}
-                className={cn(
-                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
-                  viewMode === 'tree'
-                    ? 'bg-bg-surface text-text-primary shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-                title={t('timeline.treeMode')}
-              >
-                <Network className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('timeline.treeMode')}</span>
-              </button>
-              <button
-                onClick={() => setViewMode('text')}
-                className={cn(
-                  'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
-                  viewMode === 'text'
-                    ? 'bg-bg-surface text-text-primary shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary',
-                )}
-                title={t('timeline.textMode')}
-              >
-                <List className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('timeline.textMode')}</span>
-              </button>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => cycleZoom(-1)} title={t('timeline.zoom')}>
+            <ViewModeSegment value={viewMode} onChange={setViewMode} />
+            <div className="w-px h-5 bg-border mx-1" />
+            <Button variant="ghost" size="sm" onClick={() => cycleZoom(-1)} title={t('timeline.zoomOut')}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <span className="text-xs text-text-secondary min-w-[40px] text-center">
               {t(`timeline.${zoom}`)}
             </span>
-            <Button variant="ghost" size="sm" onClick={() => cycleZoom(1)} title={t('timeline.zoom')}>
+            <Button variant="ghost" size="sm" onClick={() => cycleZoom(1)} title={t('timeline.zoomIn')}>
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
             <div className="w-px h-5 bg-border mx-1" />
-            <Button
-              variant={showConnections ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setShowConnections((v) => !v)}
-              className="gap-1.5"
-              title="切换连线显示"
-            >
-              <Link2 className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setConnectionType((t) => (t === 'causal' ? 'foreshadow' : 'causal'))}
-              className="gap-1.5 text-[11px]"
-              title={`${t('timeline.connectionType')}: ${connectionType === 'causal' ? t('timeline.connectionTypeCausal') : t('timeline.connectionTypeForeshadow')}`}
-            >
-              {connectionType === 'causal' ? t('timeline.connectionTypeCausal') : t('timeline.connectionTypeForeshadow')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              loading={checkingConsistency}
-              onClick={handleConsistencyCheck}
-              className="gap-1.5"
-              title={t('timeline.consistencyCheck')}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-            </Button>
-            <div className="w-px h-5 bg-border mx-1" />
-            <AiToolbarButton
-              view="timeline"
-              viewLabel={t('timeline.title')}
-              selection={
+            <TimelineMoreMenu
+              showConnections={showConnections}
+              onToggleConnections={() => setShowConnections((v) => !v)}
+              onlySelectedConnections={onlySelectedConnections}
+              onToggleOnlySelectedConnections={() => setOnlySelectedConnections((v) => !v)}
+              connectionType={connectionType}
+              onSwitchConnectionType={() => setConnectionType((ty) => (ty === 'causal' ? 'foreshadow' : 'causal'))}
+              checkingConsistency={checkingConsistency}
+              onCheckConsistency={handleConsistencyCheck}
+              aiSelection={
                 selectedEventId
                   ? (() => {
                       const ev = events.find((e) => e.id === selectedEventId);
                       return ev
-                        ? { type: 'event', id: ev.id, label: ev.title, content: ev.description ?? '' }
+                        ? { type: 'event' as const, id: ev.id, label: ev.title, content: ev.description ?? '' }
                         : null;
                     })()
                   : null
               }
-              suggestions={[
-                { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
-                { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
-                { label: t('ai.suggestNextEvent'), prompt: t('ai.promptNextEvent') },
-              ]}
             />
           </div>
         }
@@ -596,14 +530,14 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         />
       )}
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         <motion.div
           key={viewMode}
-          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, x: 8 }}
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, x: 4 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={reducedMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
-          transition={reducedMotion ? { duration: 0 } : MOTION_BASE}
-          className="flex flex-1 min-h-0 overflow-hidden will-change-transform"
+          exit={reducedMotion ? { opacity: 1 } : { opacity: 0, x: -2 }}
+          transition={reducedMotion ? { duration: 0 } : MOTION_FAST}
+          className="flex flex-1 min-h-0 overflow-hidden"
         >
           {viewMode === 'gantt' ? (
         <GanttChart
@@ -659,7 +593,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* 轨道面板 */}
         <aside className="w-56 flex-shrink-0 border-r border-border bg-bg-surface flex flex-col">
-          <div className="h-11 px-3 flex items-center justify-between border-b border-border">
+          <div className="h-11 px-3 flex items-center justify-between border-b border-border bg-bg-elevated">
             <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
               {t('timeline.tracks')}
             </span>
@@ -711,17 +645,17 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         <div
           ref={canvasRef}
           data-testid="timeline-canvas"
-          className="flex-1 overflow-auto bg-bg-base relative"
+          className="flex-1 overflow-auto bg-bg-base relative overscroll-x-contain [-webkit-overflow-scrolling:auto]"
           onWheel={(e) => {
+            e.preventDefault();
             const el = e.currentTarget;
             if (e.ctrlKey || e.metaKey) {
-              e.preventDefault();
               cycleZoom(e.deltaY > 0 ? 1 : -1);
-            } else if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-              e.preventDefault();
-              el.scrollLeft += e.deltaY * 0.8;
-              el.scrollLeft = clampTimelineScroll(el.scrollLeft, el.scrollWidth - el.clientWidth);
+              return;
             }
+            const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+            const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY * 0.8 : e.deltaX;
+            el.scrollLeft = clampTimelineScroll(el.scrollLeft + delta, maxScroll);
           }}
           onScroll={(e) => {
             const el = e.currentTarget;
@@ -788,8 +722,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                     viewportWidth={viewportWidth}
                     pendingConnection={pendingConnection}
                     selectedEventId={selectedEventId}
+                    onlySelectedConnections={onlySelectedConnections}
                     eventConnections={eventConnections}
-                    eventElements={eventElementRegistry.current}
                     draggingEvent={draggingEvent}
                     onDisconnect={(sourceId, targetId) => void disconnectEvents.mutateAsync({ sourceId, targetId })}
                   />
@@ -813,7 +747,6 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   selectedEventId={selectedEventId}
                   pendingConnection={pendingConnection}
                   conflictEventIds={conflictEventIds}
-                  eventElementRegistry={eventElementRegistry}
                   copiedEvent={copiedEvent}
                   onSelectEvent={(id) => {
                     if (pendingConnection && pendingConnection !== id) {
@@ -923,6 +856,170 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   );
 }
 
+// ===== 工具栏组件 =====
+function ViewModeSegment({
+  value,
+  onChange,
+}: {
+  value: 'timeline' | 'gantt' | 'tree' | 'text';
+  onChange: (v: 'timeline' | 'gantt' | 'tree' | 'text') => void;
+}) {
+  const { t } = useI18n();
+  const modes: Array<{ id: typeof value; icon: React.ComponentType<{ className?: string }>; labelKey: string }> = [
+    { id: 'timeline', icon: CalendarRange, labelKey: 'timeline.title' },
+    { id: 'gantt', icon: GanttIcon, labelKey: 'gantt.title' },
+    { id: 'tree', icon: Network, labelKey: 'timeline.treeMode' },
+    { id: 'text', icon: List, labelKey: 'timeline.textMode' },
+  ];
+  return (
+    <div className="flex bg-bg-elevated rounded-[6px] p-0.5 mr-1">
+      {modes.map((m) => {
+        const Icon = m.icon;
+        return (
+          <button
+            key={m.id}
+            onClick={() => onChange(m.id)}
+            className={cn(
+              'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+              value === m.id
+                ? 'bg-bg-surface text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary',
+            )}
+            title={t(m.labelKey)}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t(m.labelKey)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TimelineMoreMenu({
+  showConnections,
+  onToggleConnections,
+  onlySelectedConnections,
+  onToggleOnlySelectedConnections,
+  connectionType,
+  onSwitchConnectionType,
+  checkingConsistency,
+  onCheckConsistency,
+  aiSelection,
+}: {
+  showConnections: boolean;
+  onToggleConnections: () => void;
+  onlySelectedConnections: boolean;
+  onToggleOnlySelectedConnections: () => void;
+  connectionType: 'causal' | 'foreshadow';
+  onSwitchConnectionType: () => void;
+  checkingConsistency: boolean;
+  onCheckConsistency: () => void;
+  aiSelection: { type: 'event'; id: string; label: string; content: string } | null;
+}) {
+  const { t } = useI18n();
+  const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
+  const setAiContext = useAiContextStore((s) => s.setContext);
+  const [open, setOpen] = useState(false);
+
+  const openAi = () => {
+    setAiContext({
+      view: 'timeline',
+      viewLabel: t('timeline.title'),
+      selection: aiSelection,
+      suggestions: [
+        { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
+        { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
+        { label: t('ai.suggestNextEvent'), prompt: t('ai.promptNextEvent') },
+      ],
+    });
+    setAiPanelOpen(true);
+    setOpen(false);
+  };
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1" title={t('common.more')}>
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </Button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="bottom"
+          align="end"
+          sideOffset={4}
+          collisionPadding={8}
+          avoidCollisions
+          className={cn(
+            'z-50 min-w-[180px] max-w-[260px]',
+            'rounded-[8px] border border-border bg-bg-surface shadow-[var(--shadow-elevated)] p-1',
+            'focus:outline-none',
+          )}
+        >
+          <div className="flex flex-col gap-0.5">
+            <button
+              onClick={() => {
+                onToggleConnections();
+                setOpen(false);
+              }}
+              className={cn(
+                'flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left transition-colors',
+                showConnections ? 'text-accent bg-accent/10' : 'text-text-secondary hover:bg-bg-elevated',
+              )}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              {showConnections ? t('timeline.hideConnections') : t('timeline.showConnections')}
+            </button>
+            <button
+              onClick={() => {
+                onSwitchConnectionType();
+                setOpen(false);
+              }}
+              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left text-text-secondary hover:bg-bg-elevated transition-colors"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {t('timeline.connectionType')}: {connectionType === 'causal' ? t('timeline.connectionTypeCausal') : t('timeline.connectionTypeForeshadow')}
+            </button>
+            <button
+              onClick={() => {
+                onToggleOnlySelectedConnections();
+                setOpen(false);
+              }}
+              className={cn(
+                'flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left transition-colors',
+                onlySelectedConnections ? 'text-accent bg-accent/10' : 'text-text-secondary hover:bg-bg-elevated',
+              )}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {onlySelectedConnections ? t('timeline.showAllConnections') : t('timeline.showSelectedConnectionsOnly')}
+            </button>
+            <div className="h-px bg-border my-0.5" />
+            <button
+              onClick={() => {
+                onCheckConsistency();
+                setOpen(false);
+              }}
+              disabled={checkingConsistency}
+              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left text-text-secondary hover:bg-bg-elevated transition-colors disabled:opacity-50"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {t('timeline.consistencyCheck')}
+            </button>
+            <button
+              onClick={openAi}
+              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left text-text-secondary hover:bg-bg-elevated transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {t('ai.ask')}
+            </button>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 // ===== 日期标尺 =====
 function DateRuler({
   timeScale,
@@ -943,9 +1040,21 @@ function DateRuler({
     const majors = major.map((time) => ({ time, label: fmt.format(new Date(time)) }));
     const minors = minor.map((time) => ({ time }));
 
+    // 动态采样主刻度，避免标签重叠：间隔小于预估宽度 + 8px 时跳过
+    const sampled: typeof majors = [];
+    let lastX: number | null = null;
+    for (const tick of majors) {
+      const x = timeScale.timeToX(tick.time);
+      const width = estimateLabelWidth(tick.label);
+      if (lastX === null || x - lastX >= width + 8) {
+        sampled.push(tick);
+        lastX = x;
+      }
+    }
+
     const now = Date.now();
     const today = now >= min && now <= max ? timeScale.timeToX(now) : null;
-    return { majorTicks: majors, minorTicks: minors, todayX: today };
+    return { majorTicks: sampled, minorTicks: minors, todayX: today };
   }, [min, max, zoom, timeScale, i18n.language]);
 
   return (
@@ -1001,9 +1110,9 @@ function DateRuler({
             className="absolute top-0 bottom-0 z-20 pointer-events-none"
             style={{ left: todayX }}
           >
-            <div className="h-full w-px bg-red-500/60" />
+            <div className="h-full w-px bg-accent/50" />
             <span
-              className="absolute top-1 left-0 text-[9px] font-bold text-red-500 bg-bg-surface px-1 rounded whitespace-nowrap"
+              className="absolute top-1 left-0 bg-bg-surface border border-border shadow-sm rounded px-1.5 py-0.5 text-xs text-text-secondary whitespace-nowrap"
               style={{ left: clampTodayLabelX(todayX, totalWidth) - todayX }}
               data-testid="today-marker-label"
             >
@@ -1026,29 +1135,7 @@ function DateRuler({
   );
 }
 
-interface MeasuredRect {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-  midY: number;
-}
-
-function measureEventRect(el: HTMLElement, container: HTMLElement): MeasuredRect | null {
-  const rect = el.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  const left = rect.left - containerRect.left;
-  const top = rect.top - containerRect.top;
-  return {
-    left,
-    right: left + rect.width,
-    top,
-    bottom: top + rect.height,
-    midY: top + rect.height / 2,
-  };
-}
-
-// ===== 连线层（SVG，基于 DOM 测量） =====
+// ===== 连线层（SVG，纯计算，不随滚动测量 DOM） =====
 function ConnectionLayer({
   events,
   tracks,
@@ -1059,8 +1146,8 @@ function ConnectionLayer({
   viewportWidth,
   pendingConnection,
   selectedEventId,
+  onlySelectedConnections,
   eventConnections,
-  eventElements,
   draggingEvent,
   onDisconnect,
 }: {
@@ -1073,51 +1160,12 @@ function ConnectionLayer({
   viewportWidth: number;
   pendingConnection: string | null;
   selectedEventId: string | null;
+  onlySelectedConnections: boolean;
   eventConnections: EventConnection[];
-  eventElements: Map<string, HTMLElement>;
   draggingEvent: { id: string; offsetX: number } | null;
   onDisconnect: (sourceId: string, targetId: string) => void;
 }) {
-  const canvasRef = useRef<HTMLDivElement | null>(null);
-  const [measuredRects, setMeasuredRects] = useState<Map<string, MeasuredRect>>(new Map());
-
-  // Find the scrolling canvas container from the SVG root parent
-  const svgRef = useRef<SVGSVGElement>(null);
-  useEffect(() => {
-    if (svgRef.current) {
-      canvasRef.current = svgRef.current.closest('.overflow-auto') as HTMLDivElement | null;
-    }
-  }, []);
-
-  // Re-measure on scroll, resize, data or dragging changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const measure = () => {
-      const next = new Map<string, MeasuredRect>();
-      for (const [id, el] of eventElements.entries()) {
-        const rect = measureEventRect(el, canvas);
-        if (rect) next.set(id, rect);
-      }
-      setMeasuredRects(next);
-    };
-
-    measure();
-    const rafId = requestAnimationFrame(measure);
-
-    const ro = new ResizeObserver(measure);
-    ro.observe(canvas);
-    canvas.addEventListener('scroll', measure, { passive: true });
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      ro.disconnect();
-      canvas.removeEventListener('scroll', measure);
-    };
-  }, [eventElements, events, tracks, scrollLeft, viewportWidth, draggingEvent]);
-
-  const buffer = EVENT_MIN_WIDTH * 2;
+  const buffer = EVENT_CARD_MAX_WIDTH * 2;
   const visibleMin = scrollLeft - buffer;
   const visibleMax = scrollLeft + viewportWidth + buffer;
 
@@ -1137,48 +1185,35 @@ function ConnectionLayer({
   const eventPoints = useMemo(() => {
     const map = new Map<string, { source: { x: number; y: number }; target: { x: number; y: number } }>();
     for (const ev of events) {
-      const rect = measuredRects.get(ev.id);
+      const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
+      const width = getEventCardWidth(ev.title);
       const trackIndex = tracks.findIndex((t) => t.id === ev.trackId);
       const trackTop = trackTopByIndex.get(trackIndex) ?? RULER_HEIGHT;
-      let sourceX: number;
-      let targetX: number;
-      let y: number;
-
-      if (rect) {
-        sourceX = rect.right;
-        targetX = rect.left;
-        y = rect.midY;
-        if (draggingEvent?.id === ev.id) {
-          sourceX += draggingEvent.offsetX;
-          targetX += draggingEvent.offsetX;
-        }
-      } else {
-        // Fallback to timeScale-based approximation while measuring
-        const cx = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-        sourceX = cx + EVENT_MIN_WIDTH / 2;
-        targetX = cx - EVENT_MIN_WIDTH / 2;
-        const height = collapsedTrackIds.includes(ev.trackId) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
-        y = trackTop + height / 2;
-      }
-      map.set(ev.id, { source: { x: sourceX, y }, target: { x: targetX, y } });
+      const height = collapsedTrackIds.includes(ev.trackId) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
+      const offsetX = draggingEvent?.id === ev.id ? draggingEvent.offsetX : 0;
+      map.set(ev.id, {
+        source: { x: x + width + offsetX, y: trackTop + height / 2 },
+        target: { x: x + offsetX, y: trackTop + height / 2 },
+      });
     }
     return map;
-  }, [events, measuredRects, draggingEvent, tracks, collapsedTrackIds, timeScale, eventPositions, trackTopByIndex]);
+  }, [events, eventPositions, timeScale, tracks, collapsedTrackIds, trackTopByIndex, draggingEvent]);
 
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
       const sp = eventPoints.get(conn.sourceId)?.source;
       const tp = eventPoints.get(conn.targetId)?.target;
       if (!sp || !tp) return false;
+      if (onlySelectedConnections && selectedEventId) {
+        if (conn.sourceId !== selectedEventId && conn.targetId !== selectedEventId) return false;
+      }
       return sp.x >= visibleMin && sp.x <= visibleMax && tp.x >= visibleMin && tp.x <= visibleMax;
     });
-  }, [eventConnections, eventPoints, visibleMin, visibleMax]);
+  }, [eventConnections, eventPoints, visibleMin, visibleMax, onlySelectedConnections, selectedEventId]);
 
   return (
     <svg
-      ref={svgRef}
-      className="absolute top-0 left-0"
-      style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
+      className="absolute top-0 left-0 w-full h-full pointer-events-none"
     >
       {visibleConnections.map((conn) => {
         const sp = eventPoints.get(conn.sourceId)?.source;
@@ -1198,21 +1233,21 @@ function ConnectionLayer({
               d={path}
               fill="none"
               stroke={isForeshadow ? 'var(--accent-soft)' : isActive ? 'var(--accent)' : 'var(--text-secondary)'}
-              strokeWidth={isActive ? 2.5 : 1.5}
+              strokeWidth={isActive ? 2 : 1}
               strokeDasharray={isForeshadow ? '6 4' : '4 3'}
-              opacity={isActive ? 0.9 : 0.4}
-              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+              opacity={isActive ? 0.9 : 0.25}
+              className="pointer-events-auto cursor-pointer"
               onClick={() => onDisconnect(conn.sourceId, conn.targetId)}
               onMouseEnter={(e) => {
-                e.currentTarget.setAttribute('stroke-width', '3');
+                e.currentTarget.setAttribute('stroke-width', '2');
                 e.currentTarget.setAttribute('opacity', '0.9');
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.setAttribute('stroke-width', isActive ? '2.5' : '1.5');
-                e.currentTarget.setAttribute('opacity', isActive ? '0.9' : '0.4');
+                e.currentTarget.setAttribute('stroke-width', isActive ? '2' : '1');
+                e.currentTarget.setAttribute('opacity', isActive ? '0.9' : '0.25');
               }}
             />
-            <circle cx={tp.x} cy={tp.y} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} style={{ pointerEvents: 'none' }} />
+            <circle cx={tp.x} cy={tp.y} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} className="pointer-events-none" />
           </g>
         );
       })}
@@ -1236,7 +1271,6 @@ function TrackLane({
   selectedEventId,
   pendingConnection,
   conflictEventIds,
-  eventElementRegistry,
   copiedEvent,
   onSelectEvent,
   onEditEvent,
@@ -1272,7 +1306,6 @@ function TrackLane({
   selectedEventId: string | null;
   pendingConnection: string | null;
   conflictEventIds: Set<string>;
-  eventElementRegistry: React.MutableRefObject<Map<string, HTMLElement>>;
   copiedEvent: Event | null;
   onSelectEvent: (id: string) => void;
   onEditEvent: (ev: Event) => void;
@@ -1315,12 +1348,13 @@ function TrackLane({
 
   const visibleEvents = useMemo(() => {
     if (viewportWidth === 0) return events;
-    const buffer = EVENT_MIN_WIDTH * 2;
+    const buffer = EVENT_CARD_MAX_WIDTH * 2;
     const min = scrollLeft - buffer;
     const max = scrollLeft + viewportWidth + buffer;
     return events.filter((ev) => {
       const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-      return x + EVENT_MIN_WIDTH >= min && x <= max;
+      const width = getEventCardWidth(ev.title);
+      return x + width >= min && x <= max;
     });
   }, [events, eventPositions, timeScale, scrollLeft, viewportWidth]);
 
@@ -1330,7 +1364,7 @@ function TrackLane({
   );
 
   const addButtonLeft = useMemo(
-    () => computeAddButtonLeft(eventXs, totalWidth, ADD_EVENT_BUTTON_WIDTH, EVENT_MIN_WIDTH, 12),
+    () => computeAddButtonLeft(eventXs, totalWidth, ADD_EVENT_BUTTON_WIDTH, EVENT_CARD_MAX_WIDTH, 12),
     [eventXs, totalWidth],
   );
 
@@ -1343,9 +1377,13 @@ function TrackLane({
           ref={containerRef}
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0, height: targetHeight }}
-          transition={{ ...MOTION_BASE, delay: Math.min(index * 0.04, 0.2), height: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } }}
+          transition={{
+            ...MOTION_BASE,
+            delay: Math.min(index * 0.025, 0.05),
+            height: MOTION_FAST,
+          }}
           className={cn(
-            'group relative border-b border-border/40 overflow-hidden will-change-transform',
+            'group relative border-b border-border/40 overflow-hidden',
             index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
           )}
           style={{ minWidth: totalWidth, height: targetHeight }}
@@ -1386,65 +1424,55 @@ function TrackLane({
       )}
 
       {/* 事件卡片 */}
-      <AnimatePresence initial={false}>
-        {!collapsed && (
-          <motion.div
-            key={`${track.id}-content`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute inset-0"
-          >
-            <AnimatePresence>
-              {visibleEvents.map((ev, i) => {
-                const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-                return (
-                  <EventCard
-                    key={ev.id}
-                    event={ev}
-                    track={track}
-                    index={i}
-                    x={x}
-                    totalWidth={totalWidth}
-                    selected={ev.id === selectedEventId}
-                    pendingConnection={pendingConnection === ev.id}
-                    isConflict={conflictEventIds.has(ev.id)}
-                    isNew={newEventIds.has(ev.id)}
-                    eventElementRegistry={eventElementRegistry}
-                    onClick={() => onSelectEvent(ev.id)}
-                    onDoubleClick={() => onEditEvent(ev)}
-                    onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
-                    onStartConnection={() => onStartConnection(ev.id)}
-                    onDuplicate={() => onDuplicateEvent(ev)}
-                    onAskAi={() => onAskAiEvent(ev)}
-                    onDelete={() => onDeleteEvent(ev.id)}
-                    onChangeStatus={(status) => onUpdateEventStatus(ev.id, status)}
-                    onDragStart={() => onDragStart(ev.id)}
-                    onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
-                    onDragEndNotify={() => onDragEndNotify()}
-                  />
-                );
-              })}
-            </AnimatePresence>
+      {!collapsed && (
+        <div className="absolute inset-0">
+          <AnimatePresence>
+            {visibleEvents.map((ev, i) => {
+              const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
+              return (
+                <EventCard
+                  key={ev.id}
+                  event={ev}
+                  track={track}
+                  index={i}
+                  x={x}
+                  totalWidth={totalWidth}
+                  selected={ev.id === selectedEventId}
+                  pendingConnection={pendingConnection === ev.id}
+                  isConflict={conflictEventIds.has(ev.id)}
+                  isNew={newEventIds.has(ev.id)}
+                  onClick={() => onSelectEvent(ev.id)}
+                  onDoubleClick={() => onEditEvent(ev)}
+                  onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
+                  onStartConnection={() => onStartConnection(ev.id)}
+                  onDuplicate={() => onDuplicateEvent(ev)}
+                  onAskAi={() => onAskAiEvent(ev)}
+                  onDelete={() => onDeleteEvent(ev.id)}
+                  onChangeStatus={(status) => onUpdateEventStatus(ev.id, status)}
+                  onDragStart={() => onDragStart(ev.id)}
+                  onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
+                  onDragEndNotify={() => onDragEndNotify()}
+                />
+              );
+            })}
+          </AnimatePresence>
 
-            {/* 添加按钮 */}
-            <button
-              onClick={onAddEvent}
-              data-testid="add-event-btn"
-              className={cn(
-                'absolute top-3 z-10 flex items-center justify-center gap-1',
-                'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
-                'hover:border-accent hover:text-accent transition-colors',
-              )}
-              style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
-              title={t('timeline.addEvent')}
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {/* 添加按钮 */}
+          <button
+            onClick={onAddEvent}
+            data-testid="add-event-btn"
+            className={cn(
+              'absolute top-3 z-10 flex items-center justify-center gap-1',
+              'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
+              'hover:border-accent hover:text-accent transition-colors',
+            )}
+            style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
+            title={t('timeline.addEvent')}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      )}
         </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -1502,7 +1530,6 @@ function EventCard({
   pendingConnection,
   isConflict,
   isNew,
-  eventElementRegistry,
   onClick,
   onDoubleClick,
   onDragEnd,
@@ -1524,7 +1551,6 @@ function EventCard({
   pendingConnection: boolean;
   isConflict: boolean;
   isNew: boolean;
-  eventElementRegistry: React.MutableRefObject<Map<string, HTMLElement>>;
   onClick: () => void;
   onDoubleClick: () => void;
   onDragEnd: (info: PanInfo, finalX: number) => void;
@@ -1539,6 +1565,7 @@ function EventCard({
 }) {
   const { t } = useI18n();
   const ambient = useAmbientAnimation();
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
   const color = event.color ?? track.color;
   const statusMap: Record<
     EventStatus,
@@ -1550,23 +1577,20 @@ function EventCard({
   };
   const status = statusMap[event.status];
   const isRelative = event.dateType !== 'absolute';
+  const cardWidth = getEventCardWidth(event.title);
 
   const initial = isNew
     ? { opacity: 1, scale: 1.05, y: 0 }
     : { opacity: 0, scale: 0.9, y: 8 };
   const animate = { opacity: 1, scale: 1, y: 0 };
   const whileHover = ambient.animate ? { scale: 1.02, y: -2 } : { y: -2 };
-  const whileTap = ambient.fancy ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 };
+  const whileTap = enhancedAnimations ? { scale: 0.96 } : { scale: 0.98 };
   const transition = { ...ambient.transition, delay: Math.min(index * 0.015, 0.1) };
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <motion.div
-          ref={(el) => {
-            if (el) eventElementRegistry.current.set(event.id, el);
-            else eventElementRegistry.current.delete(event.id);
-          }}
           data-event-id={event.id}
       initial={initial}
       animate={animate}
@@ -1575,7 +1599,8 @@ function EventCard({
       drag="x"
       dragMomentum={false}
       dragElastic={0}
-      dragConstraints={computeEventDragConstraints(EVENT_MIN_WIDTH, totalWidth)}
+      dragSnapToOrigin
+      dragConstraints={computeEventDragConstraints(cardWidth, totalWidth, x)}
       onDragStart={onDragStart}
       onDrag={(_, info) => onDrag(info, info.offset.x)}
       onDragEnd={(_, info) => {
@@ -1591,7 +1616,8 @@ function EventCard({
         'absolute top-3 cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
         'rounded-[8px] overflow-hidden',
         'shadow-[var(--shadow-card)] transition-shadow',
-        'border-2 backdrop-blur-sm will-change-transform fancy-ripple',
+        'border-2 backdrop-blur-sm fancy-ripple bg-bg-surface',
+        enhancedAnimations && 'ambient-scale',
         selected
           ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
           : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
@@ -1600,13 +1626,12 @@ function EventCard({
       )}
       style={{
         left: x,
-        width: EVENT_MIN_WIDTH,
+        width: cardWidth,
         height: EVENT_HEIGHT,
-        background: `linear-gradient(135deg, ${color}25 0%, ${color}08 100%)`,
       }}
     >
-      {/* 顶部色带 */}
-      <div className="h-1 w-full" style={{ backgroundColor: color }} />
+      {/* 左侧轨道色条 */}
+      <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
 
       {isConflict && (
         <div
@@ -1617,15 +1642,11 @@ function EventCard({
 
       <div className="px-3.5 py-2 flex flex-col gap-1 min-w-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          {isRelative ? (
-            <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
-              <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
-              {t('timeline.relativeBadge')}
-            </span>
-          ) : (
-            <span className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', status.dot)} />
-          )}
-          <span className="text-xs font-semibold text-text-primary truncate flex-1 min-w-0">
+          <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
+            <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
+            {isRelative ? t('timeline.relativeBadge') : event.dateValue}
+          </span>
+          <span className="text-sm font-semibold text-text-primary truncate flex-1 min-w-0">
             {event.title}
           </span>
           {/* 连线手柄 */}
@@ -1640,16 +1661,6 @@ function EventCard({
             <Link2 className="h-3 w-3" />
           </button>
         </div>
-        {event.dateValue && (
-          <span className="flex items-center gap-1 text-[10px] text-text-secondary truncate">
-            {event.dateType === 'absolute' ? (
-              <CalendarDays className="h-3 w-3 flex-shrink-0" />
-            ) : (
-              <Bookmark className="h-3 w-3 flex-shrink-0" />
-            )}
-            {event.dateValue}
-          </span>
-        )}
         {event.characterIds.length > 0 && (
           <div className="flex items-center gap-0.5 mt-0.5">
             {event.characterIds.slice(0, 4).map((cid, i) => (

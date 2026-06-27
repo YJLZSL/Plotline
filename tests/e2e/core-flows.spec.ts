@@ -22,7 +22,7 @@ test.describe('核心用户流程', () => {
     await page.locator('nav a').filter({ hasText: /地图|Map/ }).click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/map/);
 
-    await page.getByTestId('add-location-btn').click();
+    await page.getByTestId('add-location-btn').first().click();
     await page.getByTestId('location-name-input').fill('王城');
     await page.getByTestId('location-save-btn').click();
 
@@ -33,7 +33,7 @@ test.describe('核心用户流程', () => {
     await page.locator('nav a').filter({ hasText: /VN|视觉小说/ }).click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/vn/);
 
-    await page.getByTestId('add-scene-btn').click();
+    await page.getByTestId('add-scene-btn').first().click();
     await page.getByTestId('scene-title-input').fill('开场');
     await page.getByTestId('add-line-dialog-btn').click();
     await page.locator('[data-testid="line-text-input"]').first().fill('欢迎来到王城。');
@@ -46,8 +46,8 @@ test.describe('核心用户流程', () => {
     await page.locator('nav a').filter({ hasText: /设置|Settings/ }).click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/settings/);
 
-    await page.getByTestId('lang-en').click();
-    await page.getByTestId('settings-save-btn').click();
+    await page.getByTestId('lang-en').first().click();
+    await page.getByTestId('settings-save-btn').first().click();
 
     await expect(page.locator('text=Settings').first()).toBeVisible();
   });
@@ -56,7 +56,7 @@ test.describe('核心用户流程', () => {
     await page.locator('nav a').filter({ hasText: /设置|Settings/ }).click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/settings/);
 
-    const toggle = page.getByTestId('animations-enabled-toggle');
+    const toggle = page.getByTestId('animations-enabled-toggle').first();
     await expect(toggle).toBeVisible();
     const initial = (await toggle.getAttribute('aria-checked')) ?? 'false';
 

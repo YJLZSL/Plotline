@@ -1,32 +1,21 @@
 import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 
 import { cn } from '@/lib/utils';
+import { normalizeMarkdown } from './markdownUtils';
 
 export interface MarkdownProps {
   content: string;
   className?: string;
 }
 
-function normalizeMarkdown(source: string): string {
-  // 部分模型会转义 Markdown 标记（如 \*、\*\*、\`），导致界面显示原始星号。
-  // 这里把成对/单个转义标记还原为普通 Markdown 语法，保留字面意义的反斜杠。
-  return source
-    .replace(/\\\*\\\*(.+?)\\\*\\\*/g, '**$1**')
-    .replace(/\\\*(.+?)\\\*/g, '*$1*')
-    .replace(/\\`(.+?)\\`/g, '`$1`')
-    .replace(/\\#/g, '#')
-    .replace(/\\-/g, '-')
-    .replace(/\\>/g, '>');
-}
-
 export function Markdown({ content, className }: MarkdownProps) {
   const normalized = normalizeMarkdown(content);
   return (
-    <div className={cn('markdown-body', className)}>
+    <div className={cn('markdown-body whitespace-pre-wrap', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkBreaks]}
+        remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeSanitize]}
         components={{
           p: ({ children }) => (
@@ -38,16 +27,18 @@ export function Markdown({ content, className }: MarkdownProps) {
           em: ({ children }) => (
             <em className="italic text-text-primary">{children}</em>
           ),
+          del: ({ children }) => (
+            <del className="line-through text-text-secondary">{children}</del>
+          ),
           code: ({ className, children, ...props }) => {
-            const isInline =
-              className === undefined || !className.includes('language-');
+            const isInline = className === undefined || !className.includes('language-');
             return (
               <code
                 className={cn(
                   'font-mono text-xs rounded',
                   isInline
                     ? 'bg-bg-base px-1 py-0.5 text-accent'
-                    : 'block bg-bg-base p-2 my-2 overflow-x-auto text-text-primary',
+                    : 'block bg-bg-base p-2 my-2 overflow-x-auto text-text-primary whitespace-pre',
                 )}
                 {...props}
               >
@@ -56,7 +47,7 @@ export function Markdown({ content, className }: MarkdownProps) {
             );
           },
           pre: ({ children }) => (
-            <pre className="not-prose my-2">{children}</pre>
+            <pre className="not-prose my-2 whitespace-pre-wrap">{children}</pre>
           ),
           ul: ({ children }) => (
             <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>
@@ -113,6 +104,20 @@ export function Markdown({ content, className }: MarkdownProps) {
             </blockquote>
           ),
           hr: () => <hr className="border-border my-3" />,
+          table: ({ children }) => (
+            <table className="w-full border-collapse text-xs my-2">{children}</table>
+          ),
+          thead: ({ children }) => (
+            <thead className="bg-bg-elevated text-text-primary">{children}</thead>
+          ),
+          tbody: ({ children }) => <tbody>{children}</tbody>,
+          tr: ({ children }) => (
+            <tr className="border-b border-border last:border-b-0">{children}</tr>
+          ),
+          th: ({ children }) => (
+            <th className="text-left px-2 py-1.5 font-semibold">{children}</th>
+          ),
+          td: ({ children }) => <td className="px-2 py-1.5">{children}</td>,
         }}
       >
         {normalized}

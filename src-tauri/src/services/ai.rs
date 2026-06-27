@@ -13,18 +13,18 @@ use std::hash::{Hash, Hasher};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    AiActionType, AiCacheEntry, AiChatContext, AiChunk, AiConversationHistoryEntry,
-    AiContextScope, AiInsertInput, AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRole,
-    AiScoredEntity, AiSearchResult, AiSession, AiShortcutInput, AiShortcutResult, AiStreamEvent,
+    AiActionType, AiChatContext, AiChunk, AiConversationHistoryEntry, AiInsertInput,
+    AiInsertResult, AiKvEntry, AiMessage, AiModelInfo, AiRagChunk, AiRole, AiScoredEntity,
+    AiSearchResult, AiSession, AiShortcutInput, AiShortcutResult, AiStreamEvent,
     CreateAiMessageInput, CreateAiSessionInput,
 };
 
 const DEFAULT_SYSTEM_PROMPT: &str =
-    "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答，并使用 Markdown 格式（**粗体**、*斜体*、`代码`、列表、标题、引用）以便界面正确渲染。"
+    "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答，并使用 Markdown 格式（**粗体**、*斜体*、`代码`、列表、标题、引用）以便界面正确渲染。";
 pub const MAX_HISTORY_MESSAGES: usize = 10;
 pub const MAX_RAG_CHUNKS: usize = 5;
-const MAX_CHUNK_TOKENS: usize = 800;
-const MAX_CONTEXT_DESC_LEN: usize = 200;
+const MAX_CHUNK_TOKENS: usize = 2000;
+const MAX_CONTEXT_DESC_LEN: usize = 800;
 
 pub fn create_session(conn: &Connection, input: CreateAiSessionInput) -> AppResult<AiSession> {
     let id = Uuid::new_v4().to_string();
@@ -209,6 +209,17 @@ pub fn set_cached_response(
          VALUES (?1, ?2, ?3, ?4)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value, created_at=excluded.created_at, expires_at=excluded.expires_at",
         params![key, value, now, expires_at],
+    )?;
+    Ok(())
+}
+
+pub fn invalidate_ai_cache_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<()> {
+    conn.execute(
+        "DELETE FROM ai_cache WHERE key LIKE ?1",
+        params![format!("ai:cache:{}:%", workspace_id)],
     )?;
     Ok(())
 }
@@ -691,28 +702,46 @@ fn truncate_string(text: &str, max_len: usize) -> String {
     }
 }
 
+fn is_han(c: char) -> bool {
+    ('\u{4e00}'..='\u{9fff}').contains(&c)
+}
+
 fn extract_terms(text: &str) -> Vec<String> {
     let mut terms = Vec::new();
     let lowered = text.to_lowercase();
-    let parts: Vec<&str> = lowered
-        .split(|c: char| c.is_whitespace() || is_punctuation(c))
-        .filter(|s| !s.is_empty())
-        .collect();
+    let chars: Vec<char> = lowered.chars().collect();
 
-    for part in parts {
-        if part.chars().all(|c| c.is_ascii_alphanumeric()) {
-            terms.push(part.to_string());
-            if part.len() >= 2 {
-                let chars: Vec<char> = part.chars().collect();
-                for w in chars.windows(2) {
+    // Extract continuous Han characters (length >= 2) and their 2-grams
+    let mut i = 0;
+    while i < chars.len() {
+        if is_han(chars[i]) {
+            let start = i;
+            while i < chars.len() && is_han(chars[i]) {
+                i += 1;
+            }
+            let han: String = chars[start..i].iter().collect();
+            if han.chars().count() >= 2 {
+                terms.push(han.clone());
+                let han_chars: Vec<char> = han.chars().collect();
+                for w in han_chars.windows(2) {
                     terms.push(format!("{}{}", w[0], w[1]));
                 }
             }
         } else {
+            i += 1;
+        }
+    }
+
+    // English / numbers split by non-alphanumeric
+    let parts: Vec<&str> = lowered
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    for part in parts {
+        terms.push(part.to_string());
+        if part.len() >= 2 {
             let chars: Vec<char> = part.chars().collect();
-            for c in &chars {
-                terms.push(c.to_string());
-            }
             for w in chars.windows(2) {
                 terms.push(format!("{}{}", w[0], w[1]));
             }
@@ -746,6 +775,23 @@ fn is_punctuation(c: char) -> bool {
                 | '–'
                 | '～'
         )
+}
+
+pub fn rag_chunks_to_search_results(chunks: &[AiRagChunk]) -> Vec<AiSearchResult> {
+    chunks
+        .iter()
+        .map(|c| AiSearchResult {
+            chunk: AiChunk {
+                id: format!("{}:{}", c.source_type, c.source_id),
+                workspace_id: String::new(),
+                source_type: c.source_type.clone(),
+                source_id: c.source_id.clone(),
+                content: c.content.clone(),
+                updated_at: Utc::now(),
+            },
+            score: c.score,
+        })
+        .collect()
 }
 
 pub fn search_chunks(
@@ -1217,13 +1263,23 @@ fn build_shortcut_context_block(
     parts.join("\n\n")
 }
 
-pub async fn run_shortcut(
+pub enum ShortcutPrep {
+    Cached(AiShortcutResult),
+    NeedApi {
+        session_id: String,
+        user_message: String,
+        history: Vec<AiMessage>,
+        entities: Vec<AiScoredEntity>,
+        retrieved_chunks: usize,
+        cache_key: String,
+    },
+}
+
+pub fn prepare_shortcut(
     conn: &Connection,
     settings: &crate::models::AppSettings,
     input: AiShortcutInput,
-) -> AppResult<AiShortcutResult> {
-    validate_ai_enabled(settings)?;
-
+) -> AppResult<ShortcutPrep> {
     let session_id = match input.session_id {
         Some(id) => id,
         None => create_session(
@@ -1239,11 +1295,20 @@ pub async fn run_shortcut(
     let user_message = crate::services::ai_prompts::user_prompt_for_action(input.action);
     add_message(conn, &session_id, AiRole::User, user_message)?;
 
+    let query_hash = hash_cache_key_material(input.query.as_deref().unwrap_or(""));
+    let context_json = input
+        .context
+        .as_ref()
+        .map(|c| serde_json::to_string(c))
+        .transpose()
+        .map_err(|e| AppError::Internal(format!("序列化上下文失败: {}", e)))?
+        .unwrap_or_default();
+    let context_hash = hash_cache_key_material(&context_json);
+    let workspace = crate::services::workspace::get(conn, &input.workspace_id)?;
+    let updated_at = workspace.updated_at.to_rfc3339();
     let context_material = format!(
-        "{:?}|{:?}|{:?}",
-        input.action,
-        input.query.as_deref().unwrap_or(""),
-        input.context.as_ref().map(|c| format!("{:?}", c.scope)).unwrap_or_default()
+        "{}|{}|{}|{}",
+        input.action, query_hash, context_hash, updated_at
     );
     let cache_key = make_cache_key(&input.workspace_id, input.action, &context_material);
 
@@ -1253,13 +1318,14 @@ pub async fn run_shortcut(
             list_messages(conn, &session_id, None)?
         };
         append_conversation_history(conn, &session_id, AiRole::Assistant, &cached)?;
-        return Ok(AiShortcutResult {
+        return Ok(ShortcutPrep::Cached(AiShortcutResult {
             session_id,
             reply: cached,
             messages,
             cached: true,
             entities: Vec::new(),
-        });
+            retrieved_chunks: 0,
+        }));
     }
 
     let query = input
@@ -1273,8 +1339,7 @@ pub async fn run_shortcut(
         Vec::new()
     };
 
-    let history = get_conversation_history(conn, &session_id, Some(MAX_HISTORY_MESSAGES));
-    let history: Vec<AiMessage> = history?
+    let history = get_conversation_history(conn, &session_id, Some(MAX_HISTORY_MESSAGES))?
         .into_iter()
         .map(|h| AiMessage {
             id: h.id,
@@ -1285,9 +1350,32 @@ pub async fn run_shortcut(
         })
         .collect();
 
-    let system_prompt = crate::services::ai_prompts::system_prompt_for_action_with_markdown(input.action);
-    let context_block = build_shortcut_context_block(input.context.as_ref(), &entities, input.action);
-    let mut system_content = system_prompt.to_string();
+    Ok(ShortcutPrep::NeedApi {
+        session_id,
+        user_message: user_message.to_string(),
+        history,
+        entities,
+        retrieved_chunks: entities.len(),
+        cache_key,
+    })
+}
+
+pub async fn call_shortcut_api(
+    settings: &crate::models::AppSettings,
+    action: AiActionType,
+    history: &[AiMessage],
+    user_message: &str,
+    entities: &[AiScoredEntity],
+    context: Option<&AiChatContext>,
+) -> AppResult<String> {
+    validate_ai_enabled(settings)?;
+
+    let base_url = settings.ai_base_url.trim().trim_end_matches('/');
+    let url = format!("{}/chat/completions", base_url);
+
+    let system_prompt = crate::services::ai_prompts::system_prompt_for_action_with_markdown(action);
+    let context_block = build_shortcut_context_block(context, entities, action);
+    let mut system_content = system_prompt;
     if !context_block.is_empty() {
         system_content.push_str("\n\n");
         system_content.push_str(&context_block);
@@ -1313,8 +1401,6 @@ pub async fn run_shortcut(
         content: user_message.to_string(),
     });
 
-    let base_url = settings.ai_base_url.trim().trim_end_matches('/');
-    let url = format!("{}/chat/completions", base_url);
     let client = reqwest::Client::new();
     let response = client
         .post(&url)
@@ -1338,33 +1424,40 @@ pub async fn run_shortcut(
         .await
         .map_err(|e| AppError::Internal(format!("解析 AI 响应失败: {}", e)))?;
 
-    let reply = payload
+    payload
         .choices
         .into_iter()
         .next()
         .map(|c| c.message.content)
-        .ok_or_else(|| AppError::Internal("AI 响应为空".into()))?;
+        .ok_or_else(|| AppError::Internal("AI 响应为空".into()))
+}
 
-    set_cached_response(
-        conn,
-        &cache_key,
-        &reply,
-        cache_ttl_for_action(input.action),
-    )?;
-    append_conversation_history(conn, &session_id, AiRole::User, user_message)?;
-    append_conversation_history(conn, &session_id, AiRole::Assistant, &reply)?;
+pub fn save_shortcut_result(
+    conn: &Connection,
+    session_id: &str,
+    cache_key: &str,
+    action: AiActionType,
+    reply: &str,
+    entities: Vec<AiScoredEntity>,
+    retrieved_chunks: usize,
+    user_message: &str,
+) -> AppResult<AiShortcutResult> {
+    set_cached_response(conn, cache_key, reply, cache_ttl_for_action(action))?;
+    append_conversation_history(conn, session_id, AiRole::User, user_message)?;
+    append_conversation_history(conn, session_id, AiRole::Assistant, reply)?;
 
     let messages = {
-        add_message(conn, &session_id, AiRole::Assistant, &reply)?;
-        list_messages(conn, &session_id, None)?
+        add_message(conn, session_id, AiRole::Assistant, reply)?;
+        list_messages(conn, session_id, None)?
     };
 
     Ok(AiShortcutResult {
-        session_id,
-        reply,
+        session_id: session_id.to_string(),
+        reply: reply.to_string(),
         messages,
         cached: false,
         entities,
+        retrieved_chunks,
     })
 }
 
@@ -1693,7 +1786,7 @@ mod tests {
     use crate::db::migrate;
     use crate::models::{
         AiChunk, CreateCharacterInput, CreateEventInput, CreateOutlineNodeInput, CreateTrackInput,
-        CreateWorkspaceInput,
+        CreateWorkspaceInput, UpdateWorkspaceInput,
     };
 
     fn in_memory_db() -> Connection {
@@ -1854,6 +1947,7 @@ mod tests {
                 content: None,
             })),
             system_prompt_override: None,
+            scope: None,
         };
         let block = build_context_block(&context);
         assert!(block.contains("工作区上下文"));
@@ -1927,6 +2021,7 @@ mod tests {
             notes: None,
             selected_entity: None,
             system_prompt_override: None,
+            scope: None,
         };
 
         let messages = build_messages(
@@ -1963,6 +2058,7 @@ mod tests {
             notes: None,
             selected_entity: None,
             system_prompt_override: Some("Override prompt.".into()),
+            scope: None,
         };
 
         let messages = build_messages(
@@ -2135,5 +2231,199 @@ mod tests {
         // Query containing LIKE wildcards should not crash or return false positives.
         let entities = retrieve_relevant_entities(&conn, &ws_id, "100% 未知_词", Some(5)).unwrap();
         assert!(entities.is_empty());
+    }
+
+    #[test]
+    fn should_prepare_shortcut_return_need_api_without_cache() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let mut settings = crate::models::AppSettings::default();
+        settings.ai_enabled = true;
+        settings.ai_rag_enabled = false;
+
+        let input = AiShortcutInput {
+            workspace_id: ws_id,
+            session_id: None,
+            action: AiActionType::OptimizeEvent,
+            context: None,
+            query: None,
+        };
+
+        let prep = prepare_shortcut(&conn, &settings, input).unwrap();
+        match prep {
+            ShortcutPrep::NeedApi {
+                session_id,
+                user_message,
+                history,
+                entities,
+                cache_key,
+            } => {
+                assert!(!session_id.is_empty());
+                assert!(!user_message.is_empty());
+                assert!(entities.is_empty());
+                assert!(!cache_key.is_empty());
+                let _ = history;
+            }
+            _ => panic!("未命中缓存时应返回 NeedApi"),
+        }
+    }
+
+    #[test]
+    fn should_prepare_shortcut_return_cached_when_cache_exists() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let mut settings = crate::models::AppSettings::default();
+        settings.ai_enabled = true;
+        settings.ai_rag_enabled = false;
+
+        let input = AiShortcutInput {
+            workspace_id: ws_id.clone(),
+            session_id: None,
+            action: AiActionType::SummarizeWorkspace,
+            context: None,
+            query: None,
+        };
+
+        let prep = prepare_shortcut(&conn, &settings, input.clone()).unwrap();
+        let cache_key = match prep {
+            ShortcutPrep::NeedApi { cache_key, .. } => cache_key,
+            _ => panic!("首次调用应返回 NeedApi"),
+        };
+
+        set_cached_response(&conn, &cache_key, "cached reply", 600).unwrap();
+
+        let prep2 = prepare_shortcut(&conn, &settings, input).unwrap();
+        match prep2 {
+            ShortcutPrep::Cached(result) => {
+                assert_eq!(result.reply, "cached reply");
+                assert!(result.cached);
+                assert!(result.entities.is_empty());
+            }
+            _ => panic!("命中缓存后应返回 Cached"),
+        }
+    }
+
+    #[test]
+    fn should_invalidate_ai_cache_for_workspace() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let other_ws = crate::services::workspace::create(
+            &conn,
+            CreateWorkspaceInput {
+                name: "其他工作区".into(),
+                description: None,
+                template: None,
+                template_id: None,
+                cover_color: None,
+                cover_image: None,
+            },
+        )
+        .unwrap();
+
+        let key1 = make_cache_key(&ws_id, AiActionType::SummarizeWorkspace, "ctx1");
+        let key2 = make_cache_key(&other_ws.id, AiActionType::SummarizeWorkspace, "ctx2");
+        set_cached_response(&conn, &key1, "ws1 cached", 600).unwrap();
+        set_cached_response(&conn, &key2, "ws2 cached", 600).unwrap();
+
+        invalidate_ai_cache_for_workspace(&conn, &ws_id).unwrap();
+
+        assert!(get_cached_response(&conn, &key1).unwrap().is_none());
+        assert_eq!(
+            get_cached_response(&conn, &key2).unwrap().as_deref(),
+            Some("ws2 cached")
+        );
+    }
+
+    #[test]
+    fn should_change_cache_key_after_workspace_updated() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        let mut settings = crate::models::AppSettings::default();
+        settings.ai_enabled = true;
+        settings.ai_rag_enabled = false;
+
+        let input = AiShortcutInput {
+            workspace_id: ws_id.clone(),
+            session_id: None,
+            action: AiActionType::SummarizeWorkspace,
+            context: None,
+            query: None,
+        };
+
+        let prep1 = prepare_shortcut(&conn, &settings, input.clone()).unwrap();
+        let key1 = match prep1 {
+            ShortcutPrep::NeedApi { cache_key, .. } => cache_key,
+            _ => panic!("首次调用应返回 NeedApi"),
+        };
+
+        // 模拟工作区更新，updated_at 变化
+        crate::services::workspace::update(
+            &conn,
+            crate::models::UpdateWorkspaceInput {
+                id: ws_id.clone(),
+                name: Some("已更新工作区".into()),
+                description: None,
+                cover_color: None,
+                cover_image: None,
+            },
+        )
+        .unwrap();
+
+        let prep2 = prepare_shortcut(&conn, &settings, input).unwrap();
+        let key2 = match prep2 {
+            ShortcutPrep::NeedApi { cache_key, .. } => cache_key,
+            _ => panic!("工作区更新后缓存键应变化，仍返回 NeedApi"),
+        };
+
+        assert_ne!(key1, key2);
+    }
+
+    #[test]
+    fn should_search_chunks_with_chinese_2grams() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+        index_workspace(&conn, &ws_id).unwrap();
+
+        // "艾莉" 是 "艾莉丝" 的 2-gram，应能命中角色 chunks
+        let chunks = search_chunks(&conn, &ws_id, "艾莉", Some(5)).unwrap();
+        assert!(
+            chunks.iter().any(|c| c.chunk.content.contains("艾莉丝")),
+            "中文 2-gram 应能召回包含完整词的 chunk"
+        );
+    }
+
+    #[test]
+    fn should_truncate_long_chunk_content_to_max_chunk_tokens() {
+        let conn = in_memory_db();
+        let ws_id = seed_workspace(&conn);
+
+        // 创建一个超长的角色描述
+        let long_description = "a".repeat(MAX_CHUNK_TOKENS * 3);
+        crate::services::character::create(
+            &conn,
+            CreateCharacterInput {
+                workspace_id: ws_id.clone(),
+                name: "超长描述角色".into(),
+                description: Some(long_description.clone()),
+                tags: None,
+                color: None,
+            },
+        )
+        .unwrap();
+
+        index_workspace(&conn, &ws_id).unwrap();
+
+        let chunks = search_chunks(&conn, &ws_id, "超长描述角色", Some(5)).unwrap();
+        let chunk = chunks
+            .iter()
+            .find(|c| c.chunk.source_type == "character" && c.chunk.content.contains("超长描述角色"))
+            .expect("应找到角色 chunk");
+
+        // MAX_CHUNK_TOKENS * 2 个字符 + 1 个省略符
+        assert!(
+            chunk.chunk.content.chars().count() <= MAX_CHUNK_TOKENS * 2 + 1,
+            "chunk 内容应被截断到 MAX_CHUNK_TOKENS 以内"
+        );
+        assert!(chunk.chunk.content.ends_with('…'));
     }
 }

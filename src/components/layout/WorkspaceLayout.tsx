@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Timer } from 'lucide-react';
 
 import { Sidebar } from './Sidebar';
@@ -29,18 +29,15 @@ export function WorkspaceLayout() {
     <div className="flex h-screen w-screen overflow-hidden bg-bg-base">
       <Sidebar workspaceId={workspaceId} />
       <div className="flex flex-1 flex-col min-w-0">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial={reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={reduced ? { opacity: 1 } : { opacity: 0, x: -8 }}
-            transition={reduced ? { duration: 0 } : MOTION_BASE}
-            className="flex-1 min-h-0 flex flex-col will-change-transform"
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          key={location.pathname}
+          initial={reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={reduced ? { duration: 0 } : MOTION_BASE}
+          className="flex-1 min-h-0 flex flex-col"
+        >
+          <Outlet />
+        </motion.div>
         <StatusBar
           left={
             <div className="flex items-center gap-3">

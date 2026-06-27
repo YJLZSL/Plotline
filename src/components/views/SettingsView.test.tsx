@@ -20,24 +20,34 @@ vi.mock('@/features/settings/hooks', () => ({
   })),
 }));
 
-const mockSetFancyAnimationsEnabled = vi.fn();
+const mockSetEnhancedAnimations = vi.fn();
 
 vi.mock('@/stores/ui', () => ({
   useThemeStore: vi.fn((selector?: (state: { applyToDOM: typeof mockApplyToDOM }) => unknown) =>
     selector ? selector({ applyToDOM: mockApplyToDOM }) : { applyToDOM: mockApplyToDOM },
   ),
-  useUIStore: vi.fn((selector?: (state: { aiPanelOpen: boolean; toggleAiPanel: () => void }) => unknown) =>
-    selector
-      ? selector({ aiPanelOpen: false, toggleAiPanel: vi.fn() })
-      : { aiPanelOpen: false, toggleAiPanel: vi.fn() },
-  ),
-}));
-
-vi.mock('@/stores/motion', () => ({
-  useMotionStore: vi.fn((selector?: (state: { fancyAnimationsEnabled: boolean; setFancyAnimationsEnabled: typeof mockSetFancyAnimationsEnabled }) => unknown) =>
-    selector
-      ? selector({ fancyAnimationsEnabled: false, setFancyAnimationsEnabled: mockSetFancyAnimationsEnabled })
-      : { fancyAnimationsEnabled: false, setFancyAnimationsEnabled: mockSetFancyAnimationsEnabled },
+  useUIStore: vi.fn(
+    (
+      selector?: (state: {
+        aiPanelOpen: boolean;
+        toggleAiPanel: () => void;
+        enhancedAnimations: boolean;
+        setEnhancedAnimations: typeof mockSetEnhancedAnimations;
+      }) => unknown,
+    ) =>
+      selector
+        ? selector({
+            aiPanelOpen: false,
+            toggleAiPanel: vi.fn(),
+            enhancedAnimations: false,
+            setEnhancedAnimations: mockSetEnhancedAnimations,
+          })
+        : {
+            aiPanelOpen: false,
+            toggleAiPanel: vi.fn(),
+            enhancedAnimations: false,
+            setEnhancedAnimations: mockSetEnhancedAnimations,
+          },
   ),
 }));
 
@@ -194,21 +204,21 @@ describe('SettingsView', () => {
     );
   });
 
-  it('should render fancy animations toggle and call store setter', () => {
+  it('should render enhanced animations toggle and call store setter', () => {
     renderSettings();
-    const toggle = screen.getByTestId('fancy-animations-toggle');
+    const toggle = screen.getByTestId('enhanced-animations-toggle');
     expect(toggle).toBeInTheDocument();
     fireEvent.click(toggle);
-    expect(mockSetFancyAnimationsEnabled).toHaveBeenCalledWith(true);
+    expect(mockSetEnhancedAnimations).toHaveBeenCalledWith(true);
   });
 
-  it('should disable fancy animations toggle when animations are turned off', () => {
+  it('should disable enhanced animations toggle when animations are turned off', () => {
     vi.mocked(useSettingsQuery).mockReturnValue({
       data: { ...baseSettings, animationsEnabled: false },
       isLoading: false,
     } as unknown as ReturnType<typeof useSettingsQuery>);
     renderSettings();
-    const toggle = screen.getByTestId('fancy-animations-toggle');
+    const toggle = screen.getByTestId('enhanced-animations-toggle');
     expect(toggle).toBeDisabled();
   });
 
@@ -217,6 +227,21 @@ describe('SettingsView', () => {
     const toggle = screen.getByTestId('animations-enabled-toggle');
     fireEvent.click(toggle);
     expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ animationsEnabled: false }));
+  });
+
+  it('should render font preview with Tailwind arbitrary value class and CSS variable', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId('settings-tab-editor'));
+    await waitFor(() => {
+      const previews = screen.getAllByText('settings.fontPreview');
+      expect(previews.length).toBeGreaterThan(0);
+      previews.forEach((preview) => {
+        expect(preview.className).toContain('[font-family:var(--preview-font)]');
+        const style = preview.getAttribute('style') ?? '';
+        expect(style).toContain('--preview-font');
+        expect(style).not.toContain('font-family:');
+      });
+    });
   });
 
   it('should switch tabs and keep AI connection placeholder', async () => {

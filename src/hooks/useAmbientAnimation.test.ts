@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 
 import { useAmbientAnimation } from './useAmbientAnimation';
 import { useMotionStore } from '@/stores/motion';
+import { useUIStore } from '@/stores/ui';
 
 vi.mock('framer-motion', () => ({
   useReducedMotion: vi.fn(() => false),
@@ -14,6 +15,7 @@ describe('useAmbientAnimation', () => {
   beforeEach(() => {
     localStorage.clear();
     useMotionStore.setState({ animationsEnabled: true, fancyAnimationsEnabled: false });
+    useUIStore.setState({ enhancedAnimations: false });
     vi.mocked(useReducedMotion).mockReturnValue(false);
   });
 
@@ -42,8 +44,8 @@ describe('useAmbientAnimation', () => {
     expect(result.current.fancy).toBe(false);
   });
 
-  it('should report fancy mode only when enabled and animations are on', () => {
-    useMotionStore.setState({ fancyAnimationsEnabled: true });
+  it('should report fancy mode only when enhanced animations are enabled and animations are on', () => {
+    useUIStore.setState({ enhancedAnimations: true });
     const { result } = renderHook(() => useAmbientAnimation());
     expect(result.current.fancy).toBe(true);
 

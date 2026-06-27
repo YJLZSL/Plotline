@@ -20,8 +20,8 @@ export type AiContextSource =
   | 'notes'
   | 'selectedEntity';
 
-const MAX_ITEMS = 50;
-const MAX_DESC_LENGTH = 200;
+const MAX_ITEMS = 100;
+const MAX_DESC_LENGTH = 800;
 
 export function truncateText(
   text: string | undefined | null,
@@ -148,4 +148,74 @@ export async function collectAiContext(
   }
 
   return context;
+}
+
+export function estimateContextBudget(context: AiChatContext): {
+  entities: number;
+  chars: number;
+} {
+  let entities = 0;
+  let chars = 0;
+
+  const add = (text: string | undefined | null) => {
+    if (text) {
+      chars += text.length;
+    }
+  };
+
+  if (context.workspaceSummary) {
+    entities += 1;
+    add(context.workspaceSummary);
+  }
+
+  if (context.timeline && context.timeline.length > 0) {
+    entities += context.timeline.length;
+    for (const item of context.timeline) {
+      add(item.title);
+      add(item.trackName);
+      add(item.dateValue);
+      add(item.description);
+    }
+  }
+
+  if (context.characters && context.characters.length > 0) {
+    entities += context.characters.length;
+    for (const item of context.characters) {
+      add(item.name);
+      add(item.role);
+      add(item.description);
+    }
+  }
+
+  if (context.locations && context.locations.length > 0) {
+    entities += context.locations.length;
+    for (const item of context.locations) {
+      add(item.name);
+      add(item.description);
+    }
+  }
+
+  if (context.outline && context.outline.length > 0) {
+    entities += context.outline.length;
+    for (const item of context.outline) {
+      add(item.title);
+    }
+  }
+
+  if (context.notes && context.notes.length > 0) {
+    entities += context.notes.length;
+    for (const item of context.notes) {
+      add(item.title);
+      add(item.summary);
+    }
+  }
+
+  if (context.selectedEntity) {
+    entities += 1;
+    add(context.selectedEntity.type);
+    add(context.selectedEntity.label);
+    add(context.selectedEntity.content);
+  }
+
+  return { entities, chars };
 }
