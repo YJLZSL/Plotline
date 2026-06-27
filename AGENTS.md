@@ -44,7 +44,8 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.7.4 已发布：修复 v2.7.3 CI SQLite ESCAPE 测试错误）
+### 当前迭代状态（v2.7.5 已发布：修复 v2.7.4 CI RAG LIKE 通配符测试错误）
+- **RAG LIKE 子串匹配修复**：修复 v2.7.4 CI 中 `cargo test` 发现的 RAG 关键词检索 `LIKE` 子查询缺少 `%` 通配符问题（`src-tauri/src/services/ai.rs`），导致检索结果始终返回 0 条；补全通配符后确保 AI RAG 检索能正确返回相关实体，CI/Release workflow 全绿。
 - **SQLite ESCAPE 单字符错误修复**：修复 v2.7.3 CI 中 `cargo test` 发现的 SQLite 错误 `ESCAPE expression must be a single character`（`src-tauri/src/services/ai.rs` RAG 检索中的 `LIKE ESCAPE` 子句），确保 CI/Release workflow 全绿。
 - **Markdown 渲染深度修复**：`src/components/ui/Markdown.tsx` 引入 `remark-gfm` 并重构 `normalizeMarkdown`，处理全角星号、HTML 实体、双重转义、跨行标记与流式输出闭合等待；新增 `isBalancedMarkdown` 时排除列表标记与孤立星号，避免合法列表被误判为未闭合；移除 `remark-breaks`，改用 CSS `white-space: pre-wrap`，彻底解决裸星号与格式异常。
 - **动画性能再优化**：`src/lib/motion.ts` 新增 `MOTION_FAST`（120ms），统一核心视图为 120–200ms 动效；减少 `AnimatePresence mode="wait"` 嵌套，压缩 stagger delay，移除滥用 `will-change-transform`；`WorkspaceLayout`、`SettingsView`、`TimelineView` 切换更跟手、更少掉帧。

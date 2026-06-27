@@ -332,11 +332,11 @@ fn retrieve_character_entities(
 ) -> AppResult<()> {
     let cases: Vec<String> = terms
         .iter()
-        .map(|t| format!("CASE WHEN LOWER(name || ' ' || COALESCE(description,'') || ' ' || COALESCE(appearance,'') || ' ' || COALESCE(backstory,'') || ' ' || COALESCE(goals,'') || ' ' || COALESCE(conflicts,'') || ' ' || COALESCE(arc,'') || ' ' || COALESCE(aliases,'') || ' ' || COALESCE(tags,'')) LIKE LOWER('{}') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .map(|t| format!("CASE WHEN LOWER(name || ' ' || COALESCE(description,'') || ' ' || COALESCE(appearance,'') || ' ' || COALESCE(backstory,'') || ' ' || COALESCE(goals,'') || ' ' || COALESCE(conflicts,'') || ' ' || COALESCE(arc,'') || ' ' || COALESCE(aliases,'') || ' ' || COALESCE(tags,'')) LIKE LOWER('%{}%') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
         .collect();
     let where_clauses: Vec<String> = terms
         .iter()
-        .map(|t| format!("LOWER(name || ' ' || COALESCE(description,'') || ' ' || COALESCE(appearance,'') || ' ' || COALESCE(backstory,'') || ' ' || COALESCE(goals,'') || ' ' || COALESCE(conflicts,'') || ' ' || COALESCE(arc,'') || ' ' || COALESCE(aliases,'') || ' ' || COALESCE(tags,'')) LIKE LOWER('{}') ESCAPE '\\'", escape_like(t)))
+        .map(|t| format!("LOWER(name || ' ' || COALESCE(description,'') || ' ' || COALESCE(appearance,'') || ' ' || COALESCE(backstory,'') || ' ' || COALESCE(goals,'') || ' ' || COALESCE(conflicts,'') || ' ' || COALESCE(arc,'') || ' ' || COALESCE(aliases,'') || ' ' || COALESCE(tags,'')) LIKE LOWER('%{}%') ESCAPE '\\'", escape_like(t)))
         .collect();
     let sql = format!(
         "SELECT id, name, description, {} AS score
@@ -375,11 +375,11 @@ fn retrieve_location_entities(
 ) -> AppResult<()> {
     let cases: Vec<String> = terms
         .iter()
-        .map(|t| format!("CASE WHEN LOWER(name || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .map(|t| format!("CASE WHEN LOWER(name || ' ' || COALESCE(description,'')) LIKE LOWER('%{}%') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
         .collect();
     let where_clauses: Vec<String> = terms
         .iter()
-        .map(|t| format!("LOWER(name || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\'", escape_like(t)))
+        .map(|t| format!("LOWER(name || ' ' || COALESCE(description,'')) LIKE LOWER('%{}%') ESCAPE '\\'", escape_like(t)))
         .collect();
     let sql = format!(
         "SELECT id, name, description, {} AS score
@@ -418,11 +418,11 @@ fn retrieve_event_entities(
 ) -> AppResult<()> {
     let cases: Vec<String> = terms
         .iter()
-        .map(|t| format!("CASE WHEN LOWER(title || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .map(|t| format!("CASE WHEN LOWER(title || ' ' || COALESCE(description,'')) LIKE LOWER('%{}%') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
         .collect();
     let where_clauses: Vec<String> = terms
         .iter()
-        .map(|t| format!("LOWER(title || ' ' || COALESCE(description,'')) LIKE LOWER('{}') ESCAPE '\\'", escape_like(t)))
+        .map(|t| format!("LOWER(title || ' ' || COALESCE(description,'')) LIKE LOWER('%{}%') ESCAPE '\\'", escape_like(t)))
         .collect();
     let sql = format!(
         "SELECT id, title, description, {} AS score
@@ -461,11 +461,11 @@ fn retrieve_outline_entities(
 ) -> AppResult<()> {
     let cases: Vec<String> = terms
         .iter()
-        .map(|t| format!("CASE WHEN LOWER(title || ' ' || COALESCE(content,'')) LIKE LOWER('{}') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
+        .map(|t| format!("CASE WHEN LOWER(title || ' ' || COALESCE(content,'')) LIKE LOWER('%{}%') ESCAPE '\\' THEN 1 ELSE 0 END", escape_like(t)))
         .collect();
     let where_clauses: Vec<String> = terms
         .iter()
-        .map(|t| format!("LOWER(title || ' ' || COALESCE(content,'')) LIKE LOWER('{}') ESCAPE '\\'", escape_like(t)))
+        .map(|t| format!("LOWER(title || ' ' || COALESCE(content,'')) LIKE LOWER('%{}%') ESCAPE '\\'", escape_like(t)))
         .collect();
     let sql = format!(
         "SELECT id, title, content, {} AS score
