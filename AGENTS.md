@@ -44,16 +44,18 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.6.1 已发布：时间轴布局修复、动画与设置页质感提升、AI 连接状态可见性）
+### 当前迭代状态（v2.6.2 已发布：修复 v2.6.1 Rust 测试编译错误，UI/UX 与 AI 助手改进保持不变）
 - **时间轴布局修复**：重写 `TimelineView.tsx` 的 `MultiSelectDropdown`，使用 `@radix-ui/react-popover` + Portal + 碰撞检测，解决下拉框被截断/偏移问题；为 "今天" 参考线标签增加边界保护，避免与轨道列重叠；增大事件卡片最小宽度并合并 "相对" 标签与状态点为单一徽章，避免标题行拥挤；统一筛选栏按钮高度与垂直对齐。
 - **动画与切换优化**：`WorkspaceLayout` 与 `SettingsView` 统一使用 `AnimatePresence mode="wait"`，视图/标签切换时长统一为 200–250ms，缓动统一为 `[0.16, 1, 0.3, 1]`；为主题卡片选中、设置标签切换增加 scale/opacity 反馈。
 - **设置页视觉重构**：主题卡片改为 2×2 网格布局，选中态使用 `ring-accent ring-2` 增强对比；字体主题选项拆分为 "无衬线 / 等宽 / 得意黑 / 像素"，得意黑（Smiley Sans）与像素字体栈解耦；设置项使用 `Card` 分组，提升扫描效率。
 - **AI 助手可用性改进**：`src/features/ai/components/AiSettingsSection.tsx` 新增连接状态卡片（未配置/配置中/成功/失败）与 "测试连接" 按钮；后端新增 `test_ai_connection` 命令；API Key 输入框增加可见性切换与格式校验提示；模型下拉增加空状态/错误提示；AI 面板右上角显示连接状态指示灯。
 - **调研与审计**：输出 `docs/v2.6.1-ui-audit.md` 与 `docs/v2.6.1-community-research.md`，汇总真实截图分析、Playwright 复现与中文社区/竞品设计惯例。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.6.1`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.6.1 状态。
-- **发布说明**：v2.6.1 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.6.2`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.6.2 状态。
+- **发布说明**：v2.6.2 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+- **v2.6.1 说明**：v2.6.1 tag 已推送但 CI/Release workflow 因 `src-tauri/src/services/ai.rs` 测试编译错误失败，未发布可用 Release；问题在 v2.6.2 修复。
 
-### 上一版本（v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布）
+### 上一版本（v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+- v2.6.1：时间轴布局修复、动画与设置页质感提升、AI 连接状态可见性（tag 已推送，但 Release 因 Rust 测试编译错误失败，功能由 v2.6.2 完整发布）。
 - v2.6.0：AI 风格模板 chips、AI apply-to-doc、时间轴筛选折叠、模板向导空状态。
 - v2.5.4：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强。
 - v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
