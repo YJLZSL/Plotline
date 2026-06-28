@@ -3,6 +3,23 @@
     "name": "Plotline",
     "tagline": "叙事创作工作台"
   },
+  "onboarding": {
+    "title": "欢迎来到 Plotline",
+    "description": "新手引导 {{current}} / {{total}}",
+    "step1Title": "开启你的故事",
+    "step1Description": "Plotline 是面向小说作者、编剧与游戏叙事设计师的本地优先创作工作台。从时间轴开始，把灵感变成结构化的世界。",
+    "step2Title": "添加第一个事件",
+    "step2Description": "进入时间轴视图，点击上方「添加事件」或双击画布空白处，写下故事里的关键节点。",
+    "step3Title": "创建角色",
+    "step3Description": "点击左侧边栏的「角色」，添加你的第一个角色。赋予他们目标、冲突与背景，让故事更有张力。",
+    "step4Title": "使用 AI 助手",
+    "step4Description": "任何视图都可以点击右上角 AI 按钮，或打开右侧 AI 面板，让 AI 帮你优化事件、检查逻辑漏洞、续写内容。",
+    "next": "下一步",
+    "prev": "上一步",
+    "skip": "跳过",
+    "finish": "完成",
+    "goToStep": "跳到第 {{step}} 步"
+  },
   "nav": {
     "workspaces": "工作区",
     "timeline": "时间轴",
@@ -100,7 +117,10 @@
     "rename": "重命名",
     "deleteTrack": "删除轨道",
     "deleteTrackConfirm": "确定删除轨道 \"{{name}}\" 及其所有事件吗？",
-    "emptyTrack": "暂无事件，双击空白处或点击上方按钮添加。",
+    "emptyTrack": "还没有轨道和事件，点击上方按钮添加第一条轨道，开始编排故事时间线。",
+    "emptyStateTitle": "时间轴还是空的",
+    "emptyStateDescription": "添加一条轨道，然后双击画布或点击按钮创建第一个事件。",
+    "emptyStateCta": "添加轨道",
     "zoom": "缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小",
@@ -188,7 +208,7 @@
     "filterTag": "按标签筛选",
     "empty": {
       "title": "还没有角色",
-      "description": "添加你的第一个角色，赋予他们目标和冲突。",
+      "description": "点击添加角色，开始构建你的世界。赋予他们目标、冲突与背景，让故事更有张力。",
       "cta": "添加角色"
     },
     "form": {
@@ -221,8 +241,9 @@
     "generateEvent": "生成时间轴事件",
     "noTracksForEvent": "当前工作区没有时间轴轨道，请先创建一个轨道",
     "empty": {
-      "title": "大纲是空的",
-      "description": "添加第一卷开始组织你的故事结构。"
+      "title": "大纲还是空的",
+      "description": "添加第一卷，然后用卷 → 章 → 场景三级结构组织你的故事。",
+      "cta": "添加第一卷"
     },
     "statusDraft": "草稿",
     "statusDone": "完成",
@@ -243,7 +264,12 @@
     "editorPlaceholder": "开始写下你的灵感与笔记…（支持富文本）",
     "emptyContent": "（空笔记）",
     "tagPlaceholder": "按回车添加标签…",
-    "saving": "保存中"
+    "saving": "保存中",
+    "empty": {
+      "title": "还没有笔记",
+      "description": "点击新建笔记，把灵感、设定、片段随时记录下来。",
+      "cta": "新建笔记"
+    }
   },
   "statistics": {
     "title": "统计",
@@ -262,7 +288,9 @@
     "characterArc": "角色弧线时间轴",
     "peakCount": "峰值 {{count}} 个事件",
     "segment": "情节段",
-    "empty": "尚无数据，开始创作后这里会显示统计。",
+    "empty": "还没有统计数据，先去时间轴或大纲添加一些内容，再回来看创作洞察。",
+    "emptyCtaTimeline": "去时间轴",
+    "emptyCtaOutline": "去大纲",
     "tabOverview": "概览",
     "tabMindmap": "思维导图",
     "tabBrain": "脑状图",
@@ -283,8 +311,8 @@
     "exportPng": "导出 PNG",
     "panHint": "中键/右键拖动平移，滚轮缩放",
     "empty": {
-      "title": "地图是空的",
-      "description": "添加第一个地点，构建你的故事世界地理。",
+      "title": "地图还是空的",
+      "description": "添加第一个地点，构建你的故事世界地理。地点可以关联事件与角色足迹。",
       "cta": "添加第一个地点"
     },
     "form": {
@@ -348,7 +376,8 @@
     "typewriter": "打字机",
     "empty": {
       "title": "还没有场景",
-      "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。"
+      "description": "创建你的第一个 VN 场景，编写对话、旁白与分支选项。",
+      "cta": "添加场景"
     }
   },
   "novel": {
@@ -364,9 +393,14 @@
     "linked": "已关联",
     "noOutlineLink": "未关联大纲",
     "editorPlaceholder": "开始写作你的章节…（支持富文本）",
-    "emptyChapters": "暂无章节",
+    "emptyChapters": "还没有章节",
     "emptyStateDesc": "从侧边栏选择章节开始编辑，或点击右上角创建新章节。",
-    "deleteConfirm": "确定删除该章节吗？此操作不可撤销。"
+    "deleteConfirm": "确定删除该章节吗？此操作不可撤销。",
+    "empty": {
+      "title": "还没有章节",
+      "description": "点击右上角新建章节，开始写作你的小说。",
+      "cta": "新建章节"
+    }
   },
   "worldbuilding": {
     "title": "世界观",
@@ -381,7 +415,8 @@
     "placeholder": "记录世界观细节…",
     "empty": {
       "title": "还没有世界观条目",
-      "description": "从历史、魔法、势力、地理、文化等维度构建你的故事世界。"
+      "description": "从历史、魔法、势力、地理、文化等维度构建你的故事世界。",
+      "cta": "添加条目"
     }
   },
   "pomodoro": {
@@ -575,13 +610,22 @@
   "settings": {
     "title": "设置",
     "appearance": "外观",
+    "appearanceDescription": "调整主题、字体、配色与动效，让创作环境更适合你。",
     "editor": "编辑器",
+    "editorDescription": "配置默认视图、字号、字体与导入字体。",
     "data": "数据",
+    "dataDescription": "管理备份路径、自动备份与数据清理。",
     "ai": "AI 助手",
+    "aiDescription": "启用 AI 并配置提供商、模型与系统提示词。",
     "startup": "启动",
     "shortcuts": "快捷键",
     "help": "教程与帮助",
     "about": "关于",
+    "aboutDescription": "查看版本信息并检查更新。",
+    "searchPlaceholder": "搜索设置…",
+    "previewTitle": "即时预览",
+    "previewSample": "落霞与孤鹜齐飞，秋水共长天一色。The quick brown fox jumps over the lazy dog.",
+    "animationPreviewLabel": "动效示例",
     "helpTimeline": "时间轴",
     "helpTimelineDesc": "时间轴是 Plotline 的核心功能，用于编排故事事件。",
     "helpTimeline1": "点击「添加轨道」创建不同线索（如主线、支线）。",
@@ -599,14 +643,32 @@
     "helpPomodoro1": "专注 25 分钟，休息 5 分钟，每 4 个专注后长休息 15 分钟。",
     "helpPomodoro2": "支持温暖、极简、MC 三种主题。",
     "helpPomodoro3": "完成专注后会有音效提示。",
-    "shortcuts": "快捷键",
-    "about": "关于",
+    "featureDescription": "功能说明",
+    "featureDescriptionDesc": "快速了解 Plotline 的主要功能与用法。",
+    "featureTimeline": "时间轴",
+    "featureTimelineDesc": "用轨道与事件编排故事时间线，支持相对/绝对日期、事件连接、一致性检查。",
+    "featureCharacters": "角色",
+    "featureCharactersDesc": "管理角色档案、关系网络与关系矩阵，让角色动机与冲突一目了然。",
+    "featureOutline": "大纲",
+    "featureOutlineDesc": "以卷 → 章 → 场景三级结构规划故事，并可将节点同步为时间轴事件。",
+    "featureMap": "地图",
+    "featureMapDesc": "在画布上摆放地点，建立路径连接，追踪角色足迹与事件关联。",
+    "featureNotebook": "资料库",
+    "featureNotebookDesc": "随时记录灵感、设定与片段，支持富文本与标签，方便 AI 引用。",
+    "featurePomodoro": "番茄钟",
+    "featurePomodoroDesc": "专注计时器帮助你保持写作节奏，提供温暖、极简与 MC 三种主题。",
+    "featureAi": "AI 助手",
+    "featureAiDesc": "基于大模型与 RAG 检索，帮你优化事件、检查逻辑、续写内容、总结工作区。",
+    "featureTheme": "主题与外观",
+    "featureThemeDesc": "切换明亮、暗黑、护眼、方块主题，自定义字体、字号与强调色。",
     "theme": "主题",
+    "themeDescription": "选择明亮、暗黑、护眼或方块主题，全局配色会立即生效。",
     "themeLight": "明亮",
     "themeDark": "暗黑",
     "themeSepia": "护眼",
     "themeMc": "方块",
     "accentColor": "主题色",
+    "accentColorDescription": "自定义强调色，用于按钮、选中状态与关键高亮。",
     "accentColorMcHint": "方块主题使用固定强调色，自定义主题色不会生效",
     "animationsEnabled": "启用动画",
     "animationsEnabledDescription": "关闭后将只保留配色，停止所有装饰动画",
@@ -615,9 +677,13 @@
     "enhancedAnimations": "增强动效",
     "enhancedAnimationsDescription": "开启后按钮与卡片会获得悬停缩放、光泽扫过等氛围动效（仍会遵守减少动效设置）",
     "uiFont": "界面字体",
+    "uiFontDescription": "设置侧边栏、工具栏与卡片等界面元素的字体。",
     "editorFont": "编辑器字体",
+    "editorFontDescription": "设置编辑器、输入框与代码区域的字体。",
     "fontSize": "字号",
+    "fontSizeDescription": "调整全局基准字号，编辑器与界面文字会同步缩放。",
     "fontTheme": "界面字体主题",
+    "fontThemeDescription": "一键切换无衬线、等宽、像素或得意黑字体组合。",
     "fontThemeSans": "无衬线",
     "fontThemeMono": "等宽",
     "fontThemePixel": "像素",
@@ -633,21 +699,29 @@
     "fontPreview": "字体预览：落霞与孤鹜齐飞，秋水共长天一色。The quick brown fox jumps over the lazy dog.",
     "importFont": "导入字体",
     "importFontDesc": "导入 .ttf / .otf / .woff / .woff2 字体文件到应用数据目录，桌面端可用。",
+    "importFontDescription": "导入本地字体文件后，可一键设为界面或编辑器字体。",
     "importFontBtn": "选择字体文件",
     "fontImported": "已导入字体 {{family}}",
     "importedFonts": "已导入字体",
     "setUiFont": "设为界面字体",
     "setEditorFont": "设为编辑器字体",
     "language": "语言",
+    "languageDescription": "切换界面显示语言，当前支持简体中文与英文。",
     "defaultView": "默认视图",
+    "defaultViewDescription": "打开工作区后默认进入的视图。",
     "timelineZoom": "时间轴默认缩放",
+    "timelineZoomDescription": "新打开时间轴时的默认时间粒度。",
     "backupPath": "备份路径",
+    "backupPathDescription": "自动备份文件的存放目录，留空则使用应用默认目录。",
     "autoBackup": "自动备份",
+    "autoBackupDescription": "按设定间隔自动备份工作区数据。",
     "backupInterval": "备份间隔（小时）",
+    "backupIntervalDescription": "两次自动备份之间的最小间隔。",
     "reset": "恢复默认",
     "saveSuccess": "设置已保存",
     "checkUpdateTitle": "检查更新",
     "checkUpdateDesc": "联网检查是否有新版本发布。仅在桌面应用中可用。",
+    "checkUpdateDescription": "检查 Plotline 是否有新版本，可在桌面应用内一键安装。",
     "checkUpdateCta": "立即检查",
     "updateAvailable": "发现新版本 v{{version}}，可在应用内一键安装",
     "updateUpToDate": "当前已是最新版本",
@@ -659,17 +733,26 @@
     "updatePromptInstall": "立即安装",
     "updatePromptLater": "稍后处理",
     "aiEnabled": "启用 AI 助手",
+    "aiEnabledDescription": "开启后可在 AI 面板中提问、优化事件与检查逻辑一致性。",
     "aiProvider": "服务提供商",
+    "aiProviderDescription": "选择 OpenAI、DeepSeek、硅基流动等兼容 OpenAI API 的服务商。",
     "aiBaseUrl": "API 基础地址",
+    "aiBaseUrlDescription": "服务商的 API 入口地址，选择预设提供商会自动填充。",
     "aiModel": "模型",
+    "aiModelDescription": "选择要使用的对话模型，可刷新列表获取可用模型。",
     "aiApiKey": "API Key",
+    "aiApiKeyDescription": "你的 API 密钥，仅存储在本地，不会上传到 Plotline 服务器。",
     "aiRagEnabled": "启用 RAG 检索增强",
+    "aiRagEnabledDescription": "开启后 AI 会引用当前工作区的角色、事件、地点等资料作答。",
     "aiSystemPrompt": "系统提示词",
     "aiSystemPromptPlaceholder": "你是 Plotline 的 AI 创作助手，熟悉叙事写作、角色塑造、大纲结构和视觉小说。请用中文简洁回答。",
     "aiSystemPromptHint": "留空则使用默认提示词。系统提示词会附加到每次 AI 对话的开头。",
+    "aiSystemPromptDescription": "定义 AI 的行为风格与回答要求，会附加到每次对话开头。",
     "aiGetKey": "获取 API Key",
     "splashEnabled": "显示开场动画",
-    "splashDuration": "开场动画时长"
+    "splashEnabledDescription": "启动时显示 Logo 与加载动画。",
+    "splashDuration": "开场动画时长",
+    "splashDurationDescription": "控制开场动画停留的毫秒数。"
   },
   "common": {
     "save": "保存",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   BarChart3,
   Clock4,
@@ -64,6 +64,8 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
   const foreshadows = connections.filter((c) => c.connectionType === 'foreshadow');
   const setAiContext = useAiContextStore((s) => s.setContext);
   const [chartTab, setChartTab] = useState<'overview' | 'mindmap' | 'brain' | 'tree'>('overview');
+  const reduced = useReducedMotion();
+  const emptyTransition = reduced ? { duration: 0 } : MOTION_BASE;
 
   useEffect(() => {
     const stats = data
@@ -109,6 +111,7 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
             icon={<BarChart3 className="h-10 w-10" />}
             title={t('statistics.title')}
             description={t('statistics.empty')}
+            transition={emptyTransition}
             actions={[
               <Button
                 key="timeline"
@@ -116,7 +119,7 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
                 className="gap-2"
               >
                 <Clock4 className="h-4 w-4" />
-                {t('nav.timeline')}
+                {t('statistics.emptyCtaTimeline')}
               </Button>,
               <Button
                 key="outline"
@@ -125,7 +128,7 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
                 className="gap-2"
               >
                 <ListTree className="h-4 w-4" />
-                {t('nav.outline')}
+                {t('statistics.emptyCtaOutline')}
               </Button>,
             ]}
           />

@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sun, Moon, BookOpen, Box, Check, RotateCcw, RefreshCw, Upload, ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { RotateCcw, Upload, ChevronDown } from 'lucide-react';
+
 import {
   Button,
   Card,
@@ -11,143 +12,43 @@ import {
   Input,
   Label,
   Switch,
-  Textarea,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
-import { FONT_STACKS } from '@/lib/fonts';
+import { MOTION_TAB } from '@/lib/motion';
 import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
-import { useThemeStore, useUIStore } from '@/stores/ui';
-import { useAiModelsQuery } from '@/features/ai/hooks';
-import { AI_PROVIDERS, getProviderPreset } from '@/features/ai/providers';
+import { useThemeStore } from '@/stores/ui';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { importFont, listImportedFonts, loadImportedFontFaces } from '@/features/font/api';
 import { APP_VERSION } from '@/lib/version';
-import type { AppSettings, DefaultView, FontTheme, Language, Theme } from '@/types';
-
-const FONT_PRESETS: Array<{ labelKey: string; value: string }> = [
-  { labelKey: 'settings.fontPresetDefault', value: '' },
-  { labelKey: 'settings.fontPresetInter', value: FONT_STACKS.sans },
-  { labelKey: 'settings.fontPresetSans', value: '"PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif' },
-  { labelKey: 'settings.fontPresetMono', value: FONT_STACKS.mono },
-  { labelKey: 'settings.fontPresetPixel', value: FONT_STACKS.pixel },
-  { labelKey: 'settings.fontPresetSmiley', value: FONT_STACKS.smiley },
-];
-
-function FontPicker({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const { t } = useI18n();
-  const matched = FONT_PRESETS.find((p) => p.value === value);
-  const mode = matched ? matched.value : '__custom__';
-  const previewStyle: CSSProperties & { '--preview-font'?: string } = {
-    '--preview-font': value || 'inherit',
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Label>{label}</Label>
-      <select
-        value={mode}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v !== '__custom__') onChange(v);
-        }}
-        className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
-      >
-        {FONT_PRESETS.map((p) => (
-          <option key={p.value} value={p.value}>
-            {t(p.labelKey)}
-          </option>
-        ))}
-        <option value="__custom__">{t('settings.fontPresetCustom')}</option>
-      </select>
-      {mode === '__custom__' && (
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={t('settings.fontCustomPlaceholder')}
-        />
-      )}
-      <p
-        className="text-xs text-text-secondary [font-family:var(--preview-font)]"
-        style={previewStyle}
-      >
-        {t('settings.fontPreview')}
-      </p>
-    </div>
-  );
-}
+import { ThemeSelector, FontSelector, AnimationPreview } from '@/features/settings/components';
+import { AiSettingsSection } from '@/features/ai/components/AiSettingsSection';
+import type { AppSettings, DefaultView, Language } from '@/types';
 
 interface SettingsViewProps {
   workspaceId: string;
   workspaceName?: string;
 }
 
-type Tab = 'appearance' | 'editor' | 'data' | 'ai' | 'startup' | 'shortcuts' | 'about' | 'help';
+type Tab = 'appearance' | 'editor' | 'ai' | 'data' | 'about';
 
-const TABS: Array<{ id: Tab; labelKey: string }> = [
-  { id: 'appearance', labelKey: 'settings.appearance' },
-  { id: 'editor', labelKey: 'settings.editor' },
-  { id: 'data', labelKey: 'settings.data' },
-  { id: 'ai', labelKey: 'settings.ai' },
-  { id: 'startup', labelKey: 'settings.startup' },
-  { id: 'shortcuts', labelKey: 'settings.shortcuts' },
-  { id: 'help', labelKey: 'settings.help' },
-  { id: 'about', labelKey: 'settings.about' },
-];
-
-const THEMES: Array<{ value: Theme; labelKey: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { value: 'light', labelKey: 'settings.themeLight', icon: Sun },
-  { value: 'dark', labelKey: 'settings.themeDark', icon: Moon },
-  { value: 'sepia', labelKey: 'settings.themeSepia', icon: BookOpen },
-  { value: 'mc', labelKey: 'settings.themeMc', icon: Box },
+const TABS: Array<{ id: Tab; labelKey: string; descriptionKey: string }> = [
+  { id: 'appearance', labelKey: 'settings.appearance', descriptionKey: 'settings.appearanceDescription' },
+  { id: 'editor', labelKey: 'settings.editor', descriptionKey: 'settings.editorDescription' },
+  { id: 'ai', labelKey: 'settings.ai', descriptionKey: 'settings.aiDescription' },
+  { id: 'data', labelKey: 'settings.data', descriptionKey: 'settings.dataDescription' },
+  { id: 'about', labelKey: 'settings.about', descriptionKey: 'settings.aboutDescription' },
 ];
 
 const ACCENT_PALETTE = ['#C68A3E', '#A86A2C', '#B85537', '#7B5E3C', '#D4A574', '#9C6B3E'];
-
-const FONT_THEMES: Array<{ value: FontTheme; labelKey: string; previewClass: string }> = [
-  { value: 'sans', labelKey: 'settings.fontThemeSans', previewClass: 'font-sans' },
-  { value: 'mono', labelKey: 'settings.fontThemeMono', previewClass: 'font-mono' },
-  { value: 'pixel', labelKey: 'settings.fontThemePixel', previewClass: '[font-family:var(--font-pixel)]' },
-  { value: 'smiley', labelKey: 'settings.fontThemeSmiley', previewClass: '[font-family:var(--font-smiley)]' },
-];
-
-const FONT_THEME_STACKS: Record<FontTheme, { ui: string; editor: string }> = {
-  sans: {
-    ui: FONT_STACKS.sans,
-    editor: FONT_STACKS.mono,
-  },
-  mono: {
-    ui: FONT_STACKS.mono,
-    editor: FONT_STACKS.mono,
-  },
-  pixel: {
-    ui: FONT_STACKS.pixel,
-    editor: FONT_STACKS.pixel,
-  },
-  smiley: {
-    ui: FONT_STACKS.smiley,
-    editor: FONT_STACKS.mono,
-  },
-};
 
 export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) {
   const { t, i18n } = useI18n();
   const { data: settings } = useSettingsQuery();
   const update = useUpdateSettings();
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
-  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
-  const setEnhancedAnimations = useUIStore((s) => s.setEnhancedAnimations);
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -155,15 +56,43 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [importedFonts, setImportedFonts] = useState<string[]>([]);
-  const modelsQuery = useAiModelsQuery(
-    draft?.aiBaseUrl ?? '',
-    draft?.aiApiKey ?? '',
-    Boolean(draft?.aiEnabled),
-  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const reduced = useReducedMotion();
+  const panelTransition = reduced ? { duration: 0 } : MOTION_TAB;
 
   useEffect(() => {
     void listImportedFonts().then((fonts) => setImportedFonts(fonts));
   }, []);
+
+  useEffect(() => {
+    if (settings && !draft) {
+      setDraft(settings);
+      applyToDOM(settings);
+    }
+  }, [settings, draft, applyToDOM]);
+
+  if (!draft) return null;
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+
+  const set = (patch: Partial<AppSettings>) => {
+    setDraft((d) => (d ? { ...d, ...patch } : d));
+    if (patch.theme || patch.accentColor || patch.fontSize || patch.uiFont || patch.editorFont || patch.fontTheme) {
+      applyToDOM({ ...draft, ...patch });
+    }
+  };
+
+  const save = async () => {
+    if (!dirty) return;
+    await update.mutateAsync(draft);
+  };
+
+  const reset = () => {
+    if (settings) {
+      setDraft(settings);
+      applyToDOM(settings);
+    }
+  };
 
   const handleImportFont = async (file: File) => {
     const family = await importFont(file);
@@ -176,8 +105,8 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const applyImportedFont = (family: string, target: 'ui' | 'editor') => {
     const fallback =
       target === 'ui'
-        ? `"${family}", ${FONT_STACKS.sans.replace(/^"Inter",\s*/, '')}`
-        : `"${family}", ${FONT_STACKS.mono}`;
+        ? `"${family}", ${FONT_STACKS_SANS_FALLBACK}`
+        : `"${family}", ${FONT_STACKS_MONO_FALLBACK}`;
     set(target === 'ui' ? { uiFont: fallback } : { editorFont: fallback });
   };
 
@@ -213,34 +142,44 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
     }
   };
 
-  useEffect(() => {
-    if (settings && !draft) {
-      setDraft(settings);
-      applyToDOM(settings);
-    }
-  }, [settings, draft, applyToDOM]);
+  const settingCards = buildSettingCards({
+    t,
+    draft,
+    set,
+    importedFonts,
+    applyImportedFont,
+    handleImportFont,
+    i18n,
+    settings,
+    checkingUpdate,
+    installUpdate,
+    installingUpdate,
+    updateVersion,
+    handleCheckUpdate,
+    handleInstallUpdate,
+  });
 
-  if (!draft) return null;
+  const activeTabDef = TABS.find((tb) => tb.id === tab)!;
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
-  const set = (patch: Partial<AppSettings>) => {
-    setDraft((d) => (d ? { ...d, ...patch } : d));
-    if (patch.theme || patch.accentColor || patch.fontSize || patch.uiFont || patch.editorFont || patch.fontTheme) {
-      applyToDOM({ ...draft, ...patch });
-    }
-  };
-
-  const save = async () => {
-    if (!dirty) return;
-    await update.mutateAsync(draft);
-  };
-
-  const reset = () => {
-    if (settings) {
-      setDraft(settings);
-      applyToDOM(settings);
-    }
-  };
+  const filteredTabs = (() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+    return TABS.map((tb) => {
+      const tabTitle = t(tb.labelKey).toLowerCase();
+      const tabDesc = t(tb.descriptionKey).toLowerCase();
+      const tabMatch = tabTitle.includes(query) || tabDesc.includes(query);
+      const cards = settingCards[tb.id]
+        .map((card, index) => ({ card, index }))
+        .filter(({ card }) => {
+          if (tabMatch) return true;
+          return (
+            card.title.toLowerCase().includes(query) ||
+            (card.description?.toLowerCase().includes(query) ?? false)
+          );
+        });
+      return { ...tb, cards };
+    }).filter((tb) => tb.cards.length > 0);
+  })();
 
   return (
     <>
@@ -269,7 +208,10 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
             <button
               key={tb.id}
               data-testid={`settings-tab-${tb.id}`}
-              onClick={() => setTab(tb.id)}
+              onClick={() => {
+                setTab(tb.id);
+                setSearchQuery('');
+              }}
               className={cn(
                 'w-full text-left text-sm px-3 h-9 rounded-[6px] transition-colors',
                 tab === tb.id
@@ -283,800 +225,553 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
         </aside>
 
         <div className="flex-1 overflow-auto p-6">
-          <AnimatePresence>
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={MOTION_BASE}
-              className="max-w-2xl mx-auto"
-            >
-            {tab === 'appearance' && (
-              <div className="flex flex-col gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.theme')}</CardTitle>
-                    <CardDescription>{t('settings.theme')}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-3">
-                      {THEMES.map((th) => {
-                        const Icon = th.icon;
-                        const active = draft.theme === th.value;
-                        return (
-                          <motion.button
-                            key={th.value}
-                            data-testid={`theme-${th.value}`}
-                            onClick={() => set({ theme: th.value })}
-                            whileTap={enhancedAnimations ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
-                            className={cn(
-                              'group relative flex flex-col items-center gap-2 p-4 rounded-[8px] border-2 transition-[colors,box-shadow] overflow-hidden fancy-ripple',
-                              enhancedAnimations && 'ambient-scale',
-                              active
-                                ? 'border-accent bg-accent/10 ring-2 ring-accent ring-offset-1 ring-offset-bg-surface'
-                                : 'border-border hover:bg-bg-elevated hover:border-accent/30',
-                            )}
-                          >
-                            <div
-                              className="ambient-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-accent/15 to-transparent"
-                              aria-hidden="true"
-                            />
-                            <div
-                              className="h-14 w-full rounded-[6px] mb-1 relative z-10 overflow-hidden border border-border/50 flex items-center justify-center gap-2"
-                              data-theme={th.value}
-                              style={{ background: 'var(--bg-base-gradient)' }}
-                            >
-                              <span className="text-[10px] font-medium text-text-primary">
-                                Aa
-                              </span>
-                              <span className="h-2 w-2 rounded-full bg-accent" />
-                            </div>
-                            <Icon className="h-4 w-4 text-text-secondary" />
-                            <span className="text-xs font-medium text-text-primary">
-                              {t(th.labelKey)}
-                            </span>
-                            {active && (
-                              <span className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-white">
-                                <Check className="h-2.5 w-2.5" />
-                              </span>
-                            )}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
+          <div className="max-w-2xl mx-auto flex flex-col gap-5">
+            <div className="sticky top-0 z-10 -mx-6 px-6 pb-2 bg-bg-base/95 backdrop-blur-sm">
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('settings.searchPlaceholder')}
+                data-testid="settings-search-input"
+                className="h-10"
+              />
+            </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.accentColor')}</CardTitle>
-                    <CardDescription>{t('settings.accentColorMcHint')}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-2 flex-wrap">
-                      {ACCENT_PALETTE.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => set({ accentColor: c })}
-                          className={cn(
-                            'h-9 w-9 rounded-full transition-transform flex items-center justify-center',
-                            draft.accentColor === c
-                              ? 'ring-2 ring-offset-2 ring-text-primary/40 scale-110'
-                              : 'hover:scale-110',
-                          )}
-                          style={{ backgroundColor: c }}
-                        >
-                          {draft.accentColor === c && <Check className="h-3.5 w-3.5 text-white" />}
-                        </button>
+            <AnimatePresence mode="wait">
+              {searchQuery.trim().length > 0 ? (
+                <motion.div
+                  key="search-results"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -3 }}
+                  transition={panelTransition}
+                  className="flex flex-col gap-5"
+                  data-testid="settings-search-results"
+                >
+                  {filteredTabs.length === 0 && (
+                    <div className="text-sm text-text-secondary text-center py-8">{t('common.noResults')}</div>
+                  )}
+                  {filteredTabs.map((tb) => (
+                    <div key={tb.id} className="flex flex-col gap-3">
+                      <div>
+                        <h2 className="text-base font-semibold text-text-primary">{t(tb.labelKey)}</h2>
+                        <p className="text-xs text-text-secondary">{t(tb.descriptionKey)}</p>
+                      </div>
+                      {tb.cards.map(({ card, index }) => (
+                        <Card key={`${tb.id}-${index}`} data-testid={card.testId}>
+                          <CardHeader>
+                            <CardTitle>{card.title}</CardTitle>
+                            {card.description && <CardDescription>{card.description}</CardDescription>}
+                          </CardHeader>
+                          <CardContent>{card.content}</CardContent>
+                        </Card>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.language')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-2">
-                      {(['zh-CN', 'en'] as Language[]).map((lng) => (
-                        <button
-                          key={lng}
-                          onClick={() => {
-                            set({ language: lng });
-                            void i18n.changeLanguage(lng);
-                          }}
-                          data-testid={`lang-${lng}`}
-                          className={cn(
-                            'h-10 px-4 rounded-[6px] border text-sm transition-colors',
-                            draft.language === lng
-                              ? 'border-accent bg-accent/10 text-accent ring-1 ring-accent'
-                              : 'border-border text-text-secondary hover:bg-bg-elevated',
-                          )}
-                        >
-                          {lng === 'zh-CN' ? '简体中文' : 'English'}
-                        </button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.fontTheme')}</CardTitle>
-                    <CardDescription>{t('settings.fontTheme')}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-3">
-                      {FONT_THEMES.map((ft) => {
-                        const active = draft.fontTheme === ft.value;
-                        return (
-                          <motion.button
-                            key={ft.value}
-                            data-testid={`font-theme-${ft.value}`}
-                            onClick={() =>
-                              set({
-                                fontTheme: ft.value,
-                                uiFont: FONT_THEME_STACKS[ft.value].ui,
-                                editorFont: FONT_THEME_STACKS[ft.value].editor,
-                              })
-                            }
-                            whileTap={enhancedAnimations ? { scale: 0.96, rotate: -0.5 } : { scale: 0.98 }}
-                            className={cn(
-                              'flex flex-col items-start gap-1.5 p-3 rounded-[8px] border-2 text-left transition-[colors,box-shadow] fancy-ripple',
-                              enhancedAnimations && 'ambient-scale',
-                              active
-                                ? 'border-accent bg-accent/10 ring-2 ring-accent ring-offset-1 ring-offset-bg-surface'
-                                : 'border-border hover:bg-bg-elevated hover:border-accent/30',
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                'text-base font-medium text-text-primary',
-                                ft.previewClass,
-                              )}
-                            >
-                              {t(ft.labelKey)}
-                            </span>
-                            <span className={cn('text-xs text-text-secondary', ft.previewClass)}>
-                              plotline Plotline 12345 ，。！？
-                            </span>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.animationsEnabled')}</CardTitle>
-                    <CardDescription>{t('settings.animationsEnabledDescription')}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <Switch
-                        checked={draft.animationsEnabled}
-                        onCheckedChange={(checked) => {
-                          set({ animationsEnabled: checked });
-                          update.mutate({ animationsEnabled: checked });
-                        }}
-                        data-testid="animations-enabled-toggle"
-                      />
-                      <p className="text-xs text-text-secondary">{t('settings.animationsEnabledDescription')}</p>
-                    </div>
-                    <div className="flex items-start gap-3 pl-0">
-                      <Switch
-                        checked={enhancedAnimations && draft.animationsEnabled}
-                        onCheckedChange={(checked) => setEnhancedAnimations(checked)}
-                        disabled={!draft.animationsEnabled}
-                        data-testid="enhanced-animations-toggle"
-                      />
-                      <div className="text-xs text-text-secondary">
-                        <p className="font-medium text-text-primary">{t('settings.enhancedAnimations')}</p>
-                        <p>{t('settings.enhancedAnimationsDescription')}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'editor' && (
-              <div className="flex flex-col gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.fontTheme')}</CardTitle>
-                    <CardDescription>{t('settings.uiFont')} / {t('settings.editorFont')}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <FontPicker
-                      label={t('settings.uiFont')}
-                      value={draft.uiFont}
-                      onChange={(v) => set({ uiFont: v })}
-                    />
-                    <FontPicker
-                      label={t('settings.editorFont')}
-                      value={draft.editorFont}
-                      onChange={(v) => set({ editorFont: v })}
-                    />
-                    <Section title={t('settings.fontSize')}>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          min={12}
-                          max={18}
-                          value={draft.fontSize}
-                          onChange={(e) => set({ fontSize: Number(e.target.value) })}
-                          className="flex-1 accent-accent"
-                        />
-                        <span className="text-sm w-12 text-right text-text-primary">
-                          {draft.fontSize}px
-                        </span>
-                      </div>
-                    </Section>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.defaultView')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <select
-                      value={draft.defaultView}
-                      onChange={(e) =>
-                        set({ defaultView: e.target.value as AppSettings['defaultView'] })
-                      }
-                      className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
-                    >
-                      {([
-                        'timeline',
-                        'characters',
-                        'outline',
-                        'map',
-                        'vn',
-                        'worldbuilding',
-                        'statistics',
-                        'notebook',
-                      ] as DefaultView[]).map((v) => (
-                        <option key={v} value={v}>{t(`nav.${v}`)}</option>
-                      ))}
-                    </select>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.timelineZoom')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <select
-                      value={draft.timelineZoom}
-                      onChange={(e) =>
-                        set({ timelineZoom: e.target.value as AppSettings['timelineZoom'] })
-                      }
-                      className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
-                    >
-                      <option value="year">{t('timeline.year')}</option>
-                      <option value="month">{t('timeline.month')}</option>
-                      <option value="day">{t('timeline.day')}</option>
-                      <option value="hour">{t('timeline.hour')}</option>
-                    </select>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.importFont')}</CardTitle>
-                    <CardDescription>{t('settings.importFontDesc')}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <label className="inline-flex">
-                      <Button variant="secondary" size="sm" className="gap-2 cursor-pointer">
-                        <Upload className="h-3.5 w-3.5" />
-                        {t('settings.importFontBtn')}
-                      </Button>
-                      <input
-                        type="file"
-                        accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void handleImportFont(f);
-                          e.currentTarget.value = '';
-                        }}
-                      />
-                    </label>
-                    {importedFonts.length > 0 && (
-                      <div className="mt-3 flex flex-col gap-2">
-                        <p className="text-xs text-text-secondary">{t('settings.importedFonts')}</p>
-                        {importedFonts.map((name) => {
-                          const family = name.replace(/\.(ttf|otf|woff|woff2)$/i, '');
-                          return (
-                            <div
-                              key={name}
-                              className="flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] border border-border bg-bg-surface"
-                            >
-                              <span className="text-sm text-text-primary truncate">{family}</span>
-                              <div className="flex gap-1.5">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => applyImportedFont(family, 'ui')}
-                                >
-                                  {t('settings.setUiFont')}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => applyImportedFont(family, 'editor')}
-                                >
-                                  {t('settings.setEditorFont')}
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'data' && (
-              <div className="flex flex-col gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.backupPath')}</CardTitle>
-                    <CardDescription>{t('settings.backupPath')}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Input
-                      value={draft.backupPath}
-                      onChange={(e) => set({ backupPath: e.target.value })}
-                      placeholder="默认: 应用数据目录"
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.autoBackup')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => set({ autoBackup: !draft.autoBackup })}
-                        className={cn(
-                          'w-12 h-7 rounded-full transition-colors relative',
-                          draft.autoBackup ? 'bg-accent' : 'bg-border',
-                        )}
-                      >
-                        <motion.span
-                          className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
-                          initial={false}
-                          animate={{ x: draft.autoBackup ? 20 : 0 }}
-                          transition={MOTION_FAST}
-                        />
-                      </button>
-                      <span className="text-xs text-text-secondary">
-                        {t('settings.backupInterval')}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.backupInterval')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        value={draft.backupIntervalHours}
-                        onChange={(e) =>
-                          set({ backupIntervalHours: Math.max(1, Number(e.target.value)) })
-                        }
-                        className="w-32"
-                      />
-                      <span className="text-xs text-text-secondary">
-                        {t('settings.backupInterval')}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'ai' && (
-              <div className="flex flex-col gap-5">
-                <Card data-testid="ai-connection-status-card">
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiEnabled')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-4">
-                      <button
-                        data-testid="ai-enabled-toggle"
-                        onClick={() => set({ aiEnabled: !draft.aiEnabled })}
-                        className={cn(
-                          'w-12 h-7 rounded-full transition-colors relative',
-                          draft.aiEnabled ? 'bg-accent' : 'bg-border',
-                        )}
-                      >
-                        <motion.span
-                          className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
-                          initial={false}
-                          animate={{ x: draft.aiEnabled ? 20 : 0 }}
-                          transition={MOTION_FAST}
-                        />
-                      </button>
-                    </div>
-                    {/* AI 连接状态组件占位；由后续 agent 实现具体 UI */}
-                    <div
-                      data-testid="ai-connection-placeholder"
-                      className="mt-4 min-h-[48px] rounded-[6px] border border-dashed border-border bg-bg-base/50"
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiProvider')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-2">
-                      {AI_PROVIDERS.map((p) => {
-                        const active = draft.aiProvider === p.id;
-                        return (
-                          <button
-                            key={p.id}
-                            onClick={() => {
-                              const patch: Partial<AppSettings> = { aiProvider: p.id };
-                              if (p.baseUrl) {
-                                patch.aiBaseUrl = p.baseUrl;
-                              }
-                              if (p.defaultModel && !draft.aiModel) {
-                                patch.aiModel = p.defaultModel;
-                              }
-                              set(patch);
-                            }}
-                            className={cn(
-                              'flex items-center gap-2 rounded-[8px] border px-3 py-2.5 text-left transition-colors',
-                              active
-                                ? 'border-accent bg-accent/10 text-text-primary ring-1 ring-accent'
-                                : 'border-border bg-bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary',
-                            )}
-                          >
-                            <span
-                              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px]"
-                              style={{ backgroundColor: `${p.color}1A`, color: p.color }}
-                            >
-                              {p.icon}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{p.name}</span>
-                              <span className="block truncate text-xs text-text-secondary">
-                                {p.description}
-                              </span>
-                            </span>
-                            {active && <Check className="h-4 w-4 flex-shrink-0 text-accent" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiBaseUrl')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Input
-                      value={draft.aiBaseUrl}
-                      onChange={(e) => set({ aiBaseUrl: e.target.value })}
-                      placeholder="https://api.openai.com/v1"
-                    />
-                    {(() => {
-                      const preset = getProviderPreset(draft.aiProvider);
-                      return (
-                        <p className="mt-1.5 text-xs text-text-secondary">
-                          {preset.name} — {preset.description}
-                        </p>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiModel')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-2">
-                      <select
-                        value={draft.aiModel}
-                        onChange={(e) => set({ aiModel: e.target.value })}
-                        className="flex-1 h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
-                      >
-                        <option value="">
-                          {getProviderPreset(draft.aiProvider).defaultModel || 'gpt-4o-mini'}
-                        </option>
-                        {modelsQuery.data?.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.id}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        loading={modelsQuery.isFetching}
-                        onClick={() => modelsQuery.refetch()}
-                        title={t('ai.refreshModels')}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {modelsQuery.error && (
-                      <p className="mt-1.5 text-xs text-red-500">{t('ai.modelListError')}</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiApiKey')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Input
-                      type="password"
-                      value={draft.aiApiKey}
-                      onChange={(e) => set({ aiApiKey: e.target.value })}
-                      placeholder="sk-..."
-                    />
-                    {(() => {
-                      const preset = getProviderPreset(draft.aiProvider);
-                      if (!preset.keyUrl) return null;
-                      return (
-                        <a
-                          href={preset.keyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline"
-                        >
-                          {t('settings.aiGetKey')}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiRagEnabled')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <button
-                      onClick={() => set({ aiRagEnabled: !draft.aiRagEnabled })}
-                      className={cn(
-                        'w-12 h-7 rounded-full transition-colors relative',
-                        draft.aiRagEnabled ? 'bg-accent' : 'bg-border',
-                      )}
-                    >
-                      <motion.span
-                        className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
-                        initial={false}
-                        animate={{ x: draft.aiRagEnabled ? 20 : 0 }}
-                        transition={MOTION_FAST}
-                      />
-                    </button>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.aiSystemPrompt')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Textarea
-                      value={draft.aiSystemPrompt}
-                      onChange={(e) => set({ aiSystemPrompt: e.target.value })}
-                      placeholder={t('settings.aiSystemPromptPlaceholder')}
-                      rows={5}
-                      className="text-sm"
-                    />
-                    <p className="mt-1.5 text-xs text-text-secondary">
-                      {t('settings.aiSystemPromptHint')}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'startup' && (
-              <div className="flex flex-col gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.splashEnabled')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <button
-                      onClick={() => set({ splashEnabled: !draft.splashEnabled })}
-                      className={cn(
-                        'w-12 h-7 rounded-full transition-colors relative',
-                        draft.splashEnabled ? 'bg-accent' : 'bg-border',
-                      )}
-                    >
-                      <motion.span
-                        className="absolute top-1 left-1 h-5 w-5 bg-white rounded-full shadow-sm"
-                        initial={false}
-                        animate={{ x: draft.splashEnabled ? 20 : 0 }}
-                        transition={MOTION_FAST}
-                      />
-                    </button>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('settings.splashDuration')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="range"
-                        min={800}
-                        max={4000}
-                        step={100}
-                        value={draft.splashDurationMs}
-                        onChange={(e) => set({ splashDurationMs: Number(e.target.value) })}
-                        className="flex-1 accent-accent"
-                      />
-                      <span className="text-sm w-16 text-right text-text-primary">
-                        {(draft.splashDurationMs / 1000).toFixed(1)}s
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'shortcuts' && (
-              <div className="flex flex-col gap-3 text-sm text-text-secondary">
-                <Card>
-                  <CardContent className="text-xs">
-                    <p className="text-text-secondary">
-                      快捷键功能将在后续迭代中开放自定义。当前可用：
-                    </p>
-                    <ul className="mt-2 space-y-1 text-text-primary/80">
-                      <li>• Ctrl/Cmd + N - 新建工作区</li>
-                      <li>• Ctrl/Cmd + B - 切换侧栏</li>
-                      <li>• Esc - 关闭对话框</li>
-                    </ul>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'help' && (
-              <div className="flex flex-col gap-4 text-sm">
-                <Card>
-                  <CardContent className="space-y-4">
-                    <h3 className="text-sm font-semibold text-text-primary">{t('settings.helpTimeline')}</h3>
-                    <p className="text-xs text-text-secondary">{t('settings.helpTimelineDesc')}</p>
-                    <ul className="text-xs text-text-primary/80 space-y-1">
-                      <li>• {t('settings.helpTimeline1')}</li>
-                      <li>• {t('settings.helpTimeline2')}</li>
-                      <li>• {t('settings.helpTimeline3')}</li>
-                      <li>• {t('settings.helpTimeline4')}</li>
-                      <li>• {t('settings.helpTimeline5')}</li>
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="space-y-4">
-                    <h3 className="text-sm font-semibold text-text-primary">{t('settings.helpOutline')}</h3>
-                    <p className="text-xs text-text-secondary">{t('settings.helpOutlineDesc')}</p>
-                    <ul className="text-xs text-text-primary/80 space-y-1">
-                      <li>• {t('settings.helpOutline1')}</li>
-                      <li>• {t('settings.helpOutline2')}</li>
-                      <li>• {t('settings.helpOutline3')}</li>
-                    </ul>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="space-y-4">
-                    <h3 className="text-sm font-semibold text-text-primary">{t('settings.helpPomodoro')}</h3>
-                    <p className="text-xs text-text-secondary">{t('settings.helpPomodoroDesc')}</p>
-                    <ul className="text-xs text-text-primary/80 space-y-1">
-                      <li>• {t('settings.helpPomodoro1')}</li>
-                      <li>• {t('settings.helpPomodoro2')}</li>
-                      <li>• {t('settings.helpPomodoro3')}</li>
-                    </ul>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {tab === 'about' && (
-              <div className="flex flex-col gap-3 text-sm">
-                <Card>
-                  <CardContent>
-                    <h2 className="text-base font-bold text-text-primary">Plotline</h2>
-                    <p className="text-xs text-text-secondary mt-1">v{APP_VERSION}</p>
-                    <p className="text-sm text-text-secondary mt-3">
-                      面向小说作者、编剧与游戏叙事设计师的本地优先创作工作台。
-                    </p>
-                    <p className="text-xs text-text-secondary/60 mt-4">
-                      技术栈：Tauri 2 + React 18 + TypeScript + Tailwind CSS v4 + SQLite
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent>
-                    <h3 className="text-sm font-semibold text-text-primary">
-                      {t('settings.checkUpdateTitle')}
-                    </h3>
-                    <p className="text-xs text-text-secondary mt-1">
-                      {installUpdate
-                        ? t('settings.updateInstallPrompt', { version: updateVersion ?? '?' })
-                        : t('settings.checkUpdateDesc')}
-                    </p>
-                    <div className="flex gap-2 mt-3">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="gap-2"
-                        loading={checkingUpdate}
-                        onClick={handleCheckUpdate}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        {t('settings.checkUpdateCta')}
-                      </Button>
-                      {installUpdate && (
-                        <Button
-                          size="sm"
-                          className="gap-2"
-                          loading={installingUpdate}
-                          onClick={handleInstallUpdate}
-                        >
-                          {t('settings.updateInstallCta')}
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </motion.div>
-          </AnimatePresence>
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -3 }}
+                  transition={panelTransition}
+                  className="flex flex-col gap-5"
+                  data-testid={`settings-tab-panel-${tab}`}
+                >
+                  <div>
+                    <h2 className="text-lg font-semibold text-text-primary">{t(activeTabDef.labelKey)}</h2>
+                    <p className="text-xs text-text-secondary mt-0.5">{t(activeTabDef.descriptionKey)}</p>
+                  </div>
+                  {settingCards[tab].map((card, index) => (
+                    <Card key={`${tab}-${index}`} data-testid={card.testId}>
+                      <CardHeader>
+                        <CardTitle>{card.title}</CardTitle>
+                        {card.description && <CardDescription>{card.description}</CardDescription>}
+                      </CardHeader>
+                      <CardContent>{card.content}</CardContent>
+                    </Card>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </>
   );
 }
 
-function Section({
-  title,
-  description,
-  children,
-}: {
+const FONT_STACKS_SANS_FALLBACK =
+  '"PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif';
+const FONT_STACKS_MONO_FALLBACK =
+  '"JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, "SFMono-Regular", "Noto Sans Mono CJK SC", "Microsoft YaHei", "Noto Sans Mono SC", monospace';
+
+interface BuildSettingCardsContext {
+  t: (key: string, options?: Record<string, unknown>) => string;
+  draft: AppSettings;
+  set: (patch: Partial<AppSettings>) => void;
+  importedFonts: string[];
+  applyImportedFont: (family: string, target: 'ui' | 'editor') => void;
+  handleImportFont: (file: File) => Promise<void>;
+  i18n: { changeLanguage: (lng: Language) => Promise<unknown> };
+  settings: AppSettings | undefined;
+  checkingUpdate: boolean;
+  installUpdate: (() => Promise<void>) | null;
+  installingUpdate: boolean;
+  updateVersion: string | null;
+  handleCheckUpdate: () => Promise<void>;
+  handleInstallUpdate: () => Promise<void>;
+}
+
+interface SettingCard {
   title: string;
   description?: string;
-  children: React.ReactNode;
+  testId: string;
+  content: React.ReactNode;
+}
+
+function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCard[]> {
+  const {
+    t,
+    draft,
+    set,
+    importedFonts,
+    applyImportedFont,
+    handleImportFont,
+    i18n,
+    settings,
+    checkingUpdate,
+    installUpdate,
+    installingUpdate,
+    updateVersion,
+    handleCheckUpdate,
+    handleInstallUpdate,
+  } = ctx;
+
+  return {
+    appearance: [
+      {
+        title: t('settings.theme'),
+        description: t('settings.themeDescription'),
+        testId: 'theme-card',
+        content: (
+          <ThemeSelector
+            value={draft.theme}
+            accentColor={draft.accentColor}
+            onChange={(theme) => set({ theme })}
+          />
+        ),
+      },
+      {
+        title: t('settings.accentColor'),
+        description: t('settings.accentColorDescription'),
+        testId: 'accent-color-card',
+        content: (
+          <div className="flex gap-2 flex-wrap">
+            {ACCENT_PALETTE.map((c) => (
+              <button
+                key={c}
+                data-testid={`accent-color-${c}`}
+                onClick={() => set({ accentColor: c })}
+                className={cn(
+                  'h-9 w-9 rounded-full transition-transform flex items-center justify-center',
+                  draft.accentColor === c
+                    ? 'ring-2 ring-offset-2 ring-text-primary/40 scale-110'
+                    : 'hover:scale-110',
+                )}
+                style={{ backgroundColor: c }}
+                aria-label={c}
+              >
+                {draft.accentColor === c && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-white"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        ),
+      },
+      {
+        title: t('settings.language'),
+        description: t('settings.languageDescription'),
+        testId: 'language-card',
+        content: (
+          <div className="flex gap-2">
+            {(['zh-CN', 'en'] as Language[]).map((lng) => (
+              <button
+                key={lng}
+                onClick={() => {
+                  set({ language: lng });
+                  void i18n.changeLanguage(lng);
+                }}
+                data-testid={`lang-${lng}`}
+                className={cn(
+                  'h-10 px-4 rounded-[6px] border text-sm transition-colors',
+                  draft.language === lng
+                    ? 'border-accent bg-accent/10 text-accent ring-1 ring-accent'
+                    : 'border-border text-text-secondary hover:bg-bg-elevated',
+                )}
+              >
+                {lng === 'zh-CN' ? '简体中文' : 'English'}
+              </button>
+            ))}
+          </div>
+        ),
+      },
+      {
+        title: t('settings.fontTheme'),
+        description: t('settings.fontThemeDescription'),
+        testId: 'font-theme-card',
+        content: (
+          <FontSelector
+            uiFont={draft.uiFont}
+            editorFont={draft.editorFont}
+            fontTheme={draft.fontTheme}
+            onChange={(patch) => set(patch)}
+          />
+        ),
+      },
+      {
+        title: t('settings.animationsEnabled'),
+        description: t('settings.animationsEnabledDescription'),
+        testId: 'animations-card',
+        content: (
+          <AnimationPreview
+            animationsEnabled={draft.animationsEnabled}
+            onAnimationsChange={(checked) => {
+              set({ animationsEnabled: checked });
+            }}
+          />
+        ),
+      },
+    ],
+    editor: [
+      {
+        title: t('settings.fontTheme'),
+        description: t('settings.fontThemeDescription'),
+        testId: 'editor-font-card',
+        content: (
+          <div className="flex flex-col gap-4">
+            <FontSelector
+              uiFont={draft.uiFont}
+              editorFont={draft.editorFont}
+              fontTheme={draft.fontTheme}
+              onChange={(patch) => set(patch)}
+            />
+            <div>
+              <Label className="text-sm font-semibold">{t('settings.fontSize')}</Label>
+              <p className="text-xs text-text-secondary mt-0.5 mb-2">{t('settings.fontSizeDescription')}</p>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min={12}
+                  max={18}
+                  value={draft.fontSize}
+                  onChange={(e) => set({ fontSize: Number(e.target.value) })}
+                  className="flex-1 accent-accent"
+                />
+                <span className="text-sm w-12 text-right text-text-primary">{draft.fontSize}px</span>
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        title: t('settings.defaultView'),
+        description: t('settings.defaultViewDescription'),
+        testId: 'default-view-card',
+        content: (
+          <select
+            value={draft.defaultView}
+            onChange={(e) => set({ defaultView: e.target.value as AppSettings['defaultView'] })}
+            className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
+          >
+            {(
+              [
+                'timeline',
+                'characters',
+                'outline',
+                'map',
+                'vn',
+                'worldbuilding',
+                'statistics',
+                'notebook',
+              ] as DefaultView[]
+            ).map((v) => (
+              <option key={v} value={v}>
+                {t(`nav.${v}`)}
+              </option>
+            ))}
+          </select>
+        ),
+      },
+      {
+        title: t('settings.timelineZoom'),
+        description: t('settings.timelineZoomDescription'),
+        testId: 'timeline-zoom-card',
+        content: (
+          <select
+            value={draft.timelineZoom}
+            onChange={(e) => set({ timelineZoom: e.target.value as AppSettings['timelineZoom'] })}
+            className="w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
+          >
+            <option value="year">{t('timeline.year')}</option>
+            <option value="month">{t('timeline.month')}</option>
+            <option value="day">{t('timeline.day')}</option>
+            <option value="hour">{t('timeline.hour')}</option>
+          </select>
+        ),
+      },
+      {
+        title: t('settings.importFont'),
+        description: t('settings.importFontDescription'),
+        testId: 'import-font-card',
+        content: (
+          <div className="flex flex-col gap-3">
+            <label className="inline-flex">
+              <Button variant="secondary" size="sm" className="gap-2 cursor-pointer">
+                <Upload className="h-3.5 w-3.5" />
+                {t('settings.importFontBtn')}
+              </Button>
+              <input
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleImportFont(f);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </label>
+            {importedFonts.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-text-secondary">{t('settings.importedFonts')}</p>
+                {importedFonts.map((name) => {
+                  const family = name.replace(/\.(ttf|otf|woff|woff2)$/i, '');
+                  return (
+                    <div
+                      key={name}
+                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-[6px] border border-border bg-bg-surface"
+                    >
+                      <span className="text-sm text-text-primary truncate">{family}</span>
+                      <div className="flex gap-1.5">
+                        <Button variant="ghost" size="sm" onClick={() => applyImportedFont(family, 'ui')}>
+                          {t('settings.setUiFont')}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => applyImportedFont(family, 'editor')}>
+                          {t('settings.setEditorFont')}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ),
+      },
+    ],
+    ai: [
+      {
+        title: t('settings.ai'),
+        description: t('settings.aiDescription'),
+        testId: 'ai-settings-card',
+        content: <AiSettingsSection draft={draft} set={set} saved={settings} />,
+      },
+    ],
+    data: [
+      {
+        title: t('settings.backupPath'),
+        description: t('settings.backupPathDescription'),
+        testId: 'backup-path-card',
+        content: (
+          <Input
+            value={draft.backupPath}
+            onChange={(e) => set({ backupPath: e.target.value })}
+            placeholder="默认: 应用数据目录"
+          />
+        ),
+      },
+      {
+        title: t('settings.autoBackup'),
+        description: t('settings.autoBackupDescription'),
+        testId: 'auto-backup-card',
+        content: (
+          <div className="flex items-center gap-4">
+            <Switch
+              checked={draft.autoBackup}
+              onCheckedChange={(checked) => set({ autoBackup: checked })}
+              data-testid="auto-backup-toggle"
+            />
+            <span className="text-xs text-text-secondary">{t('settings.backupInterval')}</span>
+          </div>
+        ),
+      },
+      {
+        title: t('settings.backupInterval'),
+        description: t('settings.backupIntervalDescription'),
+        testId: 'backup-interval-card',
+        content: (
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              value={draft.backupIntervalHours}
+              onChange={(e) => set({ backupIntervalHours: Math.max(1, Number(e.target.value)) })}
+              className="w-32"
+            />
+            <span className="text-xs text-text-secondary">{t('settings.backupInterval')}</span>
+          </div>
+        ),
+      },
+    ],
+    about: [
+      {
+        title: 'Plotline',
+        description: t('settings.aboutDescription'),
+        testId: 'about-app-card',
+        content: (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-text-secondary">v{APP_VERSION}</p>
+            <p className="text-sm text-text-secondary">
+              面向小说作者、编剧与游戏叙事设计师的本地优先创作工作台。
+            </p>
+            <p className="text-xs text-text-secondary/60">
+              技术栈：Tauri 2 + React 18 + TypeScript + Tailwind CSS v4 + SQLite
+            </p>
+          </div>
+        ),
+      },
+      {
+        title: t('settings.featureDescription'),
+        description: t('settings.featureDescriptionDesc'),
+        testId: 'feature-description-card',
+        content: <FeatureDescriptionPanel t={t} />,
+      },
+      {
+        title: t('settings.checkUpdateTitle'),
+        description: t('settings.checkUpdateDescription'),
+        testId: 'check-update-card',
+        content: (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-text-secondary">
+              {installUpdate
+                ? t('settings.updateInstallPrompt', { version: updateVersion ?? '?' })
+                : t('settings.checkUpdateDesc')}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-2"
+                loading={checkingUpdate}
+                onClick={handleCheckUpdate}
+                data-testid="check-update-btn"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={checkingUpdate ? 'animate-spin' : ''}
+                >
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 16h5v5" />
+                </svg>
+                {t('settings.checkUpdateCta')}
+              </Button>
+              {installUpdate && (
+                <Button size="sm" className="gap-2" loading={installingUpdate} onClick={handleInstallUpdate}>
+                  {t('settings.updateInstallCta')}
+                </Button>
+              )}
+            </div>
+          </div>
+        ),
+      },
+    ],
+  };
+}
+
+const FEATURE_DESCRIPTION_KEYS: Array<{ titleKey: string; descKey: string }> = [
+  { titleKey: 'settings.featureTimeline', descKey: 'settings.featureTimelineDesc' },
+  { titleKey: 'settings.featureCharacters', descKey: 'settings.featureCharactersDesc' },
+  { titleKey: 'settings.featureOutline', descKey: 'settings.featureOutlineDesc' },
+  { titleKey: 'settings.featureMap', descKey: 'settings.featureMapDesc' },
+  { titleKey: 'settings.featureNotebook', descKey: 'settings.featureNotebookDesc' },
+  { titleKey: 'settings.featurePomodoro', descKey: 'settings.featurePomodoroDesc' },
+  { titleKey: 'settings.featureAi', descKey: 'settings.featureAiDesc' },
+  { titleKey: 'settings.featureTheme', descKey: 'settings.featureThemeDesc' },
+];
+
+function FeatureDescriptionPanel({
+  t,
+}: {
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const reduced = useReducedMotion();
+  const featureTransition = reduced ? { duration: 0 } : MOTION_TAB;
+
   return (
-    <div>
-      <Label className="text-sm font-semibold">{title}</Label>
-      {description && <p className="text-xs text-text-secondary mt-0.5">{description}</p>}
-      <div className="mt-2">{children}</div>
+    <div className="flex flex-col gap-2">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        data-testid="feature-description-toggle"
+        className="flex items-center justify-between w-full px-3 py-2 rounded-[6px] bg-bg-elevated hover:bg-border/50 transition-colors text-left"
+      >
+        <span className="text-sm font-medium text-text-primary">{t('settings.featureDescription')}</span>
+        <ChevronDown
+          className={cn(
+            'h-4 w-4 text-text-secondary transition-transform duration-200',
+            expanded && 'rotate-180',
+          )}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={featureTransition}
+            className="overflow-hidden"
+            data-testid="feature-description-content"
+          >
+            <div className="flex flex-col gap-2 px-1 pb-1">
+              {FEATURE_DESCRIPTION_KEYS.map(({ titleKey, descKey }) => (
+                <div
+                  key={titleKey}
+                  className="rounded-[6px] border border-border bg-bg-surface p-3"
+                >
+                  <h4 className="text-sm font-semibold text-text-primary">{t(titleKey)}</h4>
+                  <p className="text-xs text-text-secondary mt-1 leading-relaxed">{t(descKey)}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

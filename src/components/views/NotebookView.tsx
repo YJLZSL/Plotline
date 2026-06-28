@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useReducedMotion } from 'framer-motion';
 import {
   Plus,
   Search,
@@ -21,6 +22,7 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn, relativeTime, stripHtml, truncate } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 import {
   useCreateNote,
   useDeleteNote,
@@ -51,6 +53,8 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
   const [editorTags, setEditorTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [dirty, setDirty] = useState(false);
+  const reduced = useReducedMotion();
+  const emptyTransition = reduced ? { duration: 0 } : MOTION_BASE;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -202,11 +206,21 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <div className="p-6 text-center">
-                <StickyNote className="h-8 w-8 text-text-secondary/40 mx-auto mb-2" />
-                <p className="text-xs text-text-secondary">暂无笔记</p>
-              </div>
-            ) : (
+            <div className="p-6">
+              <EmptyState
+                icon={<StickyNote className="h-10 w-10" />}
+                title={t('notebook.empty.title')}
+                description={t('notebook.empty.description')}
+                action={
+                  <Button size="sm" onClick={handleAdd} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    {t('notebook.empty.cta')}
+                  </Button>
+                }
+                transition={emptyTransition}
+              />
+            </div>
+          ) : (
               filtered.map((n) => (
                 <button
                   key={n.id}
@@ -354,6 +368,7 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
                     新建笔记
                   </Button>
                 }
+                transition={emptyTransition}
               />
             </div>
           )}

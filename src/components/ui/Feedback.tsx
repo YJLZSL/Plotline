@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
+import type { Transition } from 'framer-motion';
 
 /** 骨架屏：用于加载状态。 */
 export function Skeleton({ className }: { className?: string }) {
@@ -51,18 +52,23 @@ export function EmptyState({
   description,
   action,
   actions,
+  transition: transitionProp,
 }: {
   icon?: React.ReactNode;
   title: string;
   description?: string;
   action?: React.ReactNode;
   actions?: React.ReactNode[];
+  transition?: Transition;
 }) {
+  const reduced = useReducedMotion();
+  const transition = reduced ? { duration: 0 } : (transitionProp ?? MOTION_BASE);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={MOTION_BASE}
+      transition={transition}
       className="flex flex-col items-center justify-center text-center py-16 px-6"
     >
       {icon && (

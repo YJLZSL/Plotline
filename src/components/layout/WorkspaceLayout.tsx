@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Timer } from 'lucide-react';
@@ -9,8 +9,9 @@ import { HistoryControls } from './HistoryControls';
 import { SaveStatus } from './SaveStatus';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { PomodoroTimer } from '@/components/ui';
+import { FirstVisitGuide } from '@/components/onboarding/FirstVisitGuide';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE } from '@/lib/motion';
+import { MOTION_BASE, MOTION_SPRING } from '@/lib/motion';
 import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
 import { useWorkspacesQuery } from '@/features/workspace/hooks';
@@ -19,11 +20,26 @@ export function WorkspaceLayout() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const location = useLocation();
   const [pomoOpen, setPomoOpen] = useState(false);
-  const { aiPanelOpen, setAiPanelOpen } = useUIStore();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const { aiPanelOpen, setAiPanelOpen, firstWorkspaceVisit, setFirstWorkspaceVisit, enhancedAnimations } = useUIStore();
   const reduced = useReducedMotion();
+  const viewTransition = reduced ? { duration: 0 } : enhancedAnimations ? MOTION_SPRING : MOTION_BASE;
   const { data: workspaces = [] } = useWorkspacesQuery();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
+
+  useEffect(() => {
+    if (workspaceId && firstWorkspaceVisit) {
+      setGuideOpen(true);
+      setFirstWorkspaceVisit(false);
+    }
+  }, [workspaceId, firstWorkspaceVisit, setFirstWorkspaceVisit]);
+
   if (!workspaceId) return null;
+
+  const handleGuideClose = () => {
+    setGuideOpen(false);
+    setFirstWorkspaceVisit(false);
+  };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-base">
@@ -33,7 +49,7 @@ export function WorkspaceLayout() {
           key={location.pathname}
           initial={reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={reduced ? { duration: 0 } : MOTION_BASE}
+          transition={viewTransition}
           className="flex-1 min-h-0 flex flex-col"
         >
           <Outlet />
@@ -68,6 +84,7 @@ export function WorkspaceLayout() {
           onClose={() => setAiPanelOpen(false)}
           workspaceId={workspaceId}
         />
+        <FirstVisitGuide open={guideOpen} onClose={handleGuideClose} />
       </div>
     </div>
   );

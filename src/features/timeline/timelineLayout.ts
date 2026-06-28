@@ -1,3 +1,6 @@
+import type { Event, Track } from '@/types';
+import type { TimeScale } from './timeScale';
+
 const EVENT_CARD_MIN_WIDTH = 200;
 const EVENT_CARD_MAX_WIDTH = 360;
 
@@ -7,6 +10,138 @@ const EVENT_CARD_MAX_WIDTH = 360;
 export function getEventCardWidth(title: string, minWidth = EVENT_CARD_MIN_WIDTH, maxWidth = EVENT_CARD_MAX_WIDTH): number {
   const charWidth = /[\u4e00-\u9fa5]/.test(title) ? 14 : 8;
   return Math.min(maxWidth, Math.max(minWidth, 80 + title.length * charWidth));
+}
+
+export interface ComputeEventLayoutOptions {
+  eventHeight: number;
+  rowGap: number;
+  baseTop: number;
+  trackHeight: number;
+  minCardWidth?: number;
+  maxCardWidth?: number;
+  /** 相对事件每个 sortOrder 占用的时间单位数，默认 2 */
+  relativeDurationUnits?: number;
+}
+
+export interface EventLayoutItem {
+  x: number;
+  y: number;
+  width: number;
+  row: number;
+  trackId: string;
+}
+
+export interface EventLayoutResult {
+  /** 每个事件 id 对应的布局信息 */
+  layouts: Map<string, EventLayoutItem>;
+  /** 每个轨道 id 对应的渲染高度 */
+  trackHeights: Map<string, number>;
+}
+
+function getEventTimePosition(ev: Event, timeScale: TimeScale, relativeDurationUnits: number): number {
+  if (ev.dateType === 'absolute' && ev.dateValue) {
+    const t = new Date(ev.dateValue).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  const unitMs = timeScale.getMsPerUnit();
+  return timeScale.min + ev.sortOrder * unitMs * relativeDurationUnits;
+}
+
+function eventsOverlap(aX: number, aWidth: number, bX: number, bWidth: number): boolean {
+  return aX < bX + bWidth && aX + aWidth > bX;
+}
+
+/**
+ * 计算时间轴事件卡片的瀑布布局。
+ *
+ * 按轨道分组，对绝对事件使用真实时间戳，对相对事件使用 sortOrder 估算时间戳；
+ * 当事件在水平方向重叠时，将其放到下一个子行（row），直到无重叠为止。
+ * 返回每个事件的 x/y/width/row 以及每个轨道应展开的高度。
+ */
+export function computeEventLayout(
+  events: Event[],
+  tracks: Track[],
+  timeScale: TimeScale,
+  options: ComputeEventLayoutOptions,
+): EventLayoutResult {
+  const {
+    eventHeight,
+    rowGap,
+    baseTop,
+    trackHeight,
+    minCardWidth = EVENT_CARD_MIN_WIDTH,
+    maxCardWidth = EVENT_CARD_MAX_WIDTH,
+    relativeDurationUnits = 2,
+  } = options;
+
+  const layouts = new Map<string, EventLayoutItem>();
+  const trackHeights = new Map<string, number>();
+
+  for (const tr of tracks) {
+    trackHeights.set(tr.id, trackHeight);
+  }
+
+  const byTrack = new Map<string, Event[]>();
+  for (const ev of events) {
+    const arr = byTrack.get(ev.trackId) ?? [];
+    arr.push(ev);
+    byTrack.set(ev.trackId, arr);
+  }
+
+  for (const [trackId, trackEvents] of byTrack.entries()) {
+    const items = trackEvents.map((ev) => {
+      const time = getEventTimePosition(ev, timeScale, relativeDurationUnits);
+      const x = timeScale.timeToX(time);
+      const width = getEventCardWidth(ev.title, minCardWidth, maxCardWidth);
+      return { ev, x, width };
+    });
+
+    items.sort((a, b) => {
+      if (a.x !== b.x) return a.x - b.x;
+      return a.ev.sortOrder - b.ev.sortOrder;
+    });
+
+    const rows: Array<Array<{ x: number; width: number; id: string }>> = [];
+
+    for (const item of items) {
+      let placed = false;
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const row = rows[rowIndex]!;
+        const hasOverlap = row.some((placedItem) =>
+          eventsOverlap(item.x, item.width, placedItem.x, placedItem.width),
+        );
+        if (!hasOverlap) {
+          row.push({ x: item.x, width: item.width, id: item.ev.id });
+          layouts.set(item.ev.id, {
+            x: item.x,
+            y: baseTop + rowIndex * (eventHeight + rowGap),
+            width: item.width,
+            row: rowIndex,
+            trackId,
+          });
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        const rowIndex = rows.length;
+        rows.push([{ x: item.x, width: item.width, id: item.ev.id }]);
+        layouts.set(item.ev.id, {
+          x: item.x,
+          y: baseTop + rowIndex * (eventHeight + rowGap),
+          width: item.width,
+          row: rowIndex,
+          trackId,
+        });
+      }
+    }
+
+    const maxRow = rows.length - 1;
+    const neededHeight = baseTop * 2 + (maxRow + 1) * eventHeight + maxRow * rowGap;
+    trackHeights.set(trackId, Math.max(trackHeight, neededHeight));
+  }
+
+  return { layouts, trackHeights };
 }
 
 /**

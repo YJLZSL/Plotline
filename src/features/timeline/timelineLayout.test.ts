@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { Event, Track } from '@/types';
 import {
   clampTodayLabelX,
   computeAddButtonLeft,
@@ -6,7 +7,9 @@ import {
   clampTimelineScroll,
   getEventCardWidth,
   estimateLabelWidth,
+  computeEventLayout,
 } from './timelineLayout';
+import { createTimeScale } from './timeScale';
 
 describe('clampTodayLabelX', () => {
   it('keeps the center position when far from edges', () => {
@@ -125,5 +128,131 @@ describe('estimateLabelWidth', () => {
 
   it('estimates ASCII characters narrower than Chinese characters', () => {
     expect(estimateLabelWidth('Jan')).toBe(16 + 3 * 7);
+  });
+});
+
+function makeEvent(overrides: Partial<Event> & { id: string; title: string; trackId: string }): Event {
+  return {
+    ...overrides,
+    workspaceId: 'ws-1',
+    description: '',
+    dateType: overrides.dateType ?? 'absolute',
+    dateValue: overrides.dateValue ?? '',
+    sortOrder: overrides.sortOrder ?? 0,
+    status: 'draft',
+    color: null,
+    locationId: null,
+    imageUrls: [],
+    characterIds: [],
+    connectedEventIds: [],
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+  };
+}
+
+function makeTrack(id: string): Track {
+  return {
+    id,
+    workspaceId: 'ws-1',
+    name: `Track ${id}`,
+    color: '#F4B6C2',
+    sortOrder: 0,
+    isVisible: true,
+    createdAt: '2024-01-01T00:00:00Z',
+  };
+}
+
+const LAYOUT_OPTIONS = {
+  eventHeight: 64,
+  rowGap: 8,
+  baseTop: 12,
+  trackHeight: 92,
+};
+
+describe('computeEventLayout', () => {
+  const timeScale = createTimeScale(
+    new Date('2024-01-01T00:00:00Z').getTime(),
+    new Date('2024-12-31T00:00:00Z').getTime(),
+    'day',
+    24,
+    90,
+  );
+  const track = makeTrack('t1');
+
+  it('places a single event at row 0 without vertical offset', () => {
+    const ev = makeEvent({ id: 'e1', title: '唯一事件', trackId: 't1', dateValue: '2024-01-01' });
+    const result = computeEventLayout([ev], [track], timeScale, LAYOUT_OPTIONS);
+
+    const layout = result.layouts.get('e1');
+    expect(layout).toBeDefined();
+    expect(layout!.row).toBe(0);
+    expect(layout!.y).toBe(LAYOUT_OPTIONS.baseTop);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('keeps two non-overlapping events on the same row', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-10' });
+    const result = computeEventLayout([a, b], [track], timeScale, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(0);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('places two overlapping events on row 0 and row 1', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-02' });
+    const result = computeEventLayout([a, b], [track], timeScale, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(1);
+    expect(result.layouts.get('b')!.y).toBe(LAYOUT_OPTIONS.baseTop + LAYOUT_OPTIONS.eventHeight + LAYOUT_OPTIONS.rowGap);
+    expect(result.trackHeights.get('t1')).toBeGreaterThan(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('places three chained overlapping events on rows 0, 1 and 2', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-02' });
+    const c = makeEvent({ id: 'c', title: 'C', trackId: 't1', dateValue: '2024-01-03' });
+    const result = computeEventLayout([a, b, c], [track], timeScale, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(1);
+    expect(result.layouts.get('c')!.row).toBe(2);
+    const expectedHeight =
+      LAYOUT_OPTIONS.baseTop * 2 +
+      3 * LAYOUT_OPTIONS.eventHeight +
+      2 * LAYOUT_OPTIONS.rowGap;
+    expect(result.trackHeights.get('t1')).toBe(expectedHeight);
+  });
+
+  it('re-layouts remaining events compactly after filtering', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-02' });
+    const c = makeEvent({ id: 'c', title: 'C', trackId: 't1', dateValue: '2024-01-10' });
+
+    const full = computeEventLayout([a, b, c], [track], timeScale, LAYOUT_OPTIONS);
+    expect(full.layouts.get('a')!.row).toBe(0);
+    expect(full.layouts.get('b')!.row).toBe(1);
+    expect(full.layouts.get('c')!.row).toBe(0);
+
+    const filtered = computeEventLayout([a, c], [track], timeScale, LAYOUT_OPTIONS);
+    expect(filtered.layouts.get('a')!.row).toBe(0);
+    expect(filtered.layouts.get('c')!.row).toBe(0);
+    expect(filtered.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('estimates positions for relative events using sort order', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateType: 'relative', sortOrder: 1 });
+    const result = computeEventLayout([a, b], [track], timeScale, LAYOUT_OPTIONS);
+
+    const layoutA = result.layouts.get('a')!;
+    const layoutB = result.layouts.get('b')!;
+    expect(layoutA.x).toBeLessThan(layoutB.x);
+    // 默认每个 sortOrder 占 2 个时间单位，两张卡片宽度约 200px，在 day 视图下会重叠
+    expect(layoutA.row).toBe(0);
+    expect(layoutB.row).toBe(1);
   });
 });

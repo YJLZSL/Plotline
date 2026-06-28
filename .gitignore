@@ -49,6 +49,7 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
+tests/e2e/.storage-state.json
 
 # Vite
 .vite/

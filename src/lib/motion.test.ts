@@ -7,8 +7,13 @@ import {
   MOTION_FAST,
   MOTION_BASE,
   MOTION_SLOW,
+  MOTION_TAB,
+  MOTION_DRAG_RETURN,
+  MOTION_SPRING,
+  MOTION_LAYOUT,
   EASE_STANDARD,
   MOTION_TOKENS,
+  type MotionTokenSpec,
 } from './motion';
 
 describe('motion tokens', () => {
@@ -37,12 +42,44 @@ describe('motion tokens', () => {
     expect(MOTION_TOKENS.fast).toBe(MOTION_FAST);
     expect(MOTION_TOKENS.base).toBe(MOTION_BASE);
     expect(MOTION_TOKENS.slow).toBe(MOTION_SLOW);
+    expect(MOTION_TOKENS.spring).toBe(MOTION_SPRING);
+    expect(MOTION_TOKENS.layout).toBe(MOTION_LAYOUT);
   });
 
-  it('should keep all token durations within the 120-200ms performance window', () => {
-    Object.values(MOTION_TOKENS).forEach((token) => {
+  it('should keep duration-based token durations within the 120-200ms performance window', () => {
+    const durationTokens = [MOTION_FAST, MOTION_BASE, MOTION_SLOW, MOTION_TAB, MOTION_DRAG_RETURN] as MotionTokenSpec[];
+    durationTokens.forEach((token) => {
       expect(token.duration).toBeGreaterThanOrEqual(0.12);
       expect(token.duration).toBeLessThanOrEqual(0.2);
     });
+  });
+
+  it('should configure MOTION_SPRING as a critically damped spring (no bounce)', () => {
+    expect(MOTION_SPRING.type).toBe('spring');
+    const { stiffness, damping, mass } = MOTION_SPRING as {
+      stiffness: number;
+      damping: number;
+      mass: number;
+    };
+    expect(stiffness).toBeGreaterThanOrEqual(300);
+    expect(stiffness).toBeLessThanOrEqual(400);
+    expect(damping).toBeGreaterThanOrEqual(28);
+    expect(damping).toBeLessThanOrEqual(32);
+    expect(mass).toBeGreaterThanOrEqual(0.8);
+    expect(mass).toBeLessThanOrEqual(1);
+    const dampingRatio = damping / (2 * Math.sqrt(stiffness * mass));
+    expect(dampingRatio).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should configure MOTION_LAYOUT as a low-tension spring without bounce', () => {
+    expect(MOTION_LAYOUT.type).toBe('spring');
+    const { stiffness, damping, mass } = MOTION_LAYOUT as {
+      stiffness: number;
+      damping: number;
+      mass: number;
+    };
+    const dampingRatio = damping / (2 * Math.sqrt(stiffness * mass));
+    expect(dampingRatio).toBeGreaterThanOrEqual(1);
+    expect(stiffness).toBeLessThan((MOTION_SPRING as { stiffness: number }).stiffness);
   });
 });

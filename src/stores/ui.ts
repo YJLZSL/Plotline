@@ -9,6 +9,7 @@ interface UIState {
   detailPanelOpen: boolean;
   aiPanelOpen: boolean;
   enhancedAnimations: boolean;
+  firstWorkspaceVisit: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleDetailPanel: () => void;
@@ -16,6 +17,7 @@ interface UIState {
   toggleAiPanel: () => void;
   setAiPanelOpen: (open: boolean) => void;
   setEnhancedAnimations: (enabled: boolean) => void;
+  setFirstWorkspaceVisit: (visited: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -25,6 +27,7 @@ export const useUIStore = create<UIState>()(
       detailPanelOpen: false,
       aiPanelOpen: false,
       enhancedAnimations: false,
+      firstWorkspaceVisit: true,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleDetailPanel: () => set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
@@ -32,6 +35,7 @@ export const useUIStore = create<UIState>()(
       toggleAiPanel: () => set((s) => ({ aiPanelOpen: !s.aiPanelOpen })),
       setAiPanelOpen: (open) => set({ aiPanelOpen: open }),
       setEnhancedAnimations: (enabled) => set({ enhancedAnimations: enabled }),
+      setFirstWorkspaceVisit: (visited) => set({ firstWorkspaceVisit: visited }),
     }),
     { name: 'plotline:ui' },
   ),

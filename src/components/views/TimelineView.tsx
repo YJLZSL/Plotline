@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
+import { memo, useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion, type PanInfo } from 'framer-motion';
 import {
   Plus,
@@ -50,7 +50,7 @@ import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
+import { MOTION_BASE, MOTION_FAST, MOTION_LAYOUT } from '@/lib/motion';
 import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
 import {
   useCreateEvent,
@@ -76,6 +76,8 @@ import {
   clampTimelineScroll,
   getEventCardWidth,
   estimateLabelWidth,
+  computeEventLayout,
+  type EventLayoutItem,
 } from '@/features/timeline/timelineLayout';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
 import { useAiContextStore } from '@/stores/aiContext';
@@ -93,12 +95,24 @@ const TRACK_GAP = 6;
 const EVENT_CARD_MAX_WIDTH = 360;
 const ADD_EVENT_BUTTON_WIDTH = 64;
 const EVENT_HEIGHT = 64;
+const EVENT_ROW_GAP = 8;
+const EVENT_BASE_TOP = 12;
 const RULER_HEIGHT = 44;
 const LEFT_PADDING = 24;
 const DAY_MS = 24 * 3600 * 1000;
 const ZOOM_LEVELS = ['hour', 'day', 'month', 'year'] as const;
 
 const EVENT_COLOR_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
+const VISIBLE_EVENT_BUFFER = EVENT_CARD_MAX_WIDTH * 2;
+
+const EVENT_STATUS_STYLES: Record<
+  EventStatus,
+  { dot: string; border: string; labelKey: string }
+> = {
+  draft: { dot: 'bg-text-secondary/60', border: 'border-status-draft', labelKey: 'timeline.event.statusDraft' },
+  done: { dot: 'bg-status-done', border: 'border-status-done', labelKey: 'timeline.event.statusDone' },
+  revise: { dot: 'bg-status-revise', border: 'border-status-revise', labelKey: 'timeline.event.statusRevise' },
+};
 
 // 每个缩放级别下，单位宽度（像素 / 单位）
 const ZOOM_UNIT_WIDTH: Record<ZoomLevel, number> = {
@@ -208,31 +222,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     });
   }, [t, events, selectedEventId, setAiContext]);
 
-  const handleConsistencyCheck = async () => {
-    setCheckingConsistency(true);
-    try {
-      const conflicts = await checkConsistency(workspaceId);
-      const ids = new Set<string>();
-      for (const c of conflicts) {
-        for (const id of c.eventIds) {
-          ids.add(id);
-        }
-      }
-      setConflictEventIds(ids);
-      if (conflicts.length === 0) {
-        toastInfo(t('timeline.consistencyClean'));
-      } else {
-        toastWarning(t('timeline.consistencyConflicts', { count: conflicts.length }));
-      }
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setCheckingConsistency(false);
-    }
-  };
   const [pendingConnection, setPendingConnection] = useState<string | null>(null);
 
-  const visibleTracks = tracks.filter((tr) => tr.isVisible);
+  const visibleTracks = useMemo(() => tracks.filter((tr) => tr.isVisible), [tracks]);
 
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
@@ -267,9 +259,25 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [timeScale],
   );
 
+  const eventLayout = useMemo(
+    () =>
+      computeEventLayout(filteredEvents, visibleTracks, timeScale, {
+        eventHeight: EVENT_HEIGHT,
+        rowGap: EVENT_ROW_GAP,
+        baseTop: EVENT_BASE_TOP,
+        trackHeight: TRACK_HEIGHT,
+      }),
+    [filteredEvents, visibleTracks, timeScale],
+  );
+
   const timelineMinHeight = useMemo(
-    () => visibleTracks.reduce((sum, tr) => sum + (isCollapsed(tr.id) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT) + TRACK_GAP, RULER_HEIGHT),
-    [visibleTracks, isCollapsed],
+    () =>
+      visibleTracks.reduce(
+        (sum, tr) =>
+          sum + (isCollapsed(tr.id) ? TRACK_COLLAPSED_HEIGHT : (eventLayout.trackHeights.get(tr.id) ?? TRACK_HEIGHT)) + TRACK_GAP,
+        RULER_HEIGHT,
+      ),
+    [visibleTracks, isCollapsed, eventLayout],
   );
 
   // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 min 的伪时间戳
@@ -305,84 +313,125 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return map;
   }, [tracks, filteredEvents]);
 
-  const handleAddTrack = async () => {
+  const aiSelection = useMemo(() => {
+    if (!selectedEventId) return null;
+    const ev = events.find((e) => e.id === selectedEventId);
+    return ev ? { type: 'event' as const, id: ev.id, label: ev.title, content: ev.description ?? '' } : null;
+  }, [events, selectedEventId]);
+
+  const handleConsistencyCheck = useCallback(async () => {
+    setCheckingConsistency(true);
+    try {
+      const conflicts = await checkConsistency(workspaceId);
+      const ids = new Set<string>();
+      for (const c of conflicts) {
+        for (const id of c.eventIds) {
+          ids.add(id);
+        }
+      }
+      setConflictEventIds(ids);
+      if (conflicts.length === 0) {
+        toastInfo(t('timeline.consistencyClean'));
+      } else {
+        toastWarning(t('timeline.consistencyConflicts', { count: conflicts.length }));
+      }
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setCheckingConsistency(false);
+    }
+  }, [workspaceId, t]);
+
+  const handleAddTrack = useCallback(async () => {
     if (!newTrackName.trim()) return;
     await createTrack.mutateAsync({ workspaceId, name: newTrackName.trim() });
     setNewTrackName('');
-  };
+  }, [createTrack, newTrackName, workspaceId]);
 
-  const handleAddEvent = async (trackId: string) => {
-    const ev = await createEvent.mutateAsync({
-      workspaceId,
-      trackId,
-      title: '新事件',
-      dateType: 'relative',
-      dateValue: '',
-      sortOrder: (eventsByTrack.get(trackId)?.length ?? 0),
-    });
-    setEditingEvent(ev);
-    setEventDialogOpen(true);
-    setSelectedEventId(ev.id);
-  };
-
-  const handleCanvasDoubleClick = async (trackId: string, x: number) => {
-    const time = timeScale.xToTime(x);
-    const ev = await createEvent.mutateAsync({
-      workspaceId,
-      trackId,
-      title: '新事件',
-      dateType: 'absolute',
-      dateValue: new Date(time).toISOString().slice(0, 10),
-      sortOrder: (eventsByTrack.get(trackId)?.length ?? 0),
-    });
-    setEditingEvent(ev);
-    setEventDialogOpen(true);
-    setSelectedEventId(ev.id);
-  };
-
-  const handleEventDragEnd = async (ev: Event, track: Track, _info: PanInfo, finalX: number) => {
-    const cardWidth = getEventCardWidth(ev.title);
-    const lanePadding = 4;
-    const clampedX = Math.max(lanePadding, Math.min(totalWidth - cardWidth, finalX));
-
-    if (ev.dateType === 'absolute') {
-      const newTime = timeScale.xToTime(clampedX);
-      await updateEvent.mutateAsync({
-        id: ev.id,
-        dateType: 'absolute',
-        dateValue: new Date(newTime).toISOString().slice(0, 10),
-        trackId: track.id,
+  const handleAddEvent = useCallback(
+    async (trackId: string) => {
+      const ev = await createEvent.mutateAsync({
+        workspaceId,
+        trackId,
+        title: '新事件',
+        dateType: 'relative',
+        dateValue: '',
+        sortOrder: eventsByTrack.get(trackId)?.length ?? 0,
       });
-    } else {
-      const trackEvents = eventsByTrack.get(track.id) ?? [];
-      const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, timeScale);
-      if (newSort !== ev.sortOrder) {
+      setEditingEvent(ev);
+      setEventDialogOpen(true);
+      setSelectedEventId(ev.id);
+    },
+    [createEvent, eventsByTrack, workspaceId],
+  );
+
+  const handleCanvasDoubleClick = useCallback(
+    async (trackId: string, x: number) => {
+      const time = timeScale.xToTime(x);
+      const ev = await createEvent.mutateAsync({
+        workspaceId,
+        trackId,
+        title: '新事件',
+        dateType: 'absolute',
+        dateValue: new Date(time).toISOString().slice(0, 10),
+        sortOrder: eventsByTrack.get(trackId)?.length ?? 0,
+      });
+      setEditingEvent(ev);
+      setEventDialogOpen(true);
+      setSelectedEventId(ev.id);
+    },
+    [createEvent, eventsByTrack, timeScale, workspaceId],
+  );
+
+  const handleEventDragEnd = useCallback(
+    async (ev: Event, track: Track, _info: PanInfo, finalX: number) => {
+      const cardWidth = getEventCardWidth(ev.title);
+      const lanePadding = 4;
+      const clampedX = Math.max(lanePadding, Math.min(totalWidth - cardWidth, finalX));
+
+      if (ev.dateType === 'absolute') {
+        const newTime = timeScale.xToTime(clampedX);
         await updateEvent.mutateAsync({
           id: ev.id,
-          sortOrder: newSort,
+          dateType: 'absolute',
+          dateValue: new Date(newTime).toISOString().slice(0, 10),
           trackId: track.id,
         });
+      } else {
+        const trackEvents = eventsByTrack.get(track.id) ?? [];
+        const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, timeScale);
+        if (newSort !== ev.sortOrder) {
+          await updateEvent.mutateAsync({
+            id: ev.id,
+            sortOrder: newSort,
+            trackId: track.id,
+          });
+        }
       }
-    }
-  };
+    },
+    [eventPositions, eventsByTrack, timeScale, totalWidth, updateEvent],
+  );
 
-  const handleSaveEvent = async (data: Partial<Event> & { title: string; characterIds: string[]; imageUrls: string[] }) => {
-    if (!editingEvent) return;
-    await updateEvent.mutateAsync({
-      id: editingEvent.id,
-      title: data.title,
-      description: data.description,
-      dateType: data.dateType,
-      dateValue: data.dateValue,
-      status: data.status,
-      color: data.color,
-      trackId: data.trackId,
-      characterIds: data.characterIds,
-      imageUrls: data.imageUrls,
-    });
-    setEventDialogOpen(false);
-    setEditingEvent(null);
-  };
+  const handleSaveEvent = useCallback(
+    async (data: Partial<Event> & { title: string; characterIds: string[]; imageUrls: string[] }) => {
+      if (!editingEvent) return;
+      await updateEvent.mutateAsync({
+        id: editingEvent.id,
+        title: data.title,
+        description: data.description,
+        dateType: data.dateType,
+        dateValue: data.dateValue,
+        status: data.status,
+        color: data.color,
+        trackId: data.trackId,
+        characterIds: data.characterIds,
+        imageUrls: data.imageUrls,
+      });
+      setEventDialogOpen(false);
+      setEditingEvent(null);
+    },
+    [editingEvent, updateEvent],
+  );
 
   const handleDeleteEvent = useCallback(
     async (id: string) => {
@@ -429,12 +478,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       setAiContext({
         view: 'timeline',
         viewLabel: t('timeline.title'),
-        selection: {
-          type: 'event',
-          id: ev.id,
-          label: ev.title,
-          content: ev.description ?? '',
-        },
+        selection: { type: 'event', id: ev.id, label: ev.title, content: ev.description ?? '' },
         suggestions: [
           { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
           { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
@@ -446,11 +490,84 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [setAiContext, setAiPanelOpen, t],
   );
 
-  const cycleZoom = (dir: 1 | -1) => {
-    const idx = ZOOM_LEVELS.indexOf(zoom);
-    const next = ZOOM_LEVELS[(idx + dir + ZOOM_LEVELS.length) % ZOOM_LEVELS.length];
-    if (next) setZoom(next);
-  };
+  const handleSelectEvent = useCallback(
+    (eventId: string) => {
+      if (pendingConnection && pendingConnection !== eventId) {
+        void connectEvents.mutateAsync({
+          sourceId: pendingConnection,
+          targetId: eventId,
+          connectionType,
+        });
+        setPendingConnection(null);
+      } else {
+        setSelectedEventId(eventId);
+        const ev = events.find((e) => e.id === eventId) ?? null;
+        setEditingEvent(ev);
+      }
+    },
+    [connectEvents, connectionType, events, pendingConnection],
+  );
+
+  const handleEditEvent = useCallback((ev: Event) => {
+    setEditingEvent(ev);
+    setEventDialogOpen(true);
+  }, []);
+
+  const handleDuplicateEvent = useCallback(
+    (ev: Event) => duplicateEvent(ev),
+    [duplicateEvent],
+  );
+
+  const handleStartConnection = useCallback((id: string) => setPendingConnection(id), []);
+
+  const handleToggleCollapse = useCallback(
+    (trackId: string) => toggleTrackCollapse(trackId),
+    [toggleTrackCollapse],
+  );
+
+  const handleDragStart = useCallback((id: string) => setDraggingEvent({ id, offsetX: 0 }), []);
+
+  const handleDrag = useCallback((id: string, offsetX: number) => setDraggingEvent({ id, offsetX }), []);
+
+  const handleDragEndNotify = useCallback(() => setDraggingEvent(null), []);
+
+  const handleTrackVisibleToggle = useCallback(
+    (track: Track) => updateTrack.mutateAsync({ id: track.id, isVisible: !track.isVisible }),
+    [updateTrack],
+  );
+
+  const handleRenameTrack = useCallback((track: Track) => {
+    setEditingTrack(track);
+    setTrackDialogOpen(true);
+  }, []);
+
+  const handleDeleteTrack = useCallback((track: Track) => setDeleteTrackTarget(track), []);
+
+  const handleChangeTrackColor = useCallback(
+    (track: Track, color: string) => updateTrack.mutateAsync({ id: track.id, color }),
+    [updateTrack],
+  );
+
+  const handleUpdateEventStatus = useCallback(
+    (id: string, status: EventStatus) => updateEvent.mutateAsync({ id, status }),
+    [updateEvent],
+  );
+
+  const handlePatchEvent = useCallback(
+    (id: string, patch: Partial<Event>) => updateEvent.mutateAsync({ id, ...patch }),
+    [updateEvent],
+  );
+
+  const cycleZoom = useCallback((dir: 1 | -1) => {
+    setZoom((prev) => {
+      const idx = ZOOM_LEVELS.indexOf(prev);
+      const next = ZOOM_LEVELS[(idx + dir + ZOOM_LEVELS.length) % ZOOM_LEVELS.length];
+      return next ?? prev;
+    });
+  }, []);
+
+  const handleZoomIn = useCallback(() => cycleZoom(1), [cycleZoom]);
+  const handleZoomOut = useCallback(() => cycleZoom(-1), [cycleZoom]);
 
   // 键盘删除选中事件
   useEffect(() => {
@@ -476,13 +593,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           <div className="flex items-center gap-1">
             <ViewModeSegment value={viewMode} onChange={setViewMode} />
             <div className="w-px h-5 bg-border mx-1" />
-            <Button variant="ghost" size="sm" onClick={() => cycleZoom(-1)} title={t('timeline.zoomOut')}>
+            <Button variant="ghost" size="sm" onClick={handleZoomOut} title={t('timeline.zoomOut')}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <span className="text-xs text-text-secondary min-w-[40px] text-center">
               {t(`timeline.${zoom}`)}
             </span>
-            <Button variant="ghost" size="sm" onClick={() => cycleZoom(1)} title={t('timeline.zoomIn')}>
+            <Button variant="ghost" size="sm" onClick={handleZoomIn} title={t('timeline.zoomIn')}>
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
             <div className="w-px h-5 bg-border mx-1" />
@@ -495,16 +612,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               onSwitchConnectionType={() => setConnectionType((ty) => (ty === 'causal' ? 'foreshadow' : 'causal'))}
               checkingConsistency={checkingConsistency}
               onCheckConsistency={handleConsistencyCheck}
-              aiSelection={
-                selectedEventId
-                  ? (() => {
-                      const ev = events.find((e) => e.id === selectedEventId);
-                      return ev
-                        ? { type: 'event' as const, id: ev.id, label: ev.title, content: ev.description ?? '' }
-                        : null;
-                    })()
-                  : null
-              }
+              aiSelection={aiSelection}
             />
           </div>
         }
@@ -545,16 +653,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           events={events}
           timeScale={timeScale}
           selectedEventId={selectedEventId}
-          onSelectEvent={(id) => {
-            setSelectedEventId(id);
-            const ev = events.find((e) => e.id === id) ?? null;
-            setEditingEvent(ev);
-          }}
-          onEditEvent={(ev) => {
-            setEditingEvent(ev);
-            setEventDialogOpen(true);
-          }}
-          onAddEvent={(trackId) => void handleAddEvent(trackId)}
+          onSelectEvent={handleSelectEvent}
+          onEditEvent={handleEditEvent}
+          onAddEvent={handleAddEvent}
         />
       ) : viewMode === 'tree' ? (
         <TreeTimeline
@@ -562,32 +663,18 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           events={events}
           eventConnections={eventConnections}
           selectedEventId={selectedEventId}
-          onSelectEvent={(id) => {
-            setSelectedEventId(id);
-            const ev = events.find((e) => e.id === id) ?? null;
-            setEditingEvent(ev);
-          }}
-          onEditEvent={(ev) => {
-            setEditingEvent(ev);
-            setEventDialogOpen(true);
-          }}
+          onSelectEvent={handleSelectEvent}
+          onEditEvent={handleEditEvent}
         />
       ) : viewMode === 'text' ? (
         <TextTimeline
           tracks={tracks}
           events={events}
           selectedEventId={selectedEventId}
-          onSelectEvent={(id) => {
-            setSelectedEventId(id);
-            const ev = events.find((e) => e.id === id) ?? null;
-            setEditingEvent(ev);
-          }}
-          onEditEvent={(ev) => {
-            setEditingEvent(ev);
-            setEventDialogOpen(true);
-          }}
-          onAddEvent={(trackId) => void handleAddEvent(trackId)}
-          onUpdateEvent={(id, patch) => void updateEvent.mutateAsync({ id, ...patch })}
+          onSelectEvent={handleSelectEvent}
+          onEditEvent={handleEditEvent}
+          onAddEvent={handleAddEvent}
+          onUpdateEvent={handlePatchEvent}
         />
       ) : (
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -616,15 +703,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 track={tr}
                 eventCount={eventsByTrack.get(tr.id)?.length ?? 0}
                 collapsed={isCollapsed(tr.id)}
-                onToggleVisible={() => updateTrack.mutateAsync({ id: tr.id, isVisible: !tr.isVisible })}
-                onRename={() => {
-                  setEditingTrack(tr);
-                  setTrackDialogOpen(true);
-                }}
-                onDelete={() => setDeleteTrackTarget(tr)}
-                onChangeColor={(color) => updateTrack.mutateAsync({ id: tr.id, color })}
-                onAddEvent={() => void handleAddEvent(tr.id)}
-                onToggleCollapse={() => toggleTrackCollapse(tr.id)}
+                onToggleVisible={handleTrackVisibleToggle}
+                onRename={handleRenameTrack}
+                onDelete={handleDeleteTrack}
+                onChangeColor={handleChangeTrackColor}
+                onAddEvent={handleAddEvent}
+                onToggleCollapse={handleToggleCollapse}
               />
             ))}
             <div className="px-3 mt-2">
@@ -671,8 +755,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           {visibleTracks.length === 0 ? (
             <EmptyState
               icon={<TimelineEmptyIllustration className="h-20 w-auto text-text-secondary" />}
-              title={t('timeline.title')}
-              description={t('timeline.emptyTrack')}
+              title={t('timeline.emptyStateTitle')}
+              description={t('timeline.emptyStateDescription')}
               action={
                 <Button
                   onClick={() => {
@@ -682,7 +766,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   className="gap-2"
                 >
                   <Plus className="h-4 w-4" />
-                  {t('timeline.addTrack')}
+                  {t('timeline.emptyStateCta')}
                 </Button>
               }
             />
@@ -717,6 +801,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                     tracks={visibleTracks}
                     collapsedTrackIds={filters.collapsedTrackIds}
                     eventPositions={eventPositions}
+                    eventLayout={eventLayout}
                     timeScale={timeScale}
                     scrollLeft={scrollLeft}
                     viewportWidth={viewportWidth}
@@ -739,6 +824,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   collapsed={isCollapsed(tr.id)}
                   events={eventsByTrack.get(tr.id) ?? []}
                   eventPositions={eventPositions}
+                  eventLayout={eventLayout}
                   timeScale={timeScale}
                   totalWidth={totalWidth}
                   zoom={zoom}
@@ -748,41 +834,26 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   pendingConnection={pendingConnection}
                   conflictEventIds={conflictEventIds}
                   copiedEvent={copiedEvent}
-                  onSelectEvent={(id) => {
-                    if (pendingConnection && pendingConnection !== id) {
-                      void connectEvents.mutateAsync({
-                        sourceId: pendingConnection,
-                        targetId: id,
-                        connectionType: connectionType,
-                      });
-                      setPendingConnection(null);
-                    } else {
-                      setSelectedEventId(id);
-                      const ev = events.find((e) => e.id === id) ?? null;
-                      setEditingEvent(ev);
-                    }
-                  }}
-                  onEditEvent={(ev) => {
-                    setEditingEvent(ev);
-                    setEventDialogOpen(true);
-                  }}
-                  onAddEvent={() => void handleAddEvent(tr.id)}
-                  onAddEventToTrack={(trackId) => void handleAddEvent(trackId)}
-                  onPasteEvent={() => void pasteEvent(tr.id)}
-                  onCanvasDoubleClick={(x) => void handleCanvasDoubleClick(tr.id, x)}
+                  draggingEvent={draggingEvent}
+                  onSelectEvent={handleSelectEvent}
+                  onEditEvent={handleEditEvent}
+                  onAddEvent={handleAddEvent}
+                  onAddEventToTrack={handleAddEvent}
+                  onPasteEvent={pasteEvent}
+                  onCanvasDoubleClick={handleCanvasDoubleClick}
                   onEventDragEnd={handleEventDragEnd}
-                  onDuplicateEvent={(ev) => void duplicateEvent(ev)}
-                  onAskAiEvent={(ev) => openAiForEvent(ev)}
-                  onZoomIn={() => cycleZoom(1)}
-                  onZoomOut={() => cycleZoom(-1)}
-                  onCheckConsistency={() => void handleConsistencyCheck()}
-                  onDeleteEvent={(id) => void handleDeleteEvent(id)}
-                  onUpdateEventStatus={(id, status) => void updateEvent.mutateAsync({ id, status })}
-                  onStartConnection={(id) => setPendingConnection(id)}
-                  onDragStart={(id) => setDraggingEvent({ id, offsetX: 0 })}
-                  onDrag={(id, offsetX) => setDraggingEvent({ id, offsetX })}
-                  onDragEndNotify={() => setDraggingEvent(null)}
-                  onToggleCollapse={() => toggleTrackCollapse(tr.id)}
+                  onDuplicateEvent={handleDuplicateEvent}
+                  onAskAiEvent={openAiForEvent}
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onCheckConsistency={handleConsistencyCheck}
+                  onDeleteEvent={handleDeleteEvent}
+                  onUpdateEventStatus={handleUpdateEventStatus}
+                  onStartConnection={handleStartConnection}
+                  onDragStart={handleDragStart}
+                  onDrag={handleDrag}
+                  onDragEndNotify={handleDragEndNotify}
+                  onToggleCollapse={handleToggleCollapse}
                 />
               ))}
                 </>
@@ -1021,7 +1092,7 @@ function TimelineMoreMenu({
 }
 
 // ===== 日期标尺 =====
-function DateRuler({
+const DateRuler = memo(function DateRuler({
   timeScale,
   totalWidth,
 }: {
@@ -1133,14 +1204,15 @@ function DateRuler({
       </div>
     </div>
   );
-}
+});
 
 // ===== 连线层（SVG，纯计算，不随滚动测量 DOM） =====
-function ConnectionLayer({
+const ConnectionLayer = memo(function ConnectionLayer({
   events,
   tracks,
   collapsedTrackIds,
   eventPositions,
+  eventLayout,
   timeScale,
   scrollLeft,
   viewportWidth,
@@ -1155,6 +1227,7 @@ function ConnectionLayer({
   tracks: Track[];
   collapsedTrackIds: string[];
   eventPositions: Map<string, number>;
+  eventLayout: { layouts: Map<string, EventLayoutItem>; trackHeights: Map<string, number> };
   timeScale: TimeScale;
   scrollLeft: number;
   viewportWidth: number;
@@ -1176,28 +1249,31 @@ function ConnectionLayer({
       const track = tracks[i];
       if (!track) continue;
       map.set(i, top);
-      const height = collapsedTrackIds.includes(track.id) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
+      const height = collapsedTrackIds.includes(track.id)
+        ? TRACK_COLLAPSED_HEIGHT
+        : (eventLayout.trackHeights.get(track.id) ?? TRACK_HEIGHT);
       top += height + TRACK_GAP;
     }
     return map;
-  }, [tracks, collapsedTrackIds]);
+  }, [tracks, collapsedTrackIds, eventLayout]);
 
   const eventPoints = useMemo(() => {
     const map = new Map<string, { source: { x: number; y: number }; target: { x: number; y: number } }>();
     for (const ev of events) {
       const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-      const width = getEventCardWidth(ev.title);
+      const layout = eventLayout.layouts.get(ev.id);
+      const width = layout?.width ?? getEventCardWidth(ev.title);
       const trackIndex = tracks.findIndex((t) => t.id === ev.trackId);
       const trackTop = trackTopByIndex.get(trackIndex) ?? RULER_HEIGHT;
-      const height = collapsedTrackIds.includes(ev.trackId) ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
       const offsetX = draggingEvent?.id === ev.id ? draggingEvent.offsetX : 0;
+      const cardCenterY = trackTop + (layout?.y ?? EVENT_BASE_TOP) + EVENT_HEIGHT / 2;
       map.set(ev.id, {
-        source: { x: x + width + offsetX, y: trackTop + height / 2 },
-        target: { x: x + offsetX, y: trackTop + height / 2 },
+        source: { x: x + width + offsetX, y: cardCenterY },
+        target: { x: x + offsetX, y: cardCenterY },
       });
     }
     return map;
-  }, [events, eventPositions, timeScale, tracks, collapsedTrackIds, trackTopByIndex, draggingEvent]);
+  }, [events, eventPositions, eventLayout, timeScale, tracks, trackTopByIndex, draggingEvent]);
 
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
@@ -1253,16 +1329,56 @@ function ConnectionLayer({
       })}
     </svg>
   );
-}
+});
 
 // ===== 轨道行 =====
-function TrackLane({
+interface TrackLaneProps {
+  index: number;
+  track: Track;
+  tracks: Track[];
+  collapsed: boolean;
+  events: Event[];
+  eventPositions: Map<string, number>;
+  eventLayout: { layouts: Map<string, EventLayoutItem>; trackHeights: Map<string, number> };
+  timeScale: TimeScale;
+  totalWidth: number;
+  zoom: ZoomLevel;
+  scrollLeft: number;
+  viewportWidth: number;
+  selectedEventId: string | null;
+  pendingConnection: string | null;
+  conflictEventIds: Set<string>;
+  copiedEvent: Event | null;
+  draggingEvent: { id: string; offsetX: number } | null;
+  onSelectEvent: (eventId: string) => void;
+  onEditEvent: (ev: Event) => void;
+  onAddEvent: (trackId: string) => void;
+  onAddEventToTrack: (trackId: string) => void;
+  onPasteEvent: (trackId: string) => void;
+  onCanvasDoubleClick: (trackId: string, x: number) => void;
+  onEventDragEnd: (ev: Event, track: Track, info: PanInfo, finalX: number) => void;
+  onStartConnection: (id: string) => void;
+  onDuplicateEvent: (ev: Event) => void;
+  onAskAiEvent: (ev: Event) => void;
+  onDeleteEvent: (id: string) => void;
+  onUpdateEventStatus: (id: string, status: EventStatus) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onCheckConsistency: () => void;
+  onToggleCollapse: (trackId: string) => void;
+  onDragStart: (id: string) => void;
+  onDrag: (id: string, offsetX: number) => void;
+  onDragEndNotify: () => void;
+}
+
+const TrackLane = memo(function TrackLane({
   index,
   track,
   tracks,
   collapsed,
   events,
   eventPositions,
+  eventLayout,
   timeScale,
   totalWidth,
   zoom,
@@ -1272,6 +1388,7 @@ function TrackLane({
   pendingConnection,
   conflictEventIds,
   copiedEvent,
+  draggingEvent,
   onSelectEvent,
   onEditEvent,
   onAddEvent,
@@ -1291,42 +1408,7 @@ function TrackLane({
   onCheckConsistency,
   onToggleCollapse,
   onDragEndNotify,
-}: {
-  index: number;
-  track: Track;
-  tracks: Track[];
-  collapsed: boolean;
-  events: Event[];
-  eventPositions: Map<string, number>;
-  timeScale: TimeScale;
-  totalWidth: number;
-  zoom: ZoomLevel;
-  scrollLeft: number;
-  viewportWidth: number;
-  selectedEventId: string | null;
-  pendingConnection: string | null;
-  conflictEventIds: Set<string>;
-  copiedEvent: Event | null;
-  onSelectEvent: (id: string) => void;
-  onEditEvent: (ev: Event) => void;
-  onAddEvent: () => void;
-  onAddEventToTrack: (trackId: string) => void;
-  onPasteEvent: () => void;
-  onCanvasDoubleClick: (x: number) => void;
-  onEventDragEnd: (ev: Event, track: Track, info: PanInfo, finalX: number) => void;
-  onStartConnection: (id: string) => void;
-  onDuplicateEvent: (ev: Event) => void;
-  onAskAiEvent: (ev: Event) => void;
-  onDeleteEvent: (id: string) => void;
-  onUpdateEventStatus: (id: string, status: EventStatus) => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onCheckConsistency: () => void;
-  onToggleCollapse: () => void;
-  onDragStart: (id: string) => void;
-  onDrag: (id: string, offsetX: number) => void;
-  onDragEndNotify: () => void;
-}) {
+}: TrackLaneProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const prevEventIdsRef = useRef<Set<string>>(new Set(events.map((e) => e.id)));
@@ -1348,19 +1430,18 @@ function TrackLane({
 
   const visibleEvents = useMemo(() => {
     if (viewportWidth === 0) return events;
-    const buffer = EVENT_CARD_MAX_WIDTH * 2;
-    const min = scrollLeft - buffer;
-    const max = scrollLeft + viewportWidth + buffer;
+    const min = scrollLeft - VISIBLE_EVENT_BUFFER;
+    const max = scrollLeft + viewportWidth + VISIBLE_EVENT_BUFFER;
     return events.filter((ev) => {
-      const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-      const width = getEventCardWidth(ev.title);
-      return x + width >= min && x <= max;
+      const layout = eventLayout.layouts.get(ev.id);
+      if (!layout) return false;
+      return layout.x + layout.width >= min && layout.x <= max;
     });
-  }, [events, eventPositions, timeScale, scrollLeft, viewportWidth]);
+  }, [events, eventLayout, scrollLeft, viewportWidth]);
 
   const eventXs = useMemo(
-    () => events.map((ev) => timeScale.timeToX(eventPositions.get(ev.id) ?? 0)),
-    [events, eventPositions, timeScale],
+    () => events.map((ev) => eventLayout.layouts.get(ev.id)?.x ?? timeScale.timeToX(eventPositions.get(ev.id) ?? 0)),
+    [events, eventLayout, eventPositions, timeScale],
   );
 
   const addButtonLeft = useMemo(
@@ -1368,7 +1449,16 @@ function TrackLane({
     [eventXs, totalWidth],
   );
 
-  const targetHeight = collapsed ? TRACK_COLLAPSED_HEIGHT : TRACK_HEIGHT;
+  const targetHeight = collapsed ? TRACK_COLLAPSED_HEIGHT : (eventLayout.trackHeights.get(track.id) ?? TRACK_HEIGHT);
+
+  const handleDragEnd = useCallback(
+    (id: string, info: PanInfo, finalX: number) => {
+      const ev = events.find((e) => e.id === id);
+      if (!ev) return;
+      onEventDragEnd(ev, track, info, finalX);
+    },
+    [events, track, onEventDragEnd],
+  );
 
   return (
     <ContextMenu>
@@ -1390,89 +1480,102 @@ function TrackLane({
           onDoubleClick={(e) => {
             if (collapsed) return;
             const rect = containerRef.current?.getBoundingClientRect();
-            if (rect) onCanvasDoubleClick(e.clientX - rect.left + (containerRef.current?.parentElement?.scrollLeft ?? 0));
+            if (rect) onCanvasDoubleClick(track.id, e.clientX - rect.left + (containerRef.current?.parentElement?.scrollLeft ?? 0));
           }}
         >
-      {/* 轨道左侧色标 */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1"
-        style={{ backgroundColor: track.color }}
-      />
+          {/* 轨道左侧色标 */}
+          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: track.color }} />
 
-      {/* 折叠状态标题与计数 */}
-      {collapsed && (
-        <div className="absolute inset-0 flex items-center gap-2 pl-4 pr-3">
-          <span className="text-[10px] font-medium text-text-secondary truncate leading-none">{track.name}</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-bg-elevated text-text-secondary border border-border leading-none">
-            {events.length}
-          </span>
-        </div>
-      )}
+          {/* 折叠状态标题与计数 */}
+          {collapsed && (
+            <div className="absolute inset-0 flex items-center gap-2 pl-4 pr-3">
+              <span className="text-[10px] font-medium text-text-secondary truncate leading-none">{track.name}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-bg-elevated text-text-secondary border border-border leading-none">
+                {events.length}
+              </span>
+            </div>
+          )}
 
-      {/* 时间网格背景 */}
-      {!collapsed && (
-        <div
-          className="absolute inset-0 opacity-20 pointer-events-none"
-          style={{
-            backgroundImage: `repeating-linear-gradient(90deg, transparent ${LEFT_PADDING}px, transparent ${
-              LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]
-            }px, var(--border) ${LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
-              LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom] + 1
-            }px)`,
-          }}
-        />
-      )}
+          {/* 时间网格背景 */}
+          {!collapsed && (
+            <div
+              className="absolute inset-0 opacity-20 pointer-events-none"
+              style={{
+                backgroundImage: `repeating-linear-gradient(90deg, transparent ${LEFT_PADDING}px, transparent ${
+                  LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]
+                }px, var(--border) ${LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
+                  LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom] + 1
+                }px)`,
+              }}
+            />
+          )}
 
-      {/* 事件卡片 */}
-      {!collapsed && (
-        <div className="absolute inset-0">
-          <AnimatePresence>
-            {visibleEvents.map((ev, i) => {
-              const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
-              return (
-                <EventCard
-                  key={ev.id}
-                  event={ev}
-                  track={track}
-                  index={i}
-                  x={x}
-                  totalWidth={totalWidth}
-                  selected={ev.id === selectedEventId}
-                  pendingConnection={pendingConnection === ev.id}
-                  isConflict={conflictEventIds.has(ev.id)}
-                  isNew={newEventIds.has(ev.id)}
-                  onClick={() => onSelectEvent(ev.id)}
-                  onDoubleClick={() => onEditEvent(ev)}
-                  onDragEnd={(info, finalX) => onEventDragEnd(ev, track, info, finalX)}
-                  onStartConnection={() => onStartConnection(ev.id)}
-                  onDuplicate={() => onDuplicateEvent(ev)}
-                  onAskAi={() => onAskAiEvent(ev)}
-                  onDelete={() => onDeleteEvent(ev.id)}
-                  onChangeStatus={(status) => onUpdateEventStatus(ev.id, status)}
-                  onDragStart={() => onDragStart(ev.id)}
-                  onDrag={(_, offsetX) => onDrag(ev.id, offsetX)}
-                  onDragEndNotify={() => onDragEndNotify()}
-                />
-              );
-            })}
-          </AnimatePresence>
+          {/* 事件卡片 */}
+          {!collapsed && (
+            <div className="absolute inset-0">
+              <AnimatePresence>
+                {visibleEvents.map((ev, i) => {
+                  const layout = eventLayout.layouts.get(ev.id);
+                  if (!layout) return null;
+                  const isDragging = draggingEvent?.id === ev.id;
+                  return (
+                    <EventCard
+                      key={ev.id}
+                      event={ev}
+                      track={track}
+                      index={i}
+                      layout={layout}
+                      totalWidth={totalWidth}
+                      selected={ev.id === selectedEventId}
+                      pendingConnection={pendingConnection === ev.id}
+                      isConflict={conflictEventIds.has(ev.id)}
+                      isNew={newEventIds.has(ev.id)}
+                      isDragging={isDragging}
+                      onSelect={onSelectEvent}
+                      onEdit={onEditEvent}
+                      onDragEnd={handleDragEnd}
+                      onStartConnection={onStartConnection}
+                      onDuplicate={onDuplicateEvent}
+                      onAskAi={onAskAiEvent}
+                      onDelete={onDeleteEvent}
+                      onChangeStatus={onUpdateEventStatus}
+                      onDragStart={onDragStart}
+                      onDrag={onDrag}
+                      onDragEndNotify={onDragEndNotify}
+                    />
+                  );
+                })}
+              </AnimatePresence>
 
-          {/* 添加按钮 */}
-          <button
-            onClick={onAddEvent}
-            data-testid="add-event-btn"
-            className={cn(
-              'absolute top-3 z-10 flex items-center justify-center gap-1',
-              'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
-              'hover:border-accent hover:text-accent transition-colors',
-            )}
-            style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
-            title={t('timeline.addEvent')}
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+              {/* 拖拽 Ghost 占位与吸附参考线 */}
+              {draggingEvent && (() => {
+                const ev = visibleEvents.find((e) => e.id === draggingEvent.id);
+                const layout = ev && eventLayout.layouts.get(ev.id);
+                if (!ev || !layout) return null;
+                return (
+                  <>
+                    <EventCardGhost layout={layout} color={ev.color ?? track.color} />
+                    <DragSnapHint x={layout.x + draggingEvent.offsetX} />
+                  </>
+                );
+              })()}
+
+              {/* 添加按钮 */}
+              <button
+                onClick={() => onAddEvent(track.id)}
+                data-testid="add-event-btn"
+                className={cn(
+                  'absolute top-3 z-10 flex items-center justify-center gap-1',
+                  'rounded-[6px] border-2 border-dashed border-border/70 text-text-secondary',
+                  'hover:border-accent hover:text-accent transition-colors',
+                )}
+                style={{ left: addButtonLeft, width: ADD_EVENT_BUTTON_WIDTH, height: EVENT_HEIGHT }}
+                title={t('timeline.addEvent')}
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -1483,16 +1586,13 @@ function TrackLane({
               onClick={() => onAddEventToTrack(tr.id)}
               className="gap-2"
             >
-              <span
-                className="h-2 w-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: tr.color }}
-              />
+              <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: tr.color }} />
               <span className="truncate">{tr.name}</span>
             </ContextMenuItem>
           ))}
         </ContextMenuSection>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={onPasteEvent} disabled={!copiedEvent} className="gap-2">
+        <ContextMenuItem onClick={() => onPasteEvent(track.id)} disabled={!copiedEvent} className="gap-2">
           <ClipboardPaste className="h-3.5 w-3.5" />
           {t('contextMenu.pasteEvent')}
         </ContextMenuItem>
@@ -1506,7 +1606,7 @@ function TrackLane({
           {t('contextMenu.zoomOut')}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={onToggleCollapse} className="gap-2">
+        <ContextMenuItem onClick={() => onToggleCollapse(track.id)} className="gap-2">
           <ChevronsUpDown className="h-3.5 w-3.5" />
           {collapsed ? t('contextMenu.expandTrack') : t('contextMenu.collapseTrack')}
         </ContextMenuItem>
@@ -1517,21 +1617,90 @@ function TrackLane({
       </ContextMenuContent>
     </ContextMenu>
   );
+});
+
+// ===== 拖拽 Ghost 占位卡片 =====
+function EventCardGhost({
+  layout,
+  color,
+}: {
+  layout: EventLayoutItem;
+  color: string;
+}) {
+  const reducedMotion = useReducedMotion();
+  const shouldAnimate = reducedMotion === false;
+  return (
+    <motion.div
+      data-testid="event-card-ghost"
+      initial={shouldAnimate ? { opacity: 0 } : { opacity: 0.35 }}
+      animate={{ opacity: 0.35 }}
+      exit={{ opacity: 0 }}
+      transition={shouldAnimate ? MOTION_FAST : { duration: 0 }}
+      className="absolute rounded-[8px] border-2 border-dashed border-border/70 bg-bg-elevated pointer-events-none z-30"
+      style={{
+        left: layout.x,
+        top: layout.y,
+        width: layout.width,
+        height: EVENT_HEIGHT,
+      }}
+    >
+      <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
+    </motion.div>
+  );
+}
+
+// ===== 拖拽吸附参考线 =====
+function DragSnapHint({ x }: { x: number }) {
+  return (
+    <div
+      data-testid="drag-snap-hint"
+      className="absolute top-0 bottom-0 pointer-events-none z-40 flex flex-col items-center"
+      style={{ left: x }}
+    >
+      <div className="w-px h-full bg-accent/40 border-l border-dashed border-accent/60" />
+      <div className="absolute top-1 h-1.5 w-1.5 rounded-full bg-accent/70" />
+    </div>
+  );
 }
 
 // ===== 事件卡片 =====
-function EventCard({
+interface EventCardProps {
+  event: Event;
+  track: Track;
+  index: number;
+  layout: EventLayoutItem;
+  totalWidth: number;
+  selected: boolean;
+  pendingConnection: boolean;
+  isConflict: boolean;
+  isNew: boolean;
+  isDragging: boolean;
+  onSelect: (id: string) => void;
+  onEdit: (ev: Event) => void;
+  onDragEnd: (id: string, info: PanInfo, finalX: number) => void;
+  onStartConnection: (id: string) => void;
+  onDuplicate: (ev: Event) => void;
+  onAskAi: (ev: Event) => void;
+  onDelete: (id: string) => void;
+  onChangeStatus: (id: string, status: EventStatus) => void;
+  onDragStart: (id: string) => void;
+  onDrag: (id: string, offsetX: number) => void;
+  onDragEndNotify: () => void;
+}
+
+const EventCard = memo(function EventCard({
   event,
   track,
   index,
-  x,
+  layout,
   totalWidth,
   selected,
   pendingConnection,
   isConflict,
   isNew,
-  onClick,
-  onDoubleClick,
+  isDragging,
+  onSelect,
+  onEdit,
   onDragEnd,
   onStartConnection,
   onDuplicate,
@@ -1541,182 +1710,169 @@ function EventCard({
   onDragStart,
   onDrag,
   onDragEndNotify,
-}: {
-  event: Event;
-  track: Track;
-  index: number;
-  x: number;
-  totalWidth: number;
-  selected: boolean;
-  pendingConnection: boolean;
-  isConflict: boolean;
-  isNew: boolean;
-  onClick: () => void;
-  onDoubleClick: () => void;
-  onDragEnd: (info: PanInfo, finalX: number) => void;
-  onStartConnection: () => void;
-  onDuplicate: () => void;
-  onAskAi: () => void;
-  onDelete: () => void;
-  onChangeStatus: (status: EventStatus) => void;
-  onDragStart: () => void;
-  onDrag: (info: PanInfo, offsetX: number) => void;
-  onDragEndNotify: () => void;
-}) {
+}: EventCardProps) {
   const { t } = useI18n();
   const ambient = useAmbientAnimation();
   const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+  const reducedMotion = useReducedMotion();
   const color = event.color ?? track.color;
-  const statusMap: Record<
-    EventStatus,
-    { dot: string; border: string; labelKey: string }
-  > = {
-    draft: { dot: 'bg-text-secondary/60', border: 'border-status-draft', labelKey: 'timeline.event.statusDraft' },
-    done: { dot: 'bg-status-done', border: 'border-status-done', labelKey: 'timeline.event.statusDone' },
-    revise: { dot: 'bg-status-revise', border: 'border-status-revise', labelKey: 'timeline.event.statusRevise' },
-  };
-  const status = statusMap[event.status];
+  const status = EVENT_STATUS_STYLES[event.status];
   const isRelative = event.dateType !== 'absolute';
-  const cardWidth = getEventCardWidth(event.title);
+  const { x, y, width: cardWidth } = layout;
+
+  const dragConstraints = useMemo(
+    () => computeEventDragConstraints(cardWidth, totalWidth, x),
+    [cardWidth, totalWidth, x],
+  );
 
   const initial = isNew
     ? { opacity: 1, scale: 1.05, y: 0 }
     : { opacity: 0, scale: 0.9, y: 8 };
   const animate = { opacity: 1, scale: 1, y: 0 };
-  const whileHover = ambient.animate ? { scale: 1.02, y: -2 } : { y: -2 };
+  const shouldAnimate = reducedMotion === false;
+  const whileHover = ambient.animate && !isDragging ? { scale: 1.02, y: -2 } : { y: -2 };
   const whileTap = enhancedAnimations ? { scale: 0.96 } : { scale: 0.98 };
-  const transition = { ...ambient.transition, delay: Math.min(index * 0.015, 0.1) };
+  const transition = useMemo(
+    () => ({ ...ambient.transition, delay: Math.min(index * 0.015, 0.1), layout: MOTION_LAYOUT }),
+    [ambient.transition, index],
+  );
+  const shouldLayout = enhancedAnimations && !isDragging && shouldAnimate;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <motion.div
           data-event-id={event.id}
-      initial={initial}
-      animate={animate}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={transition}
-      drag="x"
-      dragMomentum={false}
-      dragElastic={0}
-      dragSnapToOrigin
-      dragConstraints={computeEventDragConstraints(cardWidth, totalWidth, x)}
-      onDragStart={onDragStart}
-      onDrag={(_, info) => onDrag(info, info.offset.x)}
-      onDragEnd={(_, info) => {
-        onDragEnd(info, x + info.offset.x);
-        onDragEndNotify();
-      }}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      whileHover={whileHover}
-      whileTap={whileTap}
-      title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
-      className={cn(
-        'absolute top-3 cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
-        'rounded-[8px] overflow-hidden',
-        'shadow-[var(--shadow-card)] transition-shadow',
-        'border-2 backdrop-blur-sm fancy-ripple bg-bg-surface',
-        enhancedAnimations && 'ambient-scale',
-        selected
-          ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
-          : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
-        pendingConnection && 'border-accent animate-pulse',
-        isConflict && 'ring-2 ring-red-500/50 border-red-400',
-      )}
-      style={{
-        left: x,
-        width: cardWidth,
-        height: EVENT_HEIGHT,
-      }}
-    >
-      {/* 左侧轨道色条 */}
-      <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
+          data-dragging={isDragging}
+          initial={initial}
+          animate={animate}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={transition}
+          layout={shouldLayout}
+          drag="x"
+          dragMomentum={false}
+          dragElastic={0}
+          dragSnapToOrigin
+          dragConstraints={dragConstraints}
+          whileDrag={shouldAnimate ? { scale: 1.02 } : undefined}
+          onDragStart={() => onDragStart(event.id)}
+          onDrag={(_, info) => onDrag(event.id, info.offset.x)}
+          onDragEnd={(_, info) => {
+            onDragEnd(event.id, info, x + info.offset.x);
+            onDragEndNotify();
+          }}
+          onClick={() => onSelect(event.id)}
+          onDoubleClick={() => onEdit(event)}
+          whileHover={whileHover}
+          whileTap={whileTap}
+          title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
+          className={cn(
+            'absolute cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
+            'rounded-[8px] overflow-hidden',
+            'shadow-[var(--shadow-card)] transition-shadow',
+            'border-2 backdrop-blur-sm fancy-ripple bg-bg-surface',
+            enhancedAnimations && 'ambient-scale',
+            selected
+              ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
+              : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
+            pendingConnection && 'border-accent animate-pulse',
+            isConflict && 'ring-2 ring-red-500/50 border-red-400',
+            isDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
+          )}
+          style={{
+            left: x,
+            top: y,
+            width: cardWidth,
+            height: EVENT_HEIGHT,
+          }}
+        >
+          {/* 左侧轨道色条 */}
+          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
 
-      {isConflict && (
-        <div
-          className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
-          title={t('timeline.conflictBadge')}
-        />
-      )}
+          {isConflict && (
+            <div
+              className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
+              title={t('timeline.conflictBadge')}
+            />
+          )}
 
-      <div className="px-3.5 py-2 flex flex-col gap-1 min-w-0">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
-            <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
-            {isRelative ? t('timeline.relativeBadge') : event.dateValue}
-          </span>
-          <span className="text-sm font-semibold text-text-primary truncate flex-1 min-w-0">
-            {event.title}
-          </span>
-          {/* 连线手柄 */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartConnection();
-            }}
-            className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-colors flex-shrink-0"
-            title={t('timeline.startConnection')}
-          >
-            <Link2 className="h-3 w-3" />
-          </button>
-        </div>
-        {event.characterIds.length > 0 && (
-          <div className="flex items-center gap-0.5 mt-0.5">
-            {event.characterIds.slice(0, 4).map((cid, i) => (
-              <span
-                key={cid}
-                className="h-3.5 w-3.5 rounded-full border border-white/40 text-[8px] grid place-items-center text-white font-bold"
-                style={{
-                  backgroundColor: ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6'][i % 4],
-                  marginLeft: i > 0 ? -4 : 0,
-                }}
-              >
-                {i === 3 && event.characterIds.length > 4
-                  ? `+${event.characterIds.length - 3}`
-                  : ''}
+          <div className="px-3.5 py-2 flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
+                <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
+                {isRelative ? t('timeline.relativeBadge') : event.dateValue}
               </span>
-            ))}
+              <span className="text-sm font-semibold text-text-primary truncate flex-1 min-w-0">
+                {event.title}
+              </span>
+              {/* 连线手柄 */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartConnection(event.id);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-colors flex-shrink-0"
+                title={t('timeline.startConnection')}
+              >
+                <Link2 className="h-3 w-3" />
+              </button>
+            </div>
+            {event.characterIds.length > 0 && (
+              <div className="flex items-center gap-0.5 mt-0.5">
+                {event.characterIds.slice(0, 4).map((cid, i) => (
+                  <span
+                    key={cid}
+                    className="h-3.5 w-3.5 rounded-full border border-white/40 text-[8px] grid place-items-center text-white font-bold"
+                    style={{
+                      backgroundColor: ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6'][i % 4],
+                      marginLeft: i > 0 ? -4 : 0,
+                    }}
+                  >
+                    {i === 3 && event.characterIds.length > 4
+                      ? `+${event.characterIds.length - 3}`
+                      : ''}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
         </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={onDoubleClick} className="gap-2">
+        <ContextMenuItem onClick={() => onEdit(event)} className="gap-2">
           <Pencil className="h-3.5 w-3.5" />
           {t('contextMenu.edit')}
         </ContextMenuItem>
-        <ContextMenuItem onClick={onDuplicate} className="gap-2">
+        <ContextMenuItem onClick={() => onDuplicate(event)} className="gap-2">
           <Copy className="h-3.5 w-3.5" />
           {t('contextMenu.duplicate')}
         </ContextMenuItem>
-        <ContextMenuItem onClick={onDelete} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
+        <ContextMenuItem onClick={() => onDelete(event.id)} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
           <Trash2 className="h-3.5 w-3.5" />
           {t('contextMenu.delete')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuSection label={t('contextMenu.changeStatus')}>
           {(['draft', 'done', 'revise'] as const).map((s) => (
-            <ContextMenuItem key={s} onClick={() => onChangeStatus(s)} className="gap-2">
-              <span className={cn('h-2 w-2 rounded-full flex-shrink-0', statusMap[s].dot)} />
-              {t(statusMap[s].labelKey)}
+            <ContextMenuItem key={s} onClick={() => onChangeStatus(event.id, s)} className="gap-2">
+              <span className={cn('h-2 w-2 rounded-full flex-shrink-0', EVENT_STATUS_STYLES[s].dot)} />
+              {t(EVENT_STATUS_STYLES[s].labelKey)}
             </ContextMenuItem>
           ))}
         </ContextMenuSection>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={onStartConnection} className="gap-2">
+        <ContextMenuItem onClick={() => onStartConnection(event.id)} className="gap-2">
           <Link2 className="h-3.5 w-3.5" />
           {t('contextMenu.startConnection')}
         </ContextMenuItem>
-        <ContextMenuItem onClick={onAskAi} className="gap-2">
+        <ContextMenuItem onClick={() => onAskAi(event)} className="gap-2">
           <Sparkles className="h-3.5 w-3.5" />
           {t('contextMenu.askAi')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
-}
+});
 
 function computeNewSortOrder(
   ev: Event,
@@ -1754,12 +1910,12 @@ function TrackRow({
   track: Track;
   eventCount: number;
   collapsed: boolean;
-  onToggleVisible: () => void;
-  onRename: () => void;
-  onDelete: () => void;
-  onChangeColor: (color: string) => void;
-  onAddEvent: () => void;
-  onToggleCollapse: () => void;
+  onToggleVisible: (track: Track) => void;
+  onRename: (track: Track) => void;
+  onDelete: (track: Track) => void;
+  onChangeColor: (track: Track, color: string) => void;
+  onAddEvent: (trackId: string) => void;
+  onToggleCollapse: (trackId: string) => void;
 }) {
   const { t } = useI18n();
   return (
@@ -1775,7 +1931,7 @@ function TrackRow({
         <div className="text-[10px] text-text-secondary/80 mt-0.5">{eventCount} 个事件</div>
       </div>
       <button
-        onClick={onToggleCollapse}
+        onClick={() => onToggleCollapse(track.id)}
         className={cn(
           'text-text-secondary hover:text-text-primary p-1 rounded transition-colors',
           collapsed && 'text-accent',
@@ -1785,21 +1941,21 @@ function TrackRow({
         <ChevronsUpDown className="h-3.5 w-3.5" />
       </button>
       <button
-        onClick={onToggleVisible}
+        onClick={() => onToggleVisible(track)}
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
         title={track.isVisible ? t('contextMenu.hide') : t('contextMenu.show')}
       >
         {track.isVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
       </button>
       <button
-        onClick={onRename}
+        onClick={() => onRename(track)}
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
         title={t('contextMenu.rename')}
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
       <button
-        onClick={onDelete}
+        onClick={() => onDelete(track)}
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-red-500 p-1 rounded transition-colors"
         title={t('contextMenu.delete')}
       >
@@ -1808,7 +1964,7 @@ function TrackRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={onRename} className="gap-2">
+        <ContextMenuItem onClick={() => onRename(track)} className="gap-2">
           <Pencil className="h-3.5 w-3.5" />
           {t('contextMenu.rename')}
         </ContextMenuItem>
@@ -1818,7 +1974,7 @@ function TrackRow({
               <button
                 key={c}
                 type="button"
-                onClick={() => onChangeColor(c)}
+                onClick={() => onChangeColor(track, c)}
                 className={cn(
                   'h-5 w-5 rounded-full border border-border transition-transform',
                   track.color === c ? 'ring-2 ring-accent scale-110' : 'hover:scale-110',
@@ -1829,20 +1985,20 @@ function TrackRow({
             ))}
           </div>
         </ContextMenuSection>
-        <ContextMenuItem onClick={onToggleVisible} className="gap-2">
+        <ContextMenuItem onClick={() => onToggleVisible(track)} className="gap-2">
           {track.isVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
           {track.isVisible ? t('contextMenu.hide') : t('contextMenu.show')}
         </ContextMenuItem>
-        <ContextMenuItem onClick={onToggleCollapse} className="gap-2">
+        <ContextMenuItem onClick={() => onToggleCollapse(track.id)} className="gap-2">
           <ChevronsUpDown className="h-3.5 w-3.5" />
           {collapsed ? t('contextMenu.expandTrack') : t('contextMenu.collapseTrack')}
         </ContextMenuItem>
-        <ContextMenuItem onClick={onAddEvent} className="gap-2">
+        <ContextMenuItem onClick={() => onAddEvent(track.id)} className="gap-2">
           <Plus className="h-3.5 w-3.5" />
           {t('contextMenu.addEvent')}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={onDelete} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
+        <ContextMenuItem onClick={() => onDelete(track)} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
           <Trash2 className="h-3.5 w-3.5" />
           {t('contextMenu.delete')}
         </ContextMenuItem>

@@ -21,6 +21,7 @@ vi.mock('@/features/settings/hooks', () => ({
 }));
 
 const mockSetEnhancedAnimations = vi.fn();
+const mockSetFirstWorkspaceVisit = vi.fn();
 
 vi.mock('@/stores/ui', () => ({
   useThemeStore: vi.fn((selector?: (state: { applyToDOM: typeof mockApplyToDOM }) => unknown) =>
@@ -33,6 +34,8 @@ vi.mock('@/stores/ui', () => ({
         toggleAiPanel: () => void;
         enhancedAnimations: boolean;
         setEnhancedAnimations: typeof mockSetEnhancedAnimations;
+        firstWorkspaceVisit: boolean;
+        setFirstWorkspaceVisit: typeof mockSetFirstWorkspaceVisit;
       }) => unknown,
     ) =>
       selector
@@ -41,19 +44,31 @@ vi.mock('@/stores/ui', () => ({
             toggleAiPanel: vi.fn(),
             enhancedAnimations: false,
             setEnhancedAnimations: mockSetEnhancedAnimations,
+            firstWorkspaceVisit: false,
+            setFirstWorkspaceVisit: mockSetFirstWorkspaceVisit,
           })
         : {
             aiPanelOpen: false,
             toggleAiPanel: vi.fn(),
             enhancedAnimations: false,
             setEnhancedAnimations: mockSetEnhancedAnimations,
+            firstWorkspaceVisit: false,
+            setFirstWorkspaceVisit: mockSetFirstWorkspaceVisit,
           },
   ),
 }));
 
 vi.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (options && typeof options === 'object' && 'version' in options) {
+        return `${key}:${options.version}`;
+      }
+      if (options && typeof options === 'object' && 'family' in options) {
+        return `${key}:${options.family}`;
+      }
+      return key;
+    },
     i18n: { changeLanguage: vi.fn() },
   }),
 }));
@@ -61,6 +76,12 @@ vi.mock('@/hooks/useI18n', () => ({
 vi.mock('@/features/ai/hooks', () => ({
   useAiModelsQuery: vi.fn(() => ({
     data: [],
+    isFetching: false,
+    error: null,
+    refetch: vi.fn(),
+  })),
+  useAiConnectionTest: vi.fn(() => ({
+    data: null,
     isFetching: false,
     error: null,
     refetch: vi.fn(),
@@ -78,7 +99,7 @@ vi.mock('@/features/settings/updater', () => ({
 }));
 
 vi.mock('@/lib/version', () => ({
-  APP_VERSION: '2.6.1',
+  APP_VERSION: '2.8.0',
 }));
 
 vi.mock('@/stores/toast', () => ({
@@ -222,18 +243,18 @@ describe('SettingsView', () => {
     expect(toggle).toBeDisabled();
   });
 
-  it('should toggle animations enabled and persist through update', () => {
+  it('should toggle animations enabled', () => {
     renderSettings();
     const toggle = screen.getByTestId('animations-enabled-toggle');
     fireEvent.click(toggle);
-    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ animationsEnabled: false }));
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   it('should render font preview with Tailwind arbitrary value class and CSS variable', async () => {
     renderSettings();
     fireEvent.click(screen.getByTestId('settings-tab-editor'));
     await waitFor(() => {
-      const previews = screen.getAllByText('settings.fontPreview');
+      const previews = screen.getAllByTestId('font-preview');
       expect(previews.length).toBeGreaterThan(0);
       previews.forEach((preview) => {
         expect(preview.className).toContain('[font-family:var(--preview-font)]');
@@ -244,21 +265,107 @@ describe('SettingsView', () => {
     });
   });
 
-  it('should switch tabs and keep AI connection placeholder', async () => {
+  it('should switch to AI tab and render AI settings section', async () => {
     renderSettings();
     fireEvent.click(screen.getByTestId('settings-tab-ai'));
     await waitFor(() => {
-      expect(screen.getByTestId('ai-connection-placeholder')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-settings-card')).toBeInTheDocument();
     });
     expect(screen.getByTestId('ai-enabled-toggle')).toBeInTheDocument();
   });
 
-  it('should render card groups in editor tab', async () => {
+  it('should render editor tab cards', async () => {
     renderSettings();
     fireEvent.click(screen.getByTestId('settings-tab-editor'));
     await waitFor(() => {
-      expect(screen.getByText('settings.fontTheme')).toBeInTheDocument();
+      expect(screen.getByTestId('editor-font-card')).toBeInTheDocument();
     });
-    expect(screen.getByText('settings.importFont')).toBeInTheDocument();
+    expect(screen.getByTestId('default-view-card')).toBeInTheDocument();
+    expect(screen.getByTestId('timeline-zoom-card')).toBeInTheDocument();
+    expect(screen.getByTestId('import-font-card')).toBeInTheDocument();
+  });
+
+  it('should render data tab cards', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId('settings-tab-data'));
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-path-card')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('auto-backup-card')).toBeInTheDocument();
+    expect(screen.getByTestId('backup-interval-card')).toBeInTheDocument();
+  });
+
+  it('should render about tab cards', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId('settings-tab-about'));
+    await waitFor(() => {
+      expect(screen.getByTestId('about-app-card')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('feature-description-card')).toBeInTheDocument();
+    expect(screen.getByTestId('check-update-card')).toBeInTheDocument();
+  });
+
+  it('should expand and collapse feature description panel', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId('settings-tab-about'));
+    await waitFor(() => {
+      expect(screen.getByTestId('feature-description-card')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('feature-description-content')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('feature-description-toggle'));
+    await waitFor(() => {
+      expect(screen.getByTestId('feature-description-content')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('feature-description-toggle'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('feature-description-content')).not.toBeInTheDocument();
+    });
+  });
+
+  it('should filter settings by search query', async () => {
+    renderSettings();
+    const searchInput = screen.getByTestId('settings-search-input');
+    fireEvent.change(searchInput, { target: { value: 'settings.themeDescription' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-search-results')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('theme-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('animations-card')).not.toBeInTheDocument();
+  });
+
+  it('should filter settings by group name', async () => {
+    renderSettings();
+    const searchInput = screen.getByTestId('settings-search-input');
+    fireEvent.change(searchInput, { target: { value: 'settings.data' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-search-results')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('backup-path-card')).toBeInTheDocument();
+    expect(screen.getByTestId('auto-backup-card')).toBeInTheDocument();
+    expect(screen.getByTestId('backup-interval-card')).toBeInTheDocument();
+  });
+
+  it('should show no results when search matches nothing', async () => {
+    renderSettings();
+    const searchInput = screen.getByTestId('settings-search-input');
+    fireEvent.change(searchInput, { target: { value: 'xyznonexistent' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-search-results')).toBeInTheDocument();
+    });
+    expect(screen.getByText('common.noResults')).toBeInTheDocument();
+  });
+
+  it('should clear search when switching tabs', async () => {
+    renderSettings();
+    const searchInput = screen.getByTestId('settings-search-input');
+    fireEvent.change(searchInput, { target: { value: 'theme' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-search-results')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('settings-tab-editor'));
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-tab-panel-editor')).toBeInTheDocument();
+    });
+    expect(searchInput).toHaveValue('');
   });
 });

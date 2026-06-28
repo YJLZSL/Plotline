@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useReducedMotion } from 'framer-motion';
 import {
   Plus,
   Trash2,
@@ -22,6 +23,7 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn, stripHtml } from '@/lib/utils';
+import { MOTION_BASE } from '@/lib/motion';
 import type { NovelChapterStatus } from '@/types';
 import {
   useNovelChaptersQuery,
@@ -75,6 +77,8 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
   const [editorOutlineNodeId, setEditorOutlineNodeId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const reduced = useReducedMotion();
+  const emptyTransition = reduced ? { duration: 0 } : MOTION_BASE;
 
   const selected = chapters.find((c) => c.id === selectedId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
@@ -251,9 +255,19 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
                 ))}
               </div>
             ) : chapters.length === 0 ? (
-              <div className="p-6 text-center">
-                <BookOpen className="h-8 w-8 text-text-secondary/40 mx-auto mb-2" />
-                <p className="text-xs text-text-secondary">{t('novel.emptyChapters')}</p>
+              <div className="p-6">
+                <EmptyState
+                  icon={<BookOpen className="h-8 w-8" />}
+                  title={t('novel.emptyChapters')}
+                  description={t('novel.empty.description')}
+                  action={
+                    <Button size="sm" onClick={handleAdd} className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      {t('novel.empty.cta')}
+                    </Button>
+                  }
+                  transition={emptyTransition}
+                />
               </div>
             ) : (
               sortedChapters.map((chapter) => (
@@ -419,12 +433,12 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
                     <BookOpen />
                   </AppIcon>
                 }
-                title={t('nav.novel')}
-                description={t('novel.emptyStateDesc')}
+                title={t('novel.empty.title')}
+                description={t('novel.empty.description')}
                 actions={[
                   <Button key="add" onClick={handleAdd} className="gap-2">
                     <Plus className="h-4 w-4" />
-                    {t('novel.newChapter')}
+                    {t('novel.empty.cta')}
                   </Button>,
                   <Button
                     key="outline"
@@ -436,6 +450,7 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
                     {t('nav.outline')}
                   </Button>,
                 ]}
+                transition={emptyTransition}
               />
             </div>
           )}

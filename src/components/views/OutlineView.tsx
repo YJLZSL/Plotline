@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Plus,
   ChevronRight,
@@ -37,7 +37,7 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn, downloadText } from '@/lib/utils';
-import { MOTION_FAST } from '@/lib/motion';
+import { MOTION_FAST, MOTION_BASE } from '@/lib/motion';
 import { toastError } from '@/stores/toast';
 import { isTauri } from '@/lib/ipc';
 import type { OutlineNode, OutlineNodeType } from '@/types';
@@ -84,6 +84,8 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const [editing, setEditing] = useState<OutlineNode | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'card' | 'chart'>('list');
+  const reduced = useReducedMotion();
+  const emptyTransition = reduced ? { duration: 0 } : MOTION_BASE;
 
   // 构建树
   const tree = useMemo(() => buildTree(nodes), [nodes]);
@@ -289,17 +291,20 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
               ))}
             </div>
           ) : tree.length === 0 ? (
-            <EmptyState
-              icon={<AppIcon size="lg" tone="accent"><ListTree /></AppIcon>}
-              title={t('outline.empty.title')}
-              description={t('outline.empty.description')}
-              action={
-                <Button size="sm" onClick={() => void handleAdd('volume', null)} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  {t('outline.addVolume')}
-                </Button>
-              }
-            />
+            <div className="p-6">
+              <EmptyState
+                icon={<AppIcon size="lg" tone="accent"><ListTree /></AppIcon>}
+                title={t('outline.empty.title')}
+                description={t('outline.empty.description')}
+                action={
+                  <Button size="sm" onClick={() => void handleAdd('volume', null)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    {t('outline.empty.cta')}
+                  </Button>
+                }
+                transition={emptyTransition}
+              />
+            </div>
           ) : (
             <div className="py-2">
               {tree.map((node, i) => (
@@ -380,11 +385,14 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
               </div>
             </div>
           ) : (
-            <EmptyState
-              icon={<AppIcon size="lg" tone="accent"><ListTree /></AppIcon>}
-              title={t('outline.title')}
-              description={t('outline.subtitle')}
-            />
+            <div className="flex-1 grid place-items-center">
+              <EmptyState
+                icon={<AppIcon size="lg" tone="accent"><ListTree /></AppIcon>}
+                title={t('outline.title')}
+                description={t('outline.subtitle')}
+                transition={emptyTransition}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -600,6 +608,8 @@ function OutlineCardView({
   onAddVolume: () => void;
 }) {
   const { t } = useI18n();
+  const reduced = useReducedMotion();
+  const emptyTransition = reduced ? { duration: 0 } : MOTION_BASE;
 
   const flatVolumes = useMemo(() => {
     const volumes = tree.filter((n) => n.type === 'volume');
@@ -637,9 +647,10 @@ function OutlineCardView({
           action={
             <Button size="sm" onClick={onAddVolume} className="gap-2">
               <Plus className="h-4 w-4" />
-              {t('outline.addVolume')}
+              {t('outline.empty.cta')}
             </Button>
           }
+          transition={emptyTransition}
         />
       </div>
     );

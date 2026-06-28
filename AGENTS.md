@@ -44,21 +44,22 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.7.5 已发布：修复 v2.7.4 CI RAG LIKE 通配符测试错误）
-- **RAG LIKE 子串匹配修复**：修复 v2.7.4 CI 中 `cargo test` 发现的 RAG 关键词检索 `LIKE` 子查询缺少 `%` 通配符问题（`src-tauri/src/services/ai.rs`），导致检索结果始终返回 0 条；补全通配符后确保 AI RAG 检索能正确返回相关实体，CI/Release workflow 全绿。
-- **SQLite ESCAPE 单字符错误修复**：修复 v2.7.3 CI 中 `cargo test` 发现的 SQLite 错误 `ESCAPE expression must be a single character`（`src-tauri/src/services/ai.rs` RAG 检索中的 `LIKE ESCAPE` 子句），确保 CI/Release workflow 全绿。
-- **Markdown 渲染深度修复**：`src/components/ui/Markdown.tsx` 引入 `remark-gfm` 并重构 `normalizeMarkdown`，处理全角星号、HTML 实体、双重转义、跨行标记与流式输出闭合等待；新增 `isBalancedMarkdown` 时排除列表标记与孤立星号，避免合法列表被误判为未闭合；移除 `remark-breaks`，改用 CSS `white-space: pre-wrap`，彻底解决裸星号与格式异常。
-- **动画性能再优化**：`src/lib/motion.ts` 新增 `MOTION_FAST`（120ms），统一核心视图为 120–200ms 动效；减少 `AnimatePresence mode="wait"` 嵌套，压缩 stagger delay，移除滥用 `will-change-transform`；`WorkspaceLayout`、`SettingsView`、`TimelineView` 切换更跟手、更少掉帧。
-- **时间轴交互与 UI 全面打磨**：修正 `computeEventDragConstraints` 为基于目标位置的约束，同步阻止画布越界滚动并增加 CSS overscroll 控制；重构工具栏与筛选栏层级，事件卡片采用主题表面色 + 轨道色条、宽度自适应；日期标尺防重叠、连线降噪、“今天”参考线主题化。
-- **AI 助手能力再明确化**：`AiAssistantPanel.tsx` 增加能力说明折叠面板、`/` 命令菜单与上下文摘要显示；默认启用更多上下文源；`contextCollector.ts` 提升上下文上限并新增“读取整个工作区”模式；KV Cache 键加入上下文哈希与工作区版本，RAG 中文分词与 chunk 利用率提升，前端显示检索到的资料数量。
-- **番茄钟成就系统修复**：`pomodoro.ts` 拆分 `resetAchievements` 与 `resetTimer`，新增 `achievements`（今日 count / 连续 streak）结构；完成动画延迟阶段切换，确保庆祝/爆炸效果可被感知；MC 彩蛋增加开关与频率限制。
-- **MC 主题与字体兼容性**：收紧 MC 纹理选择器避免全局污染，补全各主题 `--bg-base-gradient`，`@font-face` 增加 `local()` 源；设置页移除内联字体预览 style，修复导入顺序与 tab 动画。
-- **调研文档**：输出 `docs/v2.7.2-research.md`，深度汇总竞品、AI 助手设计惯例、中文社区反馈与动画前端效果建议。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 升级到 `2.7.4`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.7.4 状态。
-- **发布说明**：v2.7.4 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
-- **GitHub Release v2.7.4**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.4>
+### 当前迭代状态（v2.8.0 已发布：前端丝滑化与时间轴逻辑升级）
+- **时间轴事件重叠修复与拖拽升级**：修复同一轨道内事件时间重叠导致的堆叠遮挡问题，新增碰撞检测与瀑布式子行布局；拖拽时显示 ghost 与 snap hint，释放后增加归位动画，提升排布效率与手感。
+- **动效系统 spring/layout token 与增强动效开关**：`src/lib/motion.ts` 扩展 spring 与 layout token，支持更自然的弹性/布局过渡；设置页新增“增强动效”开关，低功耗设备可一键关闭复杂动画。
+- **TimelineView 性能优化**：对 `EventCard`、`TrackLane`、`DateRuler` 等高频组件应用 `React.memo` 与 `useMemo`；引入可视区裁剪，减少离屏元素渲染，长滚动时间轴更流畅。
+- **设置页重构**：按功能分组、支持设置项搜索、所有主题/字体/动效即时预览；补充中文说明，降低用户理解成本。
+- **首次进入工作区新手引导与各视图空状态优化**：新增首次工作区引导流程，帮助用户创建第一条时间轴/事件；统一各视图空状态插画、文案与 CTA，减少冷启动迷茫。
+- **前端优化指南**：新增 `docs/前端优化指南.md`，沉淀动效、渲染、交互与性能最佳实践，供后续迭代参考。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `2.8.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.8.0 状态。
+- **发布说明**：v2.8.0 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+- **GitHub Release v2.8.0**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.0>
 
-### 上一版本（v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+### 上一版本（v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+- v2.7.5：修复 v2.7.4 CI 中发现的 RAG 关键词检索 `LIKE` 子查询缺少 `%` 通配符问题（`src-tauri/src/services/ai.rs`），导致检索结果始终返回 0 条；补全通配符后确保 AI RAG 检索能正确返回相关实体，CI/Release workflow 全绿。
+- GitHub Release v2.7.5：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.5>
+- v2.7.4：修复 v2.7.3 CI 中发现的 SQLite 错误 `ESCAPE expression must be a single character`（`src-tauri/src/services/ai.rs` RAG 检索中的 `LIKE ESCAPE` 子句）；v2.7.3 的所有功能改进完整保留，CI/Release workflow 全绿。
+- GitHub Release v2.7.4：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.4>
 - v2.7.3：修复 v2.7.2 CI 中发现的 Rust 编译错误（`src-tauri/src/services/ai.rs` 中 `NeedApi` 字段匹配不完整、`UpdateWorkspaceInput` 字段缺失、`entities` 借用/移动问题），v2.7.2 的所有功能改进完整保留。tag 已推送，但 CI/Release workflow 在 `cargo test` 阶段因 SQLite `ESCAPE expression must be a single character` 错误失败，未生成可用 Release。功能由 v2.7.4 完整发布。
 - GitHub Release v2.7.3：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.3>（tag 已推送，Release 未成功；请使用 v2.7.4）
 - v2.7.2：v2.7.0 体验问题深度修复（Markdown 渲染、动画性能、时间轴交互、AI 助手能力、番茄钟成就、MC 主题与字体兼容）。tag 已推送，但 CI/Release workflow 因 `src-tauri/src/services/ai.rs` 等处 Rust 编译错误失败，未生成可用 Release。功能由 v2.7.3 完整发布。
@@ -346,5 +347,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.7  
-> 最后更新：2026-06-27（v2.7.4 已发布：修复 v2.7.3 CI SQLite ESCAPE 测试错误）
+> 文档版本：v0.5.8  
+> 最后更新：2026-06-28（v2.8.0 已发布：前端丝滑化与时间轴逻辑升级）

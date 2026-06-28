@@ -28,14 +28,49 @@ export const MOTION_SLOW_SPEC: MotionTokenSpec = {
   ease: EASE_STANDARD,
 };
 
-export const MOTION_FAST: Transition = MOTION_FAST_SPEC;
-export const MOTION_BASE: Transition = MOTION_BASE_SPEC;
-export const MOTION_SLOW: Transition = MOTION_SLOW_SPEC;
+/** 时间轴卡片拖拽释放后的归位动画：200ms，与 MOTION_SLOW 同参但语义独立。 */
+export const MOTION_DRAG_RETURN_SPEC: MotionTokenSpec = {
+  duration: 0.2,
+  ease: EASE_STANDARD,
+};
+
+/**
+ * 主视图切换等场景使用的自然弹簧动画。
+ * 参数经过临界阻尼校验（damping ratio ≈ 1），避免弹性/弹跳感。
+ */
+export const MOTION_SPRING: Transition = {
+  type: 'spring',
+  stiffness: 320,
+  damping: 32,
+  mass: 0.8,
+};
+
+/**
+ * 专用于 Framer Motion `layout` 属性的弹簧过渡。
+ * 低张力、高阻尼，确保位置/尺寸变化顺滑且不会抖动回弹。
+ */
+export const MOTION_LAYOUT: Transition = {
+  type: 'spring',
+  stiffness: 200,
+  damping: 28,
+  mass: 0.8,
+};
+
+export const MOTION_FAST = MOTION_FAST_SPEC;
+export const MOTION_BASE = MOTION_BASE_SPEC;
+export const MOTION_SLOW = MOTION_SLOW_SPEC;
+export const MOTION_DRAG_RETURN = MOTION_DRAG_RETURN_SPEC;
+
+/** 设置页等标签/分组切换的专用 token：180ms 标准缓动。 */
+export const MOTION_TAB = MOTION_BASE_SPEC;
 
 export const MOTION_TOKENS = {
   fast: MOTION_FAST,
   base: MOTION_BASE,
   slow: MOTION_SLOW,
+  tab: MOTION_TAB,
+  spring: MOTION_SPRING,
+  layout: MOTION_LAYOUT,
 } as const;
 
 export type MotionToken = keyof typeof MOTION_TOKENS;
