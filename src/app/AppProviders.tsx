@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 
-import { ToastViewport } from '@/components/ui';
+import { ToastViewport, TooltipProvider } from '@/components/ui';
 
 const queryClientOptions = {
   defaultOptions: {
@@ -21,10 +21,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [client] = useState(() => new QueryClient(queryClientOptions));
   return (
     <QueryClientProvider client={client}>
-      <BrowserRouter>
-        {children}
-        <ToastViewport />
-      </BrowserRouter>
+      <TooltipProvider delayDuration={300}>
+        <BrowserRouter>
+          {children}
+          <ToastViewport />
+        </BrowserRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

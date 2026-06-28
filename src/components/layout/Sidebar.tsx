@@ -12,7 +12,9 @@ import {
   Map as MapIcon,
   Film,
   BookOpen,
+  Scroll,
   Globe,
+  Sparkles,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -36,8 +38,10 @@ const items: NavItem[] = [
   { to: 'vn', labelKey: 'nav.vn', icon: Film },
   { to: 'worldbuilding', labelKey: 'nav.worldbuilding', icon: Globe },
   { to: 'novel', labelKey: 'nav.novel', icon: BookOpen },
+  { to: 'script', labelKey: 'nav.script', icon: Scroll },
   { to: 'statistics', labelKey: 'nav.statistics', icon: BarChart3 },
   { to: 'notebook', labelKey: 'nav.notebook', icon: StickyNote },
+  { to: 'ai-assistant', labelKey: 'nav.aiAssistant', icon: Sparkles },
   { to: 'settings', labelKey: 'nav.settings', icon: SettingsIcon },
 ];
 

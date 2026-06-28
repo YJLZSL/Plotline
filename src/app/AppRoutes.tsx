@@ -14,6 +14,8 @@ import { MapView } from '@/components/views/MapView';
 import { VnView } from '@/components/views/VnView';
 import { WorldbuildingView } from '@/components/views/WorldbuildingView';
 import { NovelView } from '@/components/views/NovelView';
+import { ScriptView } from '@/components/views/ScriptView';
+import { AiAssistantView } from '@/features/ai-assistant/components/AiAssistantView';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { useThemeStore } from '@/stores/ui';
 import { useMotionStore } from '@/stores/motion';
@@ -103,10 +105,12 @@ function AnimatedRoutes() {
             <Route path="outline" element={<WorkspaceViewWrapper view="outline" />} />
             <Route path="statistics" element={<WorkspaceViewWrapper view="statistics" />} />
             <Route path="notebook" element={<WorkspaceViewWrapper view="notebook" />} />
+            <Route path="ai-assistant" element={<WorkspaceViewWrapper view="ai-assistant" />} />
             <Route path="map" element={<WorkspaceViewWrapper view="map" />} />
             <Route path="vn" element={<WorkspaceViewWrapper view="vn" />} />
             <Route path="worldbuilding" element={<WorkspaceViewWrapper view="worldbuilding" />} />
             <Route path="novel" element={<WorkspaceViewWrapper view="novel" />} />
+            <Route path="script" element={<WorkspaceViewWrapper view="script" />} />
             <Route path="settings" element={<WorkspaceViewWrapper view="settings" />} />
           </Route>
         </Routes>
@@ -131,6 +135,8 @@ function WorkspaceViewWrapper({ view }: { view: string }) {
       return <StatisticsView workspaceId={workspaceId} workspaceName={workspaceName} />;
     case 'notebook':
       return <NotebookView workspaceId={workspaceId} workspaceName={workspaceName} />;
+    case 'ai-assistant':
+      return <AiAssistantView workspaceId={workspaceId} />;
     case 'map':
       return <MapView workspaceId={workspaceId} workspaceName={workspaceName} />;
     case 'vn':
@@ -139,6 +145,8 @@ function WorkspaceViewWrapper({ view }: { view: string }) {
       return <WorldbuildingView workspaceId={workspaceId} workspaceName={workspaceName} />;
     case 'novel':
       return <NovelView workspaceId={workspaceId} workspaceName={workspaceName} />;
+    case 'script':
+      return <ScriptView workspaceId={workspaceId} workspaceName={workspaceName} />;
     case 'settings':
       return <SettingsView workspaceId={workspaceId} workspaceName={workspaceName} />;
     default:

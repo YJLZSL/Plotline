@@ -210,3 +210,27 @@ export type AiStreamEvent =
   | { type: 'delta'; data: string }
   | { type: 'error'; data: string }
   | { type: 'done' };
+
+export type AiAgentId =
+  | 'chat'
+  | 'continue'
+  | 'brainstorm'
+  | 'check'
+  | 'polish'
+  | 'relationships'
+  | 'styleTransfer';
+
+export type AiAssistantContextMode =
+  | 'current_event'
+  | 'current_character'
+  | 'current_outline'
+  | 'whole_workspace'
+  | 'none';
+
+export interface AiAgent {
+  id: AiAgentId;
+  labelKey: string;
+  descriptionKey: string;
+  icon: string;
+  systemPrompt: string;
+}

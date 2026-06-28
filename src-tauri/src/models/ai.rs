@@ -214,6 +214,7 @@ pub struct AiModelInfo {
 pub struct AiConnectionTestInput {
     pub base_url: String,
     pub api_key: String,
+    #[allow(dead_code)]
     pub model: Option<String>,
 }
 
@@ -235,6 +236,7 @@ pub enum AiStreamEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct AiCacheEntry {
     pub key: String,
     pub value: String,

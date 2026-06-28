@@ -18,6 +18,9 @@ export type { BrandMarkProps } from './BrandMark';
 export { RichEditor } from './RichEditor';
 export { Markdown } from './Markdown';
 export { PomodoroTimer } from './PomodoroTimer';
+export { EventCard } from './EventCard';
+export type { EventCardProps } from './EventCard';
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './Tooltip';
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
 export {

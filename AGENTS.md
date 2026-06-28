@@ -44,13 +44,14 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.8.1 已发布：时间轴回归修复与 UI 清爽化）
-- **修复时间轴创建多个事件时被错误堆叠到下方的问题**：修复同一轨道内多个事件在创建/渲染时被错误分配到瀑布式子行的问题，保证事件按预期在一行内紧凑排布。
-- **AI 助手输出稳定化**：为 AI 助手输出面板增加最小高度，采用增量纯文本渲染并接入平滑滚动，减少流式输出时的闪烁与跳动。
-- **整体 UI 清爽化**：统一工具栏、侧边栏、卡片、设置页与各视图空状态的间距与阴影，降低视觉噪音，提升长时创作舒适度。
-- **测试提速**：减少 E2E 测试中的 `waitForTimeout` 硬等待，本地 Playwright 启用 2 workers，整体测试反馈更快。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `2.8.1`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.8.1 状态。
-- **发布说明**：v2.8.1 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+### 当前迭代状态（v3.0.0 未发布：跨视图叙事导航 + AI 创作工作流）
+- **时间轴逻辑重写**：新增 `timelineGrid.ts`、`timeScale.ts`、`useTimelineViewport.ts`，重写 `timelineLayout.ts` 碰撞检测与 drag constraints；`TimelineView` 集成新布局引擎，支持以指针为锚点的缩放与画布平移。
+- **Timeline / Script 双视图双向同步**：新增 `workspaceSelection.ts` 全局选择状态与 `ScriptView.tsx` 独立剧本视图；Sidebar 与路由注册 `/workspaces/:id/script`；点击剧本视图事件可跳转回时间轴并自动选中/滚动定位。
+- **AI 创作助手侧边模块**：新增 `src/features/ai-assistant/` 模块，含 7 个 Agent（对话/续写/脑暴/查漏/润色/角色关系/文风迁移）、会话管理、上下文选择器；Sidebar 新增 `AI 创作`/`AI Studio` 导航入口，路由注册 `/workspaces/:id/ai-assistant`。
+- **Rust clippy 清理**：修复 `src-tauri/src/models/ai.rs` 与 `src-tauri/src/services/ai.rs` 中 6 处已有告警，确保 `-D warnings` 通过。
+- **测试覆盖**：新增 Timeline 平移缩放、Script 同步、AI 助手 E2E 测试；新增 `scriptSort` 单元测试。前端 `pnpm lint/typecheck/build/test:run/test:e2e` 全绿。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `3.0.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v3.0.0 状态。
+- **本地构建状态**：前端构建与测试全绿；本地 Rust 编译环境出现 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，但旧测试二进制 80 项单元测试仍通过。建议通过推送 `v3.0.0` tag 触发 CI 构建与发布。
 - **GitHub Release v2.8.1**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.1>
 
 ### 上一版本（v2.8.0 / v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）

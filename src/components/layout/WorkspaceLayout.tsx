@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { MOTION_BASE, MOTION_SPRING } from '@/lib/motion';
 import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
+import { useWorkspaceSelectionStore } from '@/stores/workspaceSelection';
 import { useWorkspacesQuery } from '@/features/workspace/hooks';
 
 export function WorkspaceLayout() {
@@ -26,6 +27,7 @@ export function WorkspaceLayout() {
   const viewTransition = reduced ? { duration: 0 } : enhancedAnimations ? MOTION_SPRING : MOTION_BASE;
   const { data: workspaces = [] } = useWorkspacesQuery();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
+  const clearSelection = useWorkspaceSelectionStore((s) => s.clear);
 
   useEffect(() => {
     if (workspaceId && firstWorkspaceVisit) {
@@ -33,6 +35,10 @@ export function WorkspaceLayout() {
       setFirstWorkspaceVisit(false);
     }
   }, [workspaceId, firstWorkspaceVisit, setFirstWorkspaceVisit]);
+
+  useEffect(() => {
+    clearSelection();
+  }, [workspaceId, clearSelection]);
 
   if (!workspaceId) return null;
 

@@ -1,6 +1,6 @@
 {
   "name": "plotline",
-  "version": "2.8.1",
+  "version": "3.0.0",
   "private": true,
   "description": "本地优先的叙事创作工作台",
   "type": "module",

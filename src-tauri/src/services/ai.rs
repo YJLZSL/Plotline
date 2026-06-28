@@ -319,7 +319,7 @@ pub fn retrieve_relevant_entities(
     retrieve_outline_entities(conn, workspace_id, &terms, &mut scores)?;
 
     let mut results: Vec<AiScoredEntity> = scores.into_values().map(|(entity, _)| entity).collect();
-    results.sort_by(|a, b| b.score.cmp(&a.score));
+    results.sort_by_key(|b| std::cmp::Reverse(b.score));
     results.truncate(limit);
     Ok(results)
 }
@@ -752,6 +752,7 @@ fn extract_terms(text: &str) -> Vec<String> {
     unique.into_iter().collect()
 }
 
+#[allow(dead_code)]
 fn is_punctuation(c: char) -> bool {
     c.is_ascii_punctuation()
         || matches!(
@@ -1299,7 +1300,7 @@ pub fn prepare_shortcut(
     let context_json = input
         .context
         .as_ref()
-        .map(|c| serde_json::to_string(c))
+        .map(serde_json::to_string)
         .transpose()
         .map_err(|e| AppError::Internal(format!("序列化上下文失败: {}", e)))?
         .unwrap_or_default();
@@ -1434,6 +1435,7 @@ pub async fn call_shortcut_api(
         .ok_or_else(|| AppError::Internal("AI 响应为空".into()))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn save_shortcut_result(
     conn: &Connection,
     session_id: &str,

@@ -1,5 +1,6 @@
 import { memo, useRef, useState, useMemo, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, useReducedMotion, type PanInfo } from 'framer-motion';
+import type { PointerEvent as ReactPointerEvent } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Plus,
   Eye,
@@ -28,7 +29,19 @@ import {
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
 import { TextTimeline } from './TextTimeline';
-import { createTimeScale, type ZoomLevel, type TimeScale } from '@/features/timeline/timeScale';
+import {
+  createTimelineGrid,
+  computeTimelineLayout,
+  computeRelativeDurationUnits,
+  getZoomLabel,
+  adjustZoom,
+  DEFAULT_ZOOM,
+  LEFT_PADDING,
+  type TimeScale,
+  type ZoomLevel,
+  type EventLayoutItem,
+} from '@/features/timeline/timelineGrid';
+import { useTimelineViewport } from '@/features/timeline/useTimelineViewport';
 
 import {
   Button,
@@ -45,12 +58,12 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuSection,
+  EventCard,
 } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
-import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE, MOTION_FAST, MOTION_LAYOUT } from '@/lib/motion';
+import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
 import {
   useCreateEvent,
@@ -69,16 +82,12 @@ import { useCharactersQuery } from '@/features/characters/hooks';
 import { useLocationsQuery } from '@/features/map/hooks';
 import { checkConsistency, uploadEventImage } from '@/features/timeline/eventApi';
 import { useTimelineFilters, filterEvents } from '@/features/timeline/useTimelineFilters';
+import { useWorkspaceSelectionStore } from '@/stores/workspaceSelection';
 import {
   clampTodayLabelX,
   computeAddButtonLeft,
-  computeEventDragConstraints,
-  clampTimelineScroll,
   getEventCardWidth,
   estimateLabelWidth,
-  computeEventLayout,
-  computeRelativeDurationUnits,
-  type EventLayoutItem,
 } from '@/features/timeline/timelineLayout';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
 import { useAiContextStore } from '@/stores/aiContext';
@@ -99,29 +108,10 @@ const EVENT_HEIGHT = 64;
 const EVENT_ROW_GAP = 8;
 const EVENT_BASE_TOP = 12;
 const RULER_HEIGHT = 44;
-const LEFT_PADDING = 24;
 const DAY_MS = 24 * 3600 * 1000;
-const ZOOM_LEVELS = ['hour', 'day', 'month', 'year'] as const;
 
 const EVENT_COLOR_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
-const VISIBLE_EVENT_BUFFER = EVENT_CARD_MAX_WIDTH * 2;
-
-const EVENT_STATUS_STYLES: Record<
-  EventStatus,
-  { dot: string; border: string; labelKey: string }
-> = {
-  draft: { dot: 'bg-text-secondary/60', border: 'border-status-draft', labelKey: 'timeline.event.statusDraft' },
-  done: { dot: 'bg-status-done', border: 'border-status-done', labelKey: 'timeline.event.statusDone' },
-  revise: { dot: 'bg-status-revise', border: 'border-status-revise', labelKey: 'timeline.event.statusRevise' },
-};
-
-// 每个缩放级别下，单位宽度（像素 / 单位）
-const ZOOM_UNIT_WIDTH: Record<ZoomLevel, number> = {
-  hour: 60,
-  day: 90,
-  month: 140,
-  year: 220,
-};
+const VISIBLE_EVENT_BUFFER = EVENT_CARD_MAX_WIDTH * 4;
 
 // 每个缩放级别的主刻度单位（用于标尺）
 const ZOOM_RULER_FORMAT: Record<ZoomLevel, Intl.DateTimeFormatOptions> = {
@@ -164,8 +154,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     isCollapsed,
   } = useTimelineFilters(workspaceId);
 
-  const [zoom, setZoom] = useState<ZoomLevel>('month');
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const selectedEventId = useWorkspaceSelectionStore((s) => s.selectedEventId);
+  const selectEvent = useWorkspaceSelectionStore((s) => s.selectEvent);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
@@ -180,9 +170,25 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
   const [copiedEvent, setCopiedEvent] = useState<Event | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [viewportWidth, setViewportWidth] = useState(0);
-  const [draggingEvent, setDraggingEvent] = useState<{ id: string; offsetX: number } | null>(null);
+  const {
+    zoom,
+    setZoom,
+    scrollLeft,
+    setScrollLeft,
+    viewportWidth,
+    setViewportWidth,
+    zoomAt,
+    panBy,
+  } = useTimelineViewport({ canvasRef, initialZoom: DEFAULT_ZOOM });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null);
+  const panElementRef = useRef<HTMLElement | null>(null);
+  const [draggingEvent, setDraggingEvent] = useState<{
+    id: string;
+    offsetX: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const connectEvents = useConnectEvents(workspaceId);
   const disconnectEvents = useDisconnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
@@ -200,7 +206,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [setScrollLeft, setViewportWidth]);
 
   useEffect(() => {
     const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
@@ -223,6 +229,20 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     });
   }, [t, events, selectedEventId, setAiContext]);
 
+  // 从剧本视图跳转回来时，滚动到共享选中的事件并使其可见
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const el = document.querySelector(`[data-event-id="${selectedEventId}"]`) as HTMLElement | null;
+    if (el && canvasRef.current) {
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const cardRect = el.getBoundingClientRect();
+      const relativeX = cardRect.left - canvasRect.left;
+      const targetScrollLeft =
+        canvasRef.current.scrollLeft + relativeX - canvasRef.current.clientWidth / 2 + cardRect.width / 2;
+      canvasRef.current.scrollLeft = targetScrollLeft;
+    }
+  }, [selectedEventId]);
+
   const [pendingConnection, setPendingConnection] = useState<string | null>(null);
 
   const visibleTracks = useMemo(() => tracks.filter((tr) => tr.isVisible), [tracks]);
@@ -232,49 +252,46 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [events, filters],
   );
 
-  // 计算时间轴范围：找出所有绝对日期事件的最早/最晚时间
-  const timeScale = useMemo(() => {
+  // 计算时间轴范围与连续 zoom 网格：baseTime 为最小绝对事件时间，无绝对事件时为 0
+  const grid = useMemo(() => {
     const absoluteEvents = filteredEvents.filter((e) => e.dateType === 'absolute' && e.dateValue);
-    let minTime = Date.now();
-    let maxTime = Date.now() + 365 * DAY_MS;
+    let baseTime = 0;
+    let maxTime = 365 * DAY_MS;
     if (absoluteEvents.length > 0) {
       const times = absoluteEvents.map((e) => new Date(e.dateValue).getTime()).filter((n) => !Number.isNaN(n));
       if (times.length > 0) {
         const firstTime = Math.min(...times);
         const lastTime = Math.max(...times);
         const span = lastTime - firstTime || 365 * DAY_MS;
-        // 左边缘对齐到第一个事件，右侧保留 15% 边距；无事件时使用默认边距
-        minTime = firstTime;
+        baseTime = firstTime;
         maxTime = lastTime + span * 0.15;
       }
-    } else {
-      const span = 365 * DAY_MS;
-      minTime -= span * 0.05;
-      maxTime += span * 0.1;
     }
-    return createTimeScale(minTime, maxTime, zoom, LEFT_PADDING, ZOOM_UNIT_WIDTH[zoom]);
+    return createTimelineGrid(baseTime, maxTime, zoom, LEFT_PADDING);
   }, [filteredEvents, zoom]);
 
+  const timeScale = useMemo(() => grid.getTimeScale(), [grid]);
+
   const totalWidth = useMemo(
-    () => Math.max(800, timeScale.timeToX(timeScale.max) + LEFT_PADDING + EVENT_CARD_MAX_WIDTH),
-    [timeScale],
+    () => Math.max(800, grid.timeToX(grid.maxTime) + LEFT_PADDING + EVENT_CARD_MAX_WIDTH),
+    [grid],
   );
 
   const relativeDurationUnits = useMemo(
-    () => computeRelativeDurationUnits(timeScale, 200, 16),
-    [timeScale],
+    () => computeRelativeDurationUnits(grid, 200, 16),
+    [grid],
   );
 
   const eventLayout = useMemo(
     () =>
-      computeEventLayout(filteredEvents, visibleTracks, timeScale, {
+      computeTimelineLayout(filteredEvents, visibleTracks, grid, {
         eventHeight: EVENT_HEIGHT,
         rowGap: EVENT_ROW_GAP,
         baseTop: EVENT_BASE_TOP,
         trackHeight: TRACK_HEIGHT,
         relativeDurationUnits,
       }),
-    [filteredEvents, visibleTracks, timeScale, relativeDurationUnits],
+    [filteredEvents, visibleTracks, grid, relativeDurationUnits],
   );
 
   const timelineMinHeight = useMemo(
@@ -287,7 +304,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [visibleTracks, isCollapsed, eventLayout],
   );
 
-  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 min 的伪时间戳
+  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 baseTime 的伪时间戳
   const eventPositions = useMemo(() => {
     const positions = new Map<string, number>();
     filteredEvents.forEach((ev) => {
@@ -301,13 +318,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     const relativeEvents = filteredEvents
       .filter((e) => e.dateType !== 'absolute' || !positions.has(e.id))
       .sort((a, b) => a.sortOrder - b.sortOrder);
-    const unitMs = timeScale.getMsPerUnit();
-    const fallbackStart = timeScale.min;
+    const unitMs = grid.getMsPerUnit();
+    const fallbackStart = grid.baseTime;
     relativeEvents.forEach((ev, i) => {
       positions.set(ev.id, fallbackStart + i * unitMs * relativeDurationUnits);
     });
     return positions;
-  }, [filteredEvents, timeScale, relativeDurationUnits]);
+  }, [filteredEvents, grid, relativeDurationUnits]);
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -367,9 +384,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       });
       setEditingEvent(ev);
       setEventDialogOpen(true);
-      setSelectedEventId(ev.id);
+      selectEvent(ev.id);
     },
-    [createEvent, eventsByTrack, workspaceId],
+    [createEvent, eventsByTrack, workspaceId, selectEvent],
   );
 
   const handleCanvasDoubleClick = useCallback(
@@ -385,35 +402,36 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       });
       setEditingEvent(ev);
       setEventDialogOpen(true);
-      setSelectedEventId(ev.id);
+      selectEvent(ev.id);
     },
-    [createEvent, eventsByTrack, timeScale, workspaceId],
+    [createEvent, eventsByTrack, timeScale, workspaceId, selectEvent],
   );
 
   const handleEventDragEnd = useCallback(
-    async (ev: Event, track: Track, _info: PanInfo, finalX: number) => {
+    async (ev: Event, targetTrack: Track, finalX: number) => {
       const cardWidth = getEventCardWidth(ev.title);
       const lanePadding = 4;
       const clampedX = Math.max(lanePadding, Math.min(totalWidth - cardWidth, finalX));
 
+      const updates: Partial<Event> & { id: string } = { id: ev.id };
+      if (targetTrack.id !== ev.trackId) {
+        updates.trackId = targetTrack.id;
+      }
+
       if (ev.dateType === 'absolute') {
         const newTime = timeScale.xToTime(clampedX);
-        await updateEvent.mutateAsync({
-          id: ev.id,
-          dateType: 'absolute',
-          dateValue: new Date(newTime).toISOString().slice(0, 10),
-          trackId: track.id,
-        });
+        updates.dateType = 'absolute';
+        updates.dateValue = new Date(newTime).toISOString().slice(0, 10);
       } else {
-        const trackEvents = eventsByTrack.get(track.id) ?? [];
+        const trackEvents = eventsByTrack.get(targetTrack.id) ?? [];
         const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, timeScale);
-        if (newSort !== ev.sortOrder) {
-          await updateEvent.mutateAsync({
-            id: ev.id,
-            sortOrder: newSort,
-            trackId: track.id,
-          });
+        if (newSort !== ev.sortOrder || updates.trackId !== undefined) {
+          updates.sortOrder = newSort;
         }
+      }
+
+      if (Object.keys(updates).length > 1) {
+        await updateEvent.mutateAsync(updates);
       }
     },
     [eventPositions, eventsByTrack, timeScale, totalWidth, updateEvent],
@@ -443,11 +461,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const handleDeleteEvent = useCallback(
     async (id: string) => {
       await deleteEvent.mutateAsync(id);
-      if (selectedEventId === id) setSelectedEventId(null);
+      if (selectedEventId === id) selectEvent(null);
       setEventDialogOpen(false);
       setEditingEvent(null);
     },
-    [deleteEvent, selectedEventId],
+    [deleteEvent, selectedEventId, selectEvent],
   );
 
   const duplicateEvent = useCallback(
@@ -465,9 +483,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         sortOrder: eventsByTrack.get(trackId)?.length ?? 0,
       });
       setCopiedEvent(ev);
-      setSelectedEventId(newEv.id);
+      selectEvent(newEv.id);
     },
-    [createEvent, eventsByTrack, workspaceId],
+    [createEvent, eventsByTrack, workspaceId, selectEvent],
   );
 
   const pasteEvent = useCallback(
@@ -480,7 +498,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
   const openAiForEvent = useCallback(
     (ev: Event) => {
-      setSelectedEventId(ev.id);
+      selectEvent(ev.id);
       setEditingEvent(ev);
       setAiContext({
         view: 'timeline',
@@ -494,7 +512,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       });
       setAiPanelOpen(true);
     },
-    [setAiContext, setAiPanelOpen, t],
+    [setAiContext, setAiPanelOpen, t, selectEvent],
   );
 
   const handleSelectEvent = useCallback(
@@ -507,12 +525,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         });
         setPendingConnection(null);
       } else {
-        setSelectedEventId(eventId);
+        selectEvent(eventId);
         const ev = events.find((e) => e.id === eventId) ?? null;
         setEditingEvent(ev);
       }
     },
-    [connectEvents, connectionType, events, pendingConnection],
+    [connectEvents, connectionType, events, pendingConnection, selectEvent],
   );
 
   const handleEditEvent = useCallback((ev: Event) => {
@@ -532,9 +550,19 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [toggleTrackCollapse],
   );
 
-  const handleDragStart = useCallback((id: string) => setDraggingEvent({ id, offsetX: 0 }), []);
+  const handleDragStart = useCallback(
+    (id: string, clientX: number, clientY: number) => {
+      setDraggingEvent({ id, offsetX: 0, clientX, clientY });
+    },
+    [],
+  );
 
-  const handleDrag = useCallback((id: string, offsetX: number) => setDraggingEvent({ id, offsetX }), []);
+  const handleDrag = useCallback(
+    (id: string, offsetX: number, clientX: number, clientY: number) => {
+      setDraggingEvent({ id, offsetX, clientX, clientY });
+    },
+    [],
+  );
 
   const handleDragEndNotify = useCallback(() => setDraggingEvent(null), []);
 
@@ -565,13 +593,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [updateEvent],
   );
 
-  const cycleZoom = useCallback((dir: 1 | -1) => {
-    setZoom((prev) => {
-      const idx = ZOOM_LEVELS.indexOf(prev);
-      const next = ZOOM_LEVELS[(idx + dir + ZOOM_LEVELS.length) % ZOOM_LEVELS.length];
-      return next ?? prev;
-    });
-  }, []);
+  const cycleZoom = useCallback(
+    (dir: 1 | -1) => {
+      setZoom(adjustZoom(zoom, dir));
+    },
+    [setZoom, zoom],
+  );
 
   const handleZoomIn = useCallback(() => cycleZoom(1), [cycleZoom]);
   const handleZoomOut = useCallback(() => cycleZoom(-1), [cycleZoom]);
@@ -590,6 +617,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedEventId, eventDialogOpen, handleDeleteEvent]);
 
+  const zoomLabel = getZoomLabel(zoom);
+
   return (
     <>
       <Toolbar
@@ -604,7 +633,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <span className="text-xs text-text-secondary min-w-[40px] text-center">
-              {t(`timeline.${zoom}`)}
+              {t(`timeline.${zoomLabel}`)}
             </span>
             <Button variant="ghost" size="sm" onClick={handleZoomIn} title={t('timeline.zoomIn')}>
               <ZoomIn className="h-3.5 w-3.5" />
@@ -736,27 +765,58 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         <div
           ref={canvasRef}
           data-testid="timeline-canvas"
-          className="flex-1 overflow-auto bg-bg-base relative overscroll-x-contain [-webkit-overflow-scrolling:auto]"
+          data-panning={isPanning}
+          className={cn(
+            'flex-1 overflow-auto bg-bg-base relative overscroll-x-contain [-webkit-overflow-scrolling:auto]',
+            isPanning && 'cursor-grabbing',
+          )}
           onWheel={(e) => {
             e.preventDefault();
-            const el = e.currentTarget;
             if (e.ctrlKey || e.metaKey) {
-              cycleZoom(e.deltaY > 0 ? 1 : -1);
+              // 以鼠标位置为锚点缩放
+              zoomAt(e.clientX, e.deltaY > 0 ? 1 : -1);
               return;
             }
-            const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
-            const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY * 0.8 : e.deltaX;
-            el.scrollLeft = clampTimelineScroll(el.scrollLeft + delta, maxScroll);
+            // 触摸板/触控水平滑动优先使用 deltaX；普通滚轮纵向滚动映射为水平平移
+            const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY * 0.8;
+            panBy(delta);
           }}
           onScroll={(e) => {
             const el = e.currentTarget;
-            const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
-            const clamped = clampTimelineScroll(el.scrollLeft, maxScroll);
-            if (clamped !== el.scrollLeft) {
-              el.scrollLeft = clamped;
-            }
-            setScrollLeft(clamped);
+            setScrollLeft(el.scrollLeft);
             setViewportWidth(el.clientWidth);
+          }}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            // 仅当点击空白处（未命中事件卡片或按钮）时启动画布平移
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-event-id]') || target.closest('button')) return;
+            const el = e.currentTarget;
+            panStartRef.current = { x: e.clientX, scrollLeft: el.scrollLeft };
+            panElementRef.current = el;
+            setIsPanning(true);
+            el.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (!isPanning || !panStartRef.current) return;
+            const deltaX = e.clientX - panStartRef.current.x;
+            setScrollLeft(panStartRef.current.scrollLeft + deltaX);
+          }}
+          onPointerUp={(e) => {
+            if (!isPanning) return;
+            const el = panElementRef.current ?? e.currentTarget;
+            panStartRef.current = null;
+            panElementRef.current = null;
+            setIsPanning(false);
+            el.releasePointerCapture(e.pointerId);
+          }}
+          onPointerCancel={(e) => {
+            if (!isPanning) return;
+            const el = panElementRef.current ?? e.currentTarget;
+            panStartRef.current = null;
+            panElementRef.current = null;
+            setIsPanning(false);
+            el.releasePointerCapture(e.pointerId);
           }}
         >
           {visibleTracks.length === 0 ? (
@@ -799,6 +859,28 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   <DateRuler
                     timeScale={timeScale}
                     totalWidth={totalWidth}
+                    isPanning={isPanning}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      const el = e.currentTarget;
+                      panStartRef.current = { x: e.clientX, scrollLeft: canvasRef.current?.scrollLeft ?? 0 };
+                      panElementRef.current = el;
+                      setIsPanning(true);
+                      el.setPointerCapture(e.pointerId);
+                    }}
+                    onPointerMove={(e) => {
+                      if (!isPanning || !panStartRef.current) return;
+                      const deltaX = e.clientX - panStartRef.current.x;
+                      setScrollLeft(panStartRef.current.scrollLeft + deltaX);
+                    }}
+                    onPointerUp={(e) => {
+                      if (!isPanning) return;
+                      const el = panElementRef.current ?? e.currentTarget;
+                      panStartRef.current = null;
+                      panElementRef.current = null;
+                      setIsPanning(false);
+                      el.releasePointerCapture(e.pointerId);
+                    }}
                   />
 
                   {/* 连线层（SVG，覆盖在轨道上） */}
@@ -842,6 +924,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   conflictEventIds={conflictEventIds}
                   copiedEvent={copiedEvent}
                   draggingEvent={draggingEvent}
+                  characters={characters}
+                  locations={locations}
                   onSelectEvent={handleSelectEvent}
                   onEditEvent={handleEditEvent}
                   onAddEvent={handleAddEvent}
@@ -1102,9 +1186,17 @@ function TimelineMoreMenu({
 const DateRuler = memo(function DateRuler({
   timeScale,
   totalWidth,
+  isPanning,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
 }: {
   timeScale: TimeScale;
   totalWidth: number;
+  isPanning: boolean;
+  onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
   const { min, max, zoom } = timeScale;
   const { t, i18n } = useI18n();
@@ -1137,9 +1229,17 @@ const DateRuler = memo(function DateRuler({
 
   return (
     <div
-      className="sticky top-0 z-10 bg-bg-surface border-b border-border"
+      data-testid="timeline-ruler"
+      className={cn(
+        'sticky top-0 z-10 bg-bg-surface border-b border-border',
+        isPanning ? 'cursor-grabbing' : 'cursor-grab',
+      )}
       style={{ height: RULER_HEIGHT, minWidth: totalWidth }}
       onMouseLeave={() => setHovered(null)}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
       <div className="relative h-full">
         {/* 次刻度 */}
@@ -1349,21 +1449,23 @@ interface TrackLaneProps {
   eventLayout: { layouts: Map<string, EventLayoutItem>; trackHeights: Map<string, number> };
   timeScale: TimeScale;
   totalWidth: number;
-  zoom: ZoomLevel;
+  zoom: number;
   scrollLeft: number;
   viewportWidth: number;
   selectedEventId: string | null;
   pendingConnection: string | null;
   conflictEventIds: Set<string>;
   copiedEvent: Event | null;
-  draggingEvent: { id: string; offsetX: number } | null;
+  draggingEvent: { id: string; offsetX: number; clientX: number; clientY: number } | null;
+  characters: Character[];
+  locations: { id: string; name: string; color?: string }[];
   onSelectEvent: (eventId: string) => void;
   onEditEvent: (ev: Event) => void;
   onAddEvent: (trackId: string) => void;
   onAddEventToTrack: (trackId: string) => void;
   onPasteEvent: (trackId: string) => void;
   onCanvasDoubleClick: (trackId: string, x: number) => void;
-  onEventDragEnd: (ev: Event, track: Track, info: PanInfo, finalX: number) => void;
+  onEventDragEnd: (ev: Event, targetTrack: Track, finalX: number) => void;
   onStartConnection: (id: string) => void;
   onDuplicateEvent: (ev: Event) => void;
   onAskAiEvent: (ev: Event) => void;
@@ -1373,8 +1475,8 @@ interface TrackLaneProps {
   onZoomOut: () => void;
   onCheckConsistency: () => void;
   onToggleCollapse: (trackId: string) => void;
-  onDragStart: (id: string) => void;
-  onDrag: (id: string, offsetX: number) => void;
+  onDragStart: (id: string, clientX: number, clientY: number) => void;
+  onDrag: (id: string, offsetX: number, clientX: number, clientY: number) => void;
   onDragEndNotify: () => void;
 }
 
@@ -1396,6 +1498,8 @@ const TrackLane = memo(function TrackLane({
   conflictEventIds,
   copiedEvent,
   draggingEvent,
+  characters,
+  locations,
   onSelectEvent,
   onEditEvent,
   onAddEvent,
@@ -1458,13 +1562,60 @@ const TrackLane = memo(function TrackLane({
 
   const targetHeight = collapsed ? TRACK_COLLAPSED_HEIGHT : (eventLayout.trackHeights.get(track.id) ?? TRACK_HEIGHT);
 
+  const resolveTargetTrack = useCallback(
+    (clientX: number, clientY: number, draggedId: string) => {
+      const cardEl = document.querySelector(`[data-event-id="${draggedId}"]`) as HTMLElement | null;
+      const originalPointerEvents = cardEl?.style.pointerEvents;
+      let target: Track | null = null;
+
+      try {
+        if (cardEl) cardEl.style.pointerEvents = 'none';
+
+        // 优先使用浏览器命中测试：直接查找指针下方的轨道元素。
+        // 这比包围盒计算更稳定，能避免动画中矩形抖动或覆盖层干扰。
+        const elements = document.elementsFromPoint(clientX, clientY);
+        for (const el of elements) {
+          const trackId = el.closest('[data-track-id]')?.getAttribute('data-track-id') ?? null;
+          if (!trackId) continue;
+          const candidate = tracks.find((t) => t.id === trackId);
+          if (candidate) {
+            target = candidate;
+            break;
+          }
+        }
+      } finally {
+        if (cardEl) cardEl.style.pointerEvents = originalPointerEvents ?? '';
+      }
+
+      if (target) return target;
+
+      // 兜底：通过所有轨道的包围盒定位指针所在轨道；
+      // 若指针横向超出可见区域（内容溢出被裁剪），则仅按纵向位置匹配。
+      const lanes = [...document.querySelectorAll('[data-track-id]')].map((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          id: el.getAttribute('data-track-id') ?? null,
+          rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        };
+      });
+      const lane =
+        lanes.find((l) =>
+          l.id !== null && clientX >= l.rect.left && clientX <= l.rect.right && clientY >= l.rect.top && clientY <= l.rect.bottom,
+        ) ?? lanes.find((l) => l.id !== null && clientY >= l.rect.top && clientY <= l.rect.bottom);
+      const laneId = lane?.id;
+      return laneId ? tracks.find((t) => t.id === laneId) ?? track : track;
+    },
+    [tracks, track],
+  );
+
   const handleDragEnd = useCallback(
-    (id: string, info: PanInfo, finalX: number) => {
+    (id: string, finalX: number, clientX: number, clientY: number) => {
       const ev = events.find((e) => e.id === id);
       if (!ev) return;
-      onEventDragEnd(ev, track, info, finalX);
+      const targetTrack = resolveTargetTrack(clientX, clientY, id);
+      onEventDragEnd(ev, targetTrack, finalX);
     },
-    [events, track, onEventDragEnd],
+    [events, onEventDragEnd, resolveTargetTrack],
   );
 
   return (
@@ -1472,6 +1623,8 @@ const TrackLane = memo(function TrackLane({
       <ContextMenuTrigger asChild>
         <motion.div
           ref={containerRef}
+          data-track-id={track.id}
+          data-testid="track-lane"
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0, height: targetHeight }}
           transition={{
@@ -1509,9 +1662,9 @@ const TrackLane = memo(function TrackLane({
               className="absolute inset-0 opacity-20 pointer-events-none"
               style={{
                 backgroundImage: `repeating-linear-gradient(90deg, transparent ${LEFT_PADDING}px, transparent ${
-                  LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]
-                }px, var(--border) ${LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom]}px, var(--border) ${
-                  LEFT_PADDING + ZOOM_UNIT_WIDTH[zoom] + 1
+                  LEFT_PADDING + zoom
+                }px, var(--border) ${LEFT_PADDING + zoom}px, var(--border) ${
+                  LEFT_PADDING + zoom + 1
                 }px)`,
               }}
             />
@@ -1538,6 +1691,8 @@ const TrackLane = memo(function TrackLane({
                       isConflict={conflictEventIds.has(ev.id)}
                       isNew={newEventIds.has(ev.id)}
                       isDragging={isDragging}
+                      characters={characters}
+                      locations={locations}
                       onSelect={onSelectEvent}
                       onEdit={onEditEvent}
                       onDragEnd={handleDragEnd}
@@ -1670,221 +1825,6 @@ function DragSnapHint({ x }: { x: number }) {
   );
 }
 
-// ===== 事件卡片 =====
-interface EventCardProps {
-  event: Event;
-  track: Track;
-  index: number;
-  layout: EventLayoutItem;
-  totalWidth: number;
-  selected: boolean;
-  pendingConnection: boolean;
-  isConflict: boolean;
-  isNew: boolean;
-  isDragging: boolean;
-  onSelect: (id: string) => void;
-  onEdit: (ev: Event) => void;
-  onDragEnd: (id: string, info: PanInfo, finalX: number) => void;
-  onStartConnection: (id: string) => void;
-  onDuplicate: (ev: Event) => void;
-  onAskAi: (ev: Event) => void;
-  onDelete: (id: string) => void;
-  onChangeStatus: (id: string, status: EventStatus) => void;
-  onDragStart: (id: string) => void;
-  onDrag: (id: string, offsetX: number) => void;
-  onDragEndNotify: () => void;
-}
-
-const EventCard = memo(function EventCard({
-  event,
-  track,
-  index,
-  layout,
-  totalWidth,
-  selected,
-  pendingConnection,
-  isConflict,
-  isNew,
-  isDragging,
-  onSelect,
-  onEdit,
-  onDragEnd,
-  onStartConnection,
-  onDuplicate,
-  onAskAi,
-  onDelete,
-  onChangeStatus,
-  onDragStart,
-  onDrag,
-  onDragEndNotify,
-}: EventCardProps) {
-  const { t } = useI18n();
-  const ambient = useAmbientAnimation();
-  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
-  const reducedMotion = useReducedMotion();
-  const color = event.color ?? track.color;
-  const status = EVENT_STATUS_STYLES[event.status];
-  const isRelative = event.dateType !== 'absolute';
-  const { x, y, width: cardWidth } = layout;
-
-  const dragConstraints = useMemo(
-    () => computeEventDragConstraints(cardWidth, totalWidth, x),
-    [cardWidth, totalWidth, x],
-  );
-
-  const initial = isNew
-    ? { opacity: 1, scale: 1.05, y: 0 }
-    : { opacity: 0, scale: 0.9, y: 8 };
-  const animate = { opacity: 1, scale: 1, y: 0 };
-  const shouldAnimate = reducedMotion === false;
-  const whileHover = ambient.animate && !isDragging ? { scale: 1.02, y: -2 } : { y: -2 };
-  const whileTap = enhancedAnimations ? { scale: 0.96 } : { scale: 0.98 };
-  const transition = useMemo(
-    () => ({ ...ambient.transition, delay: Math.min(index * 0.015, 0.1), layout: MOTION_LAYOUT }),
-    [ambient.transition, index],
-  );
-  const shouldLayout = enhancedAnimations && !isDragging && shouldAnimate;
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <motion.div
-          data-event-id={event.id}
-          data-row={layout.row}
-          data-layout-y={layout.y}
-          data-layout-x={layout.x}
-          data-dragging={isDragging}
-          initial={initial}
-          animate={animate}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={transition}
-          layout={shouldLayout}
-          drag="x"
-          dragMomentum={false}
-          dragElastic={0}
-          dragSnapToOrigin
-          dragConstraints={dragConstraints}
-          whileDrag={shouldAnimate ? { scale: 1.02 } : undefined}
-          onDragStart={() => onDragStart(event.id)}
-          onDrag={(_, info) => onDrag(event.id, info.offset.x)}
-          onDragEnd={(_, info) => {
-            onDragEnd(event.id, info, x + info.offset.x);
-            onDragEndNotify();
-          }}
-          onClick={() => onSelect(event.id)}
-          onDoubleClick={() => onEdit(event)}
-          whileHover={whileHover}
-          whileTap={whileTap}
-          title={`${event.title}${event.dateValue ? ` · ${event.dateValue}` : ''}`}
-          className={cn(
-            'absolute cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
-            'rounded-[8px] overflow-hidden',
-            'shadow-[var(--shadow-card)] transition-shadow',
-            'border-2 backdrop-blur-sm fancy-ripple bg-bg-surface',
-            enhancedAnimations && 'ambient-scale',
-            selected
-              ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
-              : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
-            pendingConnection && 'border-accent animate-pulse',
-            isConflict && 'ring-2 ring-red-500/50 border-red-400',
-            isDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
-          )}
-          style={{
-            position: 'absolute',
-            left: x,
-            top: y,
-            width: cardWidth,
-            height: EVENT_HEIGHT,
-          }}
-        >
-          {/* 左侧轨道色条 */}
-          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
-
-          {isConflict && (
-            <div
-              className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 shadow-sm"
-              title={t('timeline.conflictBadge')}
-            />
-          )}
-
-          <div className="px-3.5 py-2 flex flex-col gap-1 min-w-0">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="flex items-center gap-1 flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-bg-elevated text-text-secondary border border-border/50">
-                <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
-                {isRelative ? t('timeline.relativeBadge') : event.dateValue}
-              </span>
-              <span className="text-sm font-semibold text-text-primary truncate flex-1 min-w-0">
-                {event.title}
-              </span>
-              {/* 连线手柄 */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartConnection(event.id);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-colors flex-shrink-0"
-                title={t('timeline.startConnection')}
-              >
-                <Link2 className="h-3 w-3" />
-              </button>
-            </div>
-            {event.characterIds.length > 0 && (
-              <div className="flex items-center gap-0.5 mt-0.5">
-                {event.characterIds.slice(0, 4).map((cid, i) => (
-                  <span
-                    key={cid}
-                    className="h-3.5 w-3.5 rounded-full border border-white/40 text-[8px] grid place-items-center text-white font-bold"
-                    style={{
-                      backgroundColor: ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6'][i % 4],
-                      marginLeft: i > 0 ? -4 : 0,
-                    }}
-                  >
-                    {i === 3 && event.characterIds.length > 4
-                      ? `+${event.characterIds.length - 3}`
-                      : ''}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => onEdit(event)} className="gap-2">
-          <Pencil className="h-3.5 w-3.5" />
-          {t('contextMenu.edit')}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onDuplicate(event)} className="gap-2">
-          <Copy className="h-3.5 w-3.5" />
-          {t('contextMenu.duplicate')}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onDelete(event.id)} className="gap-2 text-red-500 hover:text-red-500 hover:bg-red-500/10 focus-visible:ring-red-500/40">
-          <Trash2 className="h-3.5 w-3.5" />
-          {t('contextMenu.delete')}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuSection label={t('contextMenu.changeStatus')}>
-          {(['draft', 'done', 'revise'] as const).map((s) => (
-            <ContextMenuItem key={s} onClick={() => onChangeStatus(event.id, s)} className="gap-2">
-              <span className={cn('h-2 w-2 rounded-full flex-shrink-0', EVENT_STATUS_STYLES[s].dot)} />
-              {t(EVENT_STATUS_STYLES[s].labelKey)}
-            </ContextMenuItem>
-          ))}
-        </ContextMenuSection>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => onStartConnection(event.id)} className="gap-2">
-          <Link2 className="h-3.5 w-3.5" />
-          {t('contextMenu.startConnection')}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onAskAi(event)} className="gap-2">
-          <Sparkles className="h-3.5 w-3.5" />
-          {t('contextMenu.askAi')}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-});
-
 function computeNewSortOrder(
   ev: Event,
   finalX: number,
@@ -1932,7 +1872,7 @@ function TrackRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="group flex items-center gap-2.5 px-3 py-2 min-h-10 hover:bg-bg-elevated transition-colors">
+        <div data-testid="track-row" className="group flex items-center gap-2.5 px-3 py-2 min-h-10 hover:bg-bg-elevated transition-colors">
       <span
         className="h-3 w-3 rounded-sm flex-shrink-0 shadow-sm"
         style={{ backgroundColor: track.color }}

@@ -16,7 +16,8 @@ test.describe('Plotline UI 回归', () => {
     await expect(page).toHaveURL(/\/workspaces\/.+\/timeline/);
 
     const navLinks = page.locator('nav a');
-    await expect(navLinks).toHaveCount(10);
+    await expect(navLinks).toHaveCount(12);
+    await expect(page.locator('nav a').filter({ hasText: /AI 创作|AI Studio/ })).toBeVisible();
   });
 
   test('设置 → 关于 应显示当前版本号与"检查更新"按钮', async ({ page }) => {

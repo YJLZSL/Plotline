@@ -1,0 +1,271 @@
+import { describe, it, expect } from 'vitest';
+import type { Event, Track } from '@/types';
+import {
+  createTimelineGrid,
+  computeTimelineLayout,
+  computeRelativeDurationUnits,
+  getZoomLabel,
+  adjustZoom,
+  DEFAULT_ZOOM,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  ZOOM_FACTOR,
+} from './timelineGrid';
+
+function makeEvent(overrides: Partial<Event> & { id: string; title: string; trackId: string }): Event {
+  return {
+    ...overrides,
+    workspaceId: 'ws-1',
+    description: '',
+    dateType: overrides.dateType ?? 'absolute',
+    dateValue: overrides.dateValue ?? '',
+    sortOrder: overrides.sortOrder ?? 0,
+    status: 'draft',
+    color: null,
+    locationId: null,
+    imageUrls: [],
+    characterIds: [],
+    connectedEventIds: [],
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+  };
+}
+
+function makeTrack(id: string): Track {
+  return {
+    id,
+    workspaceId: 'ws-1',
+    name: `Track ${id}`,
+    color: '#F4B6C2',
+    sortOrder: 0,
+    isVisible: true,
+    createdAt: '2024-01-01T00:00:00Z',
+  };
+}
+
+const LAYOUT_OPTIONS = {
+  eventHeight: 64,
+  rowGap: 8,
+  baseTop: 12,
+  trackHeight: 92,
+};
+
+describe('getZoomLabel', () => {
+  it('labels base zoom values with their corresponding level', () => {
+    expect(getZoomLabel(60)).toBe('hour');
+    expect(getZoomLabel(90)).toBe('day');
+    expect(getZoomLabel(140)).toBe('month');
+    expect(getZoomLabel(220)).toBe('year');
+  });
+
+  it('uses geometric mean thresholds between base values', () => {
+    expect(getZoomLabel(50)).toBe('hour');
+    expect(getZoomLabel(80)).toBe('day');
+    expect(getZoomLabel(120)).toBe('month');
+    expect(getZoomLabel(180)).toBe('year');
+  });
+});
+
+describe('adjustZoom', () => {
+  it('multiplies zoom by the fixed factor when zooming in', () => {
+    expect(adjustZoom(100, 1)).toBeCloseTo(100 * ZOOM_FACTOR, 6);
+  });
+
+  it('divides zoom by the fixed factor when zooming out', () => {
+    expect(adjustZoom(100, -1)).toBeCloseTo(100 / ZOOM_FACTOR, 6);
+  });
+
+  it('clamps zoom to the configured min and max', () => {
+    expect(adjustZoom(MIN_ZOOM, -1)).toBe(MIN_ZOOM);
+    expect(adjustZoom(MAX_ZOOM, 1)).toBe(MAX_ZOOM);
+  });
+});
+
+describe('createTimelineGrid', () => {
+  const baseTime = new Date('2024-01-01T00:00:00Z').getTime();
+  const maxTime = new Date('2024-12-31T00:00:00Z').getTime();
+
+  it('exposes continuous zoom and approximate label', () => {
+    const grid = createTimelineGrid(baseTime, maxTime, DEFAULT_ZOOM, 24);
+    expect(grid.zoom).toBe(DEFAULT_ZOOM);
+    expect(grid.zoomLabel).toBe('month');
+    expect(grid.baseTime).toBe(baseTime);
+  });
+
+  it('clamps zoom to the legal range', () => {
+    const grid = createTimelineGrid(baseTime, maxTime, 1, 24);
+    expect(grid.zoom).toBe(MIN_ZOOM);
+  });
+
+  it('maps absolute times using the current zoom', () => {
+    const grid = createTimelineGrid(baseTime, maxTime, 90, 24);
+    const x0 = grid.timeToX(baseTime);
+    const x1 = grid.timeToX(new Date('2024-01-02T00:00:00Z').getTime());
+    expect(x0).toBe(24);
+    expect(x1 - x0).toBeCloseTo(90, 6);
+  });
+
+  it('round-trips xToTime for absolute times', () => {
+    const grid = createTimelineGrid(baseTime, maxTime, 90, 24);
+    const original = new Date('2024-03-15T00:00:00Z').getTime();
+    const x = grid.timeToX(original);
+    expect(grid.xToTime(x)).toBe(original);
+  });
+
+  it('returns a TimeScale with the same mapping', () => {
+    const grid = createTimelineGrid(baseTime, maxTime, 140, 24);
+    const scale = grid.getTimeScale();
+    expect(scale.timeToX(baseTime)).toBe(grid.timeToX(baseTime));
+    expect(scale.zoom).toBe(grid.zoomLabel);
+    expect(scale.getUnitWidth()).toBe(grid.zoom);
+  });
+
+  it('uses baseTime = 0 as the relative event origin', () => {
+    const grid = createTimelineGrid(0, 365 * 24 * 3600 * 1000, 90, 24);
+    expect(grid.baseTime).toBe(0);
+    expect(grid.timeToX(0)).toBe(24);
+  });
+});
+
+describe('computeRelativeDurationUnits', () => {
+  it('decreases as zoom increases', () => {
+    const small = createTimelineGrid(0, 1, 60, 0);
+    const large = createTimelineGrid(0, 1, 220, 0);
+    expect(computeRelativeDurationUnits(small, 200, 16)).toBeGreaterThan(
+      computeRelativeDurationUnits(large, 200, 16),
+    );
+  });
+
+  it('matches the old level-based values at base zooms', () => {
+    expect(computeRelativeDurationUnits(createTimelineGrid(0, 1, 60, 0), 200, 16)).toBe(4);
+    expect(computeRelativeDurationUnits(createTimelineGrid(0, 1, 90, 0), 200, 16)).toBe(3);
+    expect(computeRelativeDurationUnits(createTimelineGrid(0, 1, 140, 0), 200, 16)).toBe(2);
+    expect(computeRelativeDurationUnits(createTimelineGrid(0, 1, 220, 0), 200, 16)).toBe(2);
+  });
+});
+
+describe('computeTimelineLayout', () => {
+  const baseTime = new Date('2024-01-01T00:00:00Z').getTime();
+  const maxTime = new Date('2024-12-31T00:00:00Z').getTime();
+  const grid = createTimelineGrid(baseTime, maxTime, 90, 24);
+  const track = makeTrack('t1');
+
+  it('places a single event at row 0 without vertical offset', () => {
+    const ev = makeEvent({ id: 'e1', title: '唯一事件', trackId: 't1', dateValue: '2024-01-01' });
+    const result = computeTimelineLayout([ev], [track], grid, LAYOUT_OPTIONS);
+
+    const layout = result.layouts.get('e1');
+    expect(layout).toBeDefined();
+    expect(layout!.row).toBe(0);
+    expect(layout!.y).toBe(LAYOUT_OPTIONS.baseTop);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('keeps two non-overlapping events on the same row', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-10' });
+    const result = computeTimelineLayout([a, b], [track], grid, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(0);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('places two overlapping events on row 0 and row 1', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-02' });
+    const result = computeTimelineLayout([a, b], [track], grid, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(1);
+    expect(result.layouts.get('b')!.y).toBe(LAYOUT_OPTIONS.baseTop + LAYOUT_OPTIONS.eventHeight + LAYOUT_OPTIONS.rowGap);
+    expect(result.trackHeights.get('t1')).toBeGreaterThan(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('places three chained overlapping events on rows 0, 1 and 2', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-02' });
+    const c = makeEvent({ id: 'c', title: 'C', trackId: 't1', dateValue: '2024-01-03' });
+    const result = computeTimelineLayout([a, b, c], [track], grid, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(1);
+    expect(result.layouts.get('c')!.row).toBe(2);
+    const expectedHeight =
+      LAYOUT_OPTIONS.baseTop * 2 +
+      3 * LAYOUT_OPTIONS.eventHeight +
+      2 * LAYOUT_OPTIONS.rowGap;
+    expect(result.trackHeights.get('t1')).toBe(expectedHeight);
+  });
+
+  it('re-layouts remaining events compactly after filtering', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateValue: '2024-01-01' });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateValue: '2024-01-02' });
+    const c = makeEvent({ id: 'c', title: 'C', trackId: 't1', dateValue: '2024-01-10' });
+
+    const full = computeTimelineLayout([a, b, c], [track], grid, LAYOUT_OPTIONS);
+    expect(full.layouts.get('a')!.row).toBe(0);
+    expect(full.layouts.get('b')!.row).toBe(1);
+    expect(full.layouts.get('c')!.row).toBe(0);
+
+    const filtered = computeTimelineLayout([a, c], [track], grid, LAYOUT_OPTIONS);
+    expect(filtered.layouts.get('a')!.row).toBe(0);
+    expect(filtered.layouts.get('c')!.row).toBe(0);
+    expect(filtered.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('places two adjacent relative events on the same row with default spacing', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateType: 'relative', sortOrder: 1 });
+    const result = computeTimelineLayout([a, b], [track], grid, LAYOUT_OPTIONS);
+
+    const layoutA = result.layouts.get('a')!;
+    const layoutB = result.layouts.get('b')!;
+    expect(layoutA.x).toBeLessThan(layoutB.x);
+    expect(layoutA.row).toBe(0);
+    expect(layoutB.row).toBe(0);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('stacks relative events when explicit spacing is too small', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateType: 'relative', sortOrder: 1 });
+    const result = computeTimelineLayout([a, b], [track], grid, {
+      ...LAYOUT_OPTIONS,
+      relativeDurationUnits: 2,
+    });
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(1);
+  });
+
+  it('places relative events starting from baseTime when absolute events exist', () => {
+    const absolute = makeEvent({ id: 'abs', title: 'Abs', trackId: 't1', dateValue: '2024-01-01' });
+    const relative = makeEvent({ id: 'rel', title: 'Rel', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const result = computeTimelineLayout([absolute, relative], [track], grid, LAYOUT_OPTIONS);
+
+    const absoluteX = result.layouts.get('abs')!.x;
+    const relativeX = result.layouts.get('rel')!.x;
+    expect(relativeX).toBe(absoluteX);
+  });
+
+  it('places relative events at left padding when there is no absolute event', () => {
+    const noAbsoluteGrid = createTimelineGrid(0, 365 * 24 * 3600 * 1000, 90, 24);
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const result = computeTimelineLayout([a], [track], noAbsoluteGrid, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.x).toBe(noAbsoluteGrid.leftPadding);
+  });
+
+  it('computes relative duration units based on zoom value', () => {
+    const hourGrid = createTimelineGrid(0, 1, 60, 0);
+    const dayGrid = createTimelineGrid(0, 1, 90, 0);
+    const monthGrid = createTimelineGrid(0, 1, 140, 0);
+    const yearGrid = createTimelineGrid(0, 1, 220, 0);
+
+    expect(computeRelativeDurationUnits(hourGrid, 200, 16)).toBe(4);
+    expect(computeRelativeDurationUnits(dayGrid, 200, 16)).toBe(3);
+    expect(computeRelativeDurationUnits(monthGrid, 200, 16)).toBe(2);
+    expect(computeRelativeDurationUnits(yearGrid, 200, 16)).toBe(2);
+  });
+});
