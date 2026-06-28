@@ -5,9 +5,10 @@ import '@/i18n';
 import { EmptyState } from './Feedback';
 
 describe('EmptyState', () => {
-  it('wraps the icon in an ambient bob animation container', () => {
+  it('wraps the icon in a muted style container', () => {
     render(<EmptyState icon={<span data-testid="empty-icon">icon</span>} title="No data" />);
     const wrapper = screen.getByTestId('empty-icon').parentElement;
-    expect(wrapper).toHaveClass('animate-ambient-bob');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toHaveClass('text-text-secondary', 'opacity-60');
   });
 });

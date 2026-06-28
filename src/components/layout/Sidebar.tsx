@@ -80,7 +80,7 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
               key={item.to}
               to={fullPath}
               className={cn(
-                'group flex items-center gap-3 rounded-[6px] px-2 h-10 transition-colors',
+                'group flex items-center gap-3 rounded-[6px] px-2 h-9 transition-colors',
                 'text-sm font-medium relative',
                 active
                   ? 'text-accent bg-accent/10'
@@ -111,7 +111,7 @@ export function Sidebar({ workspaceId }: { workspaceId: string }) {
       <button
         onClick={toggle}
         className={cn(
-          'h-10 border-t border-border flex items-center justify-center',
+          'h-9 border-t border-border/60 flex items-center justify-center',
           'text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors',
         )}
         aria-label={collapsed ? '展开侧栏' : '收起侧栏'}

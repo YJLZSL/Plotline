@@ -44,18 +44,18 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v2.8.0 已发布：前端丝滑化与时间轴逻辑升级）
-- **时间轴事件重叠修复与拖拽升级**：修复同一轨道内事件时间重叠导致的堆叠遮挡问题，新增碰撞检测与瀑布式子行布局；拖拽时显示 ghost 与 snap hint，释放后增加归位动画，提升排布效率与手感。
-- **动效系统 spring/layout token 与增强动效开关**：`src/lib/motion.ts` 扩展 spring 与 layout token，支持更自然的弹性/布局过渡；设置页新增“增强动效”开关，低功耗设备可一键关闭复杂动画。
-- **TimelineView 性能优化**：对 `EventCard`、`TrackLane`、`DateRuler` 等高频组件应用 `React.memo` 与 `useMemo`；引入可视区裁剪，减少离屏元素渲染，长滚动时间轴更流畅。
-- **设置页重构**：按功能分组、支持设置项搜索、所有主题/字体/动效即时预览；补充中文说明，降低用户理解成本。
-- **首次进入工作区新手引导与各视图空状态优化**：新增首次工作区引导流程，帮助用户创建第一条时间轴/事件；统一各视图空状态插画、文案与 CTA，减少冷启动迷茫。
-- **前端优化指南**：新增 `docs/前端优化指南.md`，沉淀动效、渲染、交互与性能最佳实践，供后续迭代参考。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `2.8.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.8.0 状态。
-- **发布说明**：v2.8.0 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
-- **GitHub Release v2.8.0**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.0>
+### 当前迭代状态（v2.8.1 已发布：时间轴回归修复与 UI 清爽化）
+- **修复时间轴创建多个事件时被错误堆叠到下方的问题**：修复同一轨道内多个事件在创建/渲染时被错误分配到瀑布式子行的问题，保证事件按预期在一行内紧凑排布。
+- **AI 助手输出稳定化**：为 AI 助手输出面板增加最小高度，采用增量纯文本渲染并接入平滑滚动，减少流式输出时的闪烁与跳动。
+- **整体 UI 清爽化**：统一工具栏、侧边栏、卡片、设置页与各视图空状态的间距与阴影，降低视觉噪音，提升长时创作舒适度。
+- **测试提速**：减少 E2E 测试中的 `waitForTimeout` 硬等待，本地 Playwright 启用 2 workers，整体测试反馈更快。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `2.8.1`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v2.8.1 状态。
+- **发布说明**：v2.8.1 的 Release 签名继续由 CI 自动完成，发布前仅需统一版本号与更新日志，无需手动维护 `releases/vX.Y.Z/latest.json` 签名。
+- **GitHub Release v2.8.1**：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.1>
 
-### 上一版本（v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+### 上一版本（v2.8.0 / v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+- v2.8.0：前端丝滑化与时间轴逻辑升级。时间轴事件重叠修复与拖拽升级、动效系统 spring/layout token 与增强动效开关、TimelineView 性能优化、设置页重构、首次进入工作区新手引导与各视图空状态优化、新增 `docs/前端优化指南.md`。
+- GitHub Release v2.8.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.0>
 - v2.7.5：修复 v2.7.4 CI 中发现的 RAG 关键词检索 `LIKE` 子查询缺少 `%` 通配符问题（`src-tauri/src/services/ai.rs`），导致检索结果始终返回 0 条；补全通配符后确保 AI RAG 检索能正确返回相关实体，CI/Release workflow 全绿。
 - GitHub Release v2.7.5：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.5>
 - v2.7.4：修复 v2.7.3 CI 中发现的 SQLite 错误 `ESCAPE expression must be a single character`（`src-tauri/src/services/ai.rs` RAG 检索中的 `LIKE ESCAPE` 子句）；v2.7.3 的所有功能改进完整保留，CI/Release workflow 全绿。
@@ -77,7 +77,7 @@
 - GitHub Release v2.3.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.3.0>
 - GitHub Release v2.2.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
 
-### 下一迭代方向（v2.7+ 候选）
+### 下一迭代方向（v2.9+ 候选）
 - 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
 - VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
 - 世界观：种族/物种/宗教等实体管理、设定冲突检测。

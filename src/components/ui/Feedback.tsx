@@ -69,10 +69,10 @@ export function EmptyState({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={transition}
-      className="flex flex-col items-center justify-center text-center py-16 px-6"
+      className="flex flex-col items-center justify-center text-center py-12 px-6"
     >
       {icon && (
-        <div className="text-text-secondary mb-4 opacity-60 animate-ambient-bob">
+        <div className="text-text-secondary mb-3 opacity-60">
           {icon}
         </div>
       )}
@@ -81,7 +81,7 @@ export function EmptyState({
         <p className="text-sm text-text-secondary mt-1 max-w-sm">{description}</p>
       )}
       {(action || (actions && actions.length > 0)) && (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
           {action}
           {actions}
         </div>

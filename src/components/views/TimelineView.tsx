@@ -77,6 +77,7 @@ import {
   getEventCardWidth,
   estimateLabelWidth,
   computeEventLayout,
+  computeRelativeDurationUnits,
   type EventLayoutItem,
 } from '@/features/timeline/timelineLayout';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
@@ -259,6 +260,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [timeScale],
   );
 
+  const relativeDurationUnits = useMemo(
+    () => computeRelativeDurationUnits(timeScale, 200, 16),
+    [timeScale],
+  );
+
   const eventLayout = useMemo(
     () =>
       computeEventLayout(filteredEvents, visibleTracks, timeScale, {
@@ -266,8 +272,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         rowGap: EVENT_ROW_GAP,
         baseTop: EVENT_BASE_TOP,
         trackHeight: TRACK_HEIGHT,
+        relativeDurationUnits,
       }),
-    [filteredEvents, visibleTracks, timeScale],
+    [filteredEvents, visibleTracks, timeScale, relativeDurationUnits],
   );
 
   const timelineMinHeight = useMemo(
@@ -297,10 +304,10 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     const unitMs = timeScale.getMsPerUnit();
     const fallbackStart = timeScale.min;
     relativeEvents.forEach((ev, i) => {
-      positions.set(ev.id, fallbackStart + i * unitMs * 2);
+      positions.set(ev.id, fallbackStart + i * unitMs * relativeDurationUnits);
     });
     return positions;
-  }, [filteredEvents, timeScale]);
+  }, [filteredEvents, timeScale, relativeDurationUnits]);
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -1743,6 +1750,9 @@ const EventCard = memo(function EventCard({
       <ContextMenuTrigger asChild>
         <motion.div
           data-event-id={event.id}
+          data-row={layout.row}
+          data-layout-y={layout.y}
+          data-layout-x={layout.x}
           data-dragging={isDragging}
           initial={initial}
           animate={animate}
@@ -1780,6 +1790,7 @@ const EventCard = memo(function EventCard({
             isDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
           )}
           style={{
+            position: 'absolute',
             left: x,
             top: y,
             width: cardWidth,
@@ -1921,7 +1932,7 @@ function TrackRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="group flex items-center gap-2.5 px-3 py-2.5 min-h-11 hover:bg-bg-elevated transition-colors">
+        <div className="group flex items-center gap-2.5 px-3 py-2 min-h-10 hover:bg-bg-elevated transition-colors">
       <span
         className="h-3 w-3 rounded-sm flex-shrink-0 shadow-sm"
         style={{ backgroundColor: track.color }}
@@ -2520,7 +2531,7 @@ function FilterBar({
   ] as const;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-2 min-h-11 border-b border-border bg-bg-surface/80 backdrop-blur-sm">
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2 min-h-11 border-b border-border/60 bg-bg-surface/80 backdrop-blur-sm">
       <div className="flex items-center gap-1.5 text-text-secondary text-xs h-8 shrink-0">
         <Filter className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">{t('timeline.filter')}</span>

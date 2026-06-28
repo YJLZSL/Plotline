@@ -12,6 +12,26 @@ export function getEventCardWidth(title: string, minWidth = EVENT_CARD_MIN_WIDTH
   return Math.min(maxWidth, Math.max(minWidth, 80 + title.length * charWidth));
 }
 
+/** 相对事件卡片之间的目标水平间隙（像素）。 */
+const RELATIVE_EVENT_CARD_GAP = 16;
+
+/** 事件重叠判定时的安全间隙（像素），用于避免卡片边缘刚好相切时被误判为重叠。 */
+const EVENT_OVERLAP_GAP = 1;
+
+/**
+ * 根据当前缩放级别和单位宽度，计算相邻相对事件之间应占用的单位数，
+ * 使它们的水平间距至少能容纳一张最窄卡片 + 间隙。
+ */
+export function computeRelativeDurationUnits(
+  timeScale: TimeScale,
+  minCardWidth = EVENT_CARD_MIN_WIDTH,
+  gap = RELATIVE_EVENT_CARD_GAP,
+): number {
+  const unitWidth = timeScale.getUnitWidth();
+  if (unitWidth <= 0) return 2;
+  return Math.max(2, Math.ceil((minCardWidth + gap) / unitWidth));
+}
+
 export interface ComputeEventLayoutOptions {
   eventHeight: number;
   rowGap: number;
@@ -19,7 +39,7 @@ export interface ComputeEventLayoutOptions {
   trackHeight: number;
   minCardWidth?: number;
   maxCardWidth?: number;
-  /** 相对事件每个 sortOrder 占用的时间单位数，默认 2 */
+  /** 相对事件每个 sortOrder 占用的时间单位数；未提供时按当前缩放级别自动计算，保证相邻卡片不重叠。 */
   relativeDurationUnits?: number;
 }
 
@@ -47,8 +67,14 @@ function getEventTimePosition(ev: Event, timeScale: TimeScale, relativeDurationU
   return timeScale.min + ev.sortOrder * unitMs * relativeDurationUnits;
 }
 
-function eventsOverlap(aX: number, aWidth: number, bX: number, bWidth: number): boolean {
-  return aX < bX + bWidth && aX + aWidth > bX;
+function eventsOverlap(
+  aX: number,
+  aWidth: number,
+  bX: number,
+  bWidth: number,
+  gap = EVENT_OVERLAP_GAP,
+): boolean {
+  return aX + gap < bX + bWidth && aX + aWidth > bX + gap;
 }
 
 /**
@@ -71,7 +97,7 @@ export function computeEventLayout(
     trackHeight,
     minCardWidth = EVENT_CARD_MIN_WIDTH,
     maxCardWidth = EVENT_CARD_MAX_WIDTH,
-    relativeDurationUnits = 2,
+    relativeDurationUnits = computeRelativeDurationUnits(timeScale, minCardWidth, RELATIVE_EVENT_CARD_GAP),
   } = options;
 
   const layouts = new Map<string, EventLayoutItem>();

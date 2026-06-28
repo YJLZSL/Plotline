@@ -226,7 +226,7 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
 
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-2xl mx-auto flex flex-col gap-5">
-            <div className="sticky top-0 z-10 -mx-6 px-6 pb-2 bg-bg-base/95 backdrop-blur-sm">
+            <div className="sticky top-0 z-10 -mx-6 px-6 pb-3 bg-bg-base/80 backdrop-blur-sm border-b border-border/30">
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

@@ -22,19 +22,16 @@ test.describe('Plotline 发布前可视化点击回归', () => {
     await page.waitForLoadState('networkidle');
     // 等待视图切换动画完成并确认时间轴内容渲染
     await expect(page.locator('text=/时间轴|Timeline|轨道|Tracks/').first()).toBeVisible();
-    await page.waitForTimeout(300);
     await page.screenshot({ path: 'test-results/visual/03-timeline.png', fullPage: true });
 
     await page.locator('nav a').filter({ hasText: /角色|Characters/ }).first().click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/characters/);
     await expect(page.locator('text=/还没有角色|No characters|添加角色/').first()).toBeVisible();
-    await page.waitForTimeout(300);
     await page.screenshot({ path: 'test-results/visual/04-characters.png', fullPage: true });
 
     await page.locator('nav a').filter({ hasText: /大纲|Outline/ }).first().click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/outline/);
     await expect(page.locator('text=/大纲是空的|Empty outline|添加卷/').first()).toBeVisible();
-    await page.waitForTimeout(300);
     await page.screenshot({ path: 'test-results/visual/05-outline.png', fullPage: true });
 
     await page.locator('nav a').filter({ hasText: /统计|Statistics/ }).first().click();
@@ -43,7 +40,6 @@ test.describe('Plotline 发布前可视化点击回归', () => {
     await expect(
       page.locator('text=/概览|Overview|尚无数据|No data|统计/').first(),
     ).toBeVisible();
-    await page.waitForTimeout(300);
     await page.screenshot({ path: 'test-results/visual/06-statistics.png', fullPage: true });
 
     await page.locator('nav a').filter({ hasText: /设置|Settings/ }).first().click();
@@ -53,7 +49,7 @@ test.describe('Plotline 发布前可视化点击回归', () => {
     await page.screenshot({ path: 'test-results/visual/07-settings-about.png', fullPage: true });
 
     await page.getByRole('button', { name: /立即检查|Check Now/ }).click();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(250);
     await page.screenshot({ path: 'test-results/visual/08-update-check.png', fullPage: true });
   });
 });

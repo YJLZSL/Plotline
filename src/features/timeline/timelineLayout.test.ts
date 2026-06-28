@@ -8,6 +8,7 @@ import {
   getEventCardWidth,
   estimateLabelWidth,
   computeEventLayout,
+  computeRelativeDurationUnits,
 } from './timelineLayout';
 import { createTimeScale } from './timeScale';
 
@@ -243,7 +244,7 @@ describe('computeEventLayout', () => {
     expect(filtered.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
   });
 
-  it('estimates positions for relative events using sort order', () => {
+  it('places two adjacent relative events on the same row at day zoom with default spacing', () => {
     const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
     const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateType: 'relative', sortOrder: 1 });
     const result = computeEventLayout([a, b], [track], timeScale, LAYOUT_OPTIONS);
@@ -251,8 +252,68 @@ describe('computeEventLayout', () => {
     const layoutA = result.layouts.get('a')!;
     const layoutB = result.layouts.get('b')!;
     expect(layoutA.x).toBeLessThan(layoutB.x);
-    // 默认每个 sortOrder 占 2 个时间单位，两张卡片宽度约 200px，在 day 视图下会重叠
     expect(layoutA.row).toBe(0);
-    expect(layoutB.row).toBe(1);
+    expect(layoutB.row).toBe(0);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('stacks relative events when explicit spacing is too small', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateType: 'relative', sortOrder: 1 });
+    const result = computeEventLayout([a, b], [track], timeScale, {
+      ...LAYOUT_OPTIONS,
+      relativeDurationUnits: 2,
+    });
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(1);
+  });
+
+  it('places two adjacent relative events on the same row at month zoom', () => {
+    const monthTimeScale = createTimeScale(
+      new Date('2024-01-01T00:00:00Z').getTime(),
+      new Date('2024-12-31T00:00:00Z').getTime(),
+      'month',
+      24,
+      140,
+    );
+    const a = makeEvent({ id: 'a', title: '新事件', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: '新事件', trackId: 't1', dateType: 'relative', sortOrder: 1 });
+    const result = computeEventLayout([a, b], [track], monthTimeScale, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(0);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('places three adjacent relative events on the same row at month zoom', () => {
+    const monthTimeScale = createTimeScale(
+      new Date('2024-01-01T00:00:00Z').getTime(),
+      new Date('2024-12-31T00:00:00Z').getTime(),
+      'month',
+      24,
+      140,
+    );
+    const a = makeEvent({ id: 'a', title: '新事件', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: '新事件', trackId: 't1', dateType: 'relative', sortOrder: 1 });
+    const c = makeEvent({ id: 'c', title: '新事件', trackId: 't1', dateType: 'relative', sortOrder: 2 });
+    const result = computeEventLayout([a, b, c], [track], monthTimeScale, LAYOUT_OPTIONS);
+
+    expect(result.layouts.get('a')!.row).toBe(0);
+    expect(result.layouts.get('b')!.row).toBe(0);
+    expect(result.layouts.get('c')!.row).toBe(0);
+    expect(result.trackHeights.get('t1')).toBe(LAYOUT_OPTIONS.trackHeight);
+  });
+
+  it('computes relative duration units based on zoom level', () => {
+    const hourScale = createTimeScale(0, 1, 'hour', 0, 60);
+    const dayScale = createTimeScale(0, 1, 'day', 0, 90);
+    const monthScale = createTimeScale(0, 1, 'month', 0, 140);
+    const yearScale = createTimeScale(0, 1, 'year', 0, 220);
+
+    expect(computeRelativeDurationUnits(hourScale, 200, 16)).toBe(4);
+    expect(computeRelativeDurationUnits(dayScale, 200, 16)).toBe(3);
+    expect(computeRelativeDurationUnits(monthScale, 200, 16)).toBe(2);
+    expect(computeRelativeDurationUnits(yearScale, 200, 16)).toBe(2);
   });
 });

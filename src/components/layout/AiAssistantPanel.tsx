@@ -64,7 +64,6 @@ import {
   AI_STYLE_TEMPLATES,
   type AiStyleTemplate,
 } from '@/features/ai/promptTemplates';
-import { isBalancedMarkdown } from '@/components/ui/markdownUtils';
 import type {
   AiActionType,
   AiChatContext,
@@ -89,6 +88,19 @@ interface SlashCommand {
   labelKey: string;
   descriptionKey: string;
   action: AiActionType | 'ask' | 'whole_workspace';
+}
+
+function scrollToBottom(element: HTMLElement, smooth: boolean) {
+  const behavior = smooth ? ('smooth' as const) : ('auto' as const);
+  if (typeof element.scrollTo === 'function') {
+    try {
+      element.scrollTo({ top: element.scrollHeight, behavior });
+    } catch {
+      element.scrollTop = element.scrollHeight;
+    }
+  } else {
+    element.scrollTop = element.scrollHeight;
+  }
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
@@ -167,6 +179,7 @@ export function AiAssistantPanel({
   const [contextBudget, setContextBudget] = useState<{ entities: number; chars: number } | null>(
     null,
   );
+  const messageAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
 
@@ -198,8 +211,13 @@ export function AiAssistantPanel({
   }, [open, sessions, currentSessionId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isStreaming, streamingContent]);
+    const area = messageAreaRef.current;
+    if (!area) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    requestAnimationFrame(() => {
+      scrollToBottom(area, !reduced);
+    });
+  }, [messages.length, streamingContent, isStreaming]);
 
   const aiContext = useAiContextStore();
 
@@ -769,7 +787,11 @@ export function AiAssistantPanel({
                 <section className="flex-1 min-w-0 flex flex-col">
                   <CapabilityChips />
                   <CapabilityPanel />
-                  <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3" data-testid="ai-message-area">
+                  <div
+                    ref={messageAreaRef}
+                    className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 scroll-smooth"
+                    data-testid="ai-message-area"
+                  >
                     {messages.length === 0 && !isStreaming && (
                       <EmptyState
                         icon={<Bot className="h-8 w-8" />}
@@ -785,19 +807,13 @@ export function AiAssistantPanel({
                         currentView={aiContext.view}
                       />
                     ))}
-                    {isStreaming && streamingContent && (
+                    {isStreaming && (
                       <MessageBubble
                         message={{ id: 'streaming', role: 'assistant', content: streamingContent }}
                         workspaceId={workspaceId}
                         currentView={aiContext.view}
                         streaming
                       />
-                    )}
-                    {isStreaming && !streamingContent && (
-                      <div className="flex items-center gap-2 text-xs text-text-secondary">
-                        <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                        {t('ai.thinking')}
-                      </div>
                     )}
                     <div ref={messagesEndRef} />
                   </div>
@@ -1338,6 +1354,34 @@ function isTargetRecommendedForView(target: AiInsertTarget, view: string): boole
   }
 }
 
+function TypingIndicator() {
+  const { t } = useI18n();
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  return (
+    <span
+      data-testid="ai-typing-indicator"
+      className="inline-flex items-center gap-1 ml-1"
+      aria-label={t('ai.thinking')}
+      role="status"
+    >
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-1 w-1 rounded-full bg-text-secondary/60"
+          animate={prefersReduced ? undefined : { opacity: [0.3, 1, 0.3] }}
+          transition={{
+            duration: MOTION_BASE.duration * 4,
+            repeat: Infinity,
+            delay: i * 0.15,
+            ease: MOTION_BASE.ease,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function MessageBubble({
   message,
   workspaceId,
@@ -1351,7 +1395,6 @@ function MessageBubble({
 }) {
   const isUser = message.role === 'user';
   const apply = useApplyAiOutput(workspaceId);
-  const shouldRenderMarkdown = !isUser && (!streaming || isBalancedMarkdown(message.content));
 
   return (
     <div className={cn('flex flex-col', isUser ? 'items-end' : 'items-start')}>
@@ -1361,15 +1404,21 @@ function MessageBubble({
           isUser
             ? 'bg-accent text-white rounded-tr-sm whitespace-pre-wrap'
             : 'bg-bg-elevated text-text-primary border border-border rounded-tl-sm',
+          streaming && 'min-h-[120px]',
         )}
       >
-        {shouldRenderMarkdown ? (
-          <Markdown content={message.content} />
-        ) : (
+        {isUser ? (
           <span className="whitespace-pre-wrap">{message.content}</span>
+        ) : streaming ? (
+          <div className="whitespace-pre-wrap">
+            {message.content}
+            <TypingIndicator />
+          </div>
+        ) : (
+          <Markdown content={message.content} />
         )}
       </div>
-      {!isUser && (
+      {!isUser && !streaming && (
         <ApplyDropdown
           targets={APPLY_TARGETS}
           view={currentView}

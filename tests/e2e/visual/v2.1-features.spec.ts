@@ -43,20 +43,19 @@ test.describe('Plotline v2.1 功能可视化回归', () => {
     // 进入统计视图并切换标签页
     await page.locator('nav a').filter({ hasText: /统计|Statistics/ }).first().click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/statistics/);
-    await expect(page.getByTestId('stats-tab-overview')).toBeVisible();
-    await page.waitForTimeout(300);
+    await page.getByTestId('stats-tab-overview').click();
     await page.screenshot({ path: 'test-results/visual/09-statistics-overview.png', fullPage: true });
 
     await page.getByTestId('stats-tab-mindmap').click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(150);
     await page.screenshot({ path: 'test-results/visual/10-statistics-mindmap.png', fullPage: true });
 
     await page.getByTestId('stats-tab-brain').click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(150);
     await page.screenshot({ path: 'test-results/visual/11-statistics-brain.png', fullPage: true });
 
     await page.getByTestId('stats-tab-tree').click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(150);
     await page.screenshot({ path: 'test-results/visual/12-statistics-tree.png', fullPage: true });
   });
 
@@ -78,7 +77,6 @@ test.describe('Plotline v2.1 功能可视化回归', () => {
 
     // 选中角色卡片
     await page.locator('text=AI 测试角色').first().click();
-    await page.waitForTimeout(200);
 
     await page.getByTestId('ai-toolbar-btn').click();
     await expect(page.getByTestId('ai-assistant-panel')).toBeVisible();
@@ -100,7 +98,7 @@ test.describe('Plotline v2.1 功能可视化回归', () => {
 
     await page.locator('nav a').filter({ hasText: /时间轴|Timeline/ }).first().click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/timeline/);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(250);
     await page.screenshot({ path: 'test-results/visual/15-timeline-mc-theme.png', fullPage: true });
   });
 });

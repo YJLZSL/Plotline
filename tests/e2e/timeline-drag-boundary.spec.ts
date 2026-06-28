@@ -37,7 +37,7 @@ test.describe('时间轴拖拽边界', () => {
     await page.mouse.up();
 
     // 等待 Framer Motion 完成拖拽回弹
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(200);
 
     const finalBox = await card.boundingBox();
     expect(finalBox).not.toBeNull();
@@ -54,7 +54,9 @@ test.describe('时间轴拖拽边界', () => {
     expect(scrollLeft).toBe(0);
   });
 
-  test('同一轨道内多个事件卡片会垂直错开显示', async ({ page }) => {
+  test('同一轨道内多个默认相对事件在 month 视图下水平并排显示', async ({ page }) => {
+    // 禁用动画以便稳定测量布局
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     // 通过添加按钮在同一轨道快速创建两个相对事件
     await page.getByTestId('add-event-btn').first().click();
     await page.getByTestId('event-title-input').fill('事件 A');
@@ -74,12 +76,12 @@ test.describe('时间轴拖拽边界', () => {
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
 
-    // 两张卡片不应共享同一垂直位置（避免互相遮挡）
-    expect(a!.y).not.toBe(b!.y);
-    expect(b!.y).toBeGreaterThan(a!.y);
+    // 截图留存以便人工复核（断言前截图，避免失败时未留存）
+    await page.screenshot({ path: 'test-results/timeline-side-by-side-layout.png' });
 
-    // 截图留存以便人工复核
-    await page.screenshot({ path: 'test-results/timeline-overlap-layout.png' });
+    // 两张卡片应在同一水平线上，且第二张位于第一张右侧
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(5);
+    expect(b!.x).toBeGreaterThan(a!.x + a!.width / 2);
   });
 
   test('拖拽事件卡片时显示半透明 ghost 占位与吸附参考线', async ({ page }) => {
@@ -145,7 +147,7 @@ test.describe('时间轴拖拽边界', () => {
     await page.mouse.up();
 
     // 等待 Framer Motion 归位动画 + 后端更新
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
 
     const after = await getCardBoxes();
     expect(after.length).toBe(2);

@@ -18,7 +18,6 @@ test.describe('MC 主题视觉回归', () => {
   test('番茄钟：默认状态截图', async ({ page }, testInfo) => {
     await page.getByTitle('番茄钟').click();
     await expect(page.locator('text=25:00')).toBeVisible();
-    await page.waitForTimeout(300);
 
     const path = 'test-results/visual/16-pomodoro-default.png';
     await page.screenshot({ path });
@@ -29,7 +28,6 @@ test.describe('MC 主题视觉回归', () => {
     await page.getByTitle('番茄钟').click();
     await page.getByRole('button', { name: 'MC' }).click();
     await expect(page.getByTestId('mc-block-progress')).toBeVisible();
-    await page.waitForTimeout(300);
 
     const path = 'test-results/visual/17-pomodoro-mc-theme.png';
     await page.screenshot({ path });
@@ -55,7 +53,7 @@ test.describe('MC 主题视觉回归', () => {
 
     await page.getByTestId('theme-mc').click();
     await page.getByTestId('settings-save-btn').click();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(250);
 
     const path = 'test-results/visual/19-settings-mc-theme.png';
     await page.screenshot({ path, fullPage: true });
@@ -69,7 +67,7 @@ test.describe('MC 主题视觉回归', () => {
 
     await page.locator('nav a').filter({ hasText: /时间轴|Timeline/ }).first().click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/timeline/);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(250);
 
     const path = 'test-results/visual/20-timeline-mc-theme.png';
     await page.screenshot({ path, fullPage: true });

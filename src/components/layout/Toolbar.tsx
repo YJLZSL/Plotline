@@ -18,7 +18,7 @@ export function Toolbar({ title, workspaceId, workspaceName, right }: ToolbarPro
 
   return (
     <header
-      className="h-12 flex items-center gap-3 px-4 border-b border-border bg-bg-surface flex-shrink-0"
+      className="h-12 flex items-center gap-3 px-4 border-b border-border/60 bg-bg-surface flex-shrink-0"
       data-tauri-drag-region
     >
       <button

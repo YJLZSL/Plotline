@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   QueryClient,
@@ -31,16 +31,30 @@ import {
 } from '@/features/ai/hooks';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import type {
+  AiChatResult,
   AiInsertInput,
   AiInsertResult,
   AiMessage,
   AiSession,
   AiShortcutInput,
   AiShortcutResult,
+  AiStreamEvent,
   CreateAiSessionInput,
 } from '@/types';
 
 const applyMutate = vi.fn();
+
+let lastStreamCallback: ((event: AiStreamEvent) => void) | null = null;
+let streamResolve: ((value: AiChatResult) => void) | null = null;
+
+function mockStreamingAiChat() {
+  vi.mocked(aiChatStream).mockImplementation(async (_input, callback) => {
+    lastStreamCallback = callback;
+    return new Promise<AiChatResult>((resolve) => {
+      streamResolve = resolve;
+    });
+  });
+}
 
 const defaultContext: Partial<AiContextState> = {
   view: 'unknown',
@@ -209,6 +223,8 @@ function mockHooks(messages: AiMessage[] = []) {
 describe('AiAssistantPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    lastStreamCallback = null;
+    streamResolve = null;
     useAiContextStore.setState(defaultContext);
     mockHooks();
   });
@@ -494,5 +510,81 @@ describe('AiAssistantPanel', () => {
 
     await user.click(screen.getByTestId('ai-slash-command-whole_workspace'));
     expect(textarea).toHaveValue('/whole-workspace ');
+  });
+
+  it('renders streaming content as plain text and final content as stable markdown', async () => {
+    mockStreamingAiChat();
+    const user = userEvent.setup();
+    renderPanel();
+
+    const textarea = screen.getByPlaceholderText('输入消息，按 Enter 发送…');
+    await user.type(textarea, 'hello');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-typing-indicator')).toBeInTheDocument();
+    });
+
+    act(() => {
+      lastStreamCallback?.({ type: 'delta', data: '这是 ' });
+    });
+    expect(screen.getByText(/这是/)).toBeInTheDocument();
+
+    act(() => {
+      lastStreamCallback?.({ type: 'delta', data: '**粗体**' });
+    });
+    expect(screen.getByText(/这是 \*\*粗体\*\*/)).toBeInTheDocument();
+    expect(screen.queryByText('粗体')?.tagName).not.toBe('STRONG');
+
+    const finalAssistantMessage: AiMessage = {
+      id: 'msg-final',
+      sessionId: 'session-1',
+      role: 'assistant',
+      content: '这是 **粗体**',
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+
+    act(() => {
+      vi.mocked(useAiMessagesQuery).mockReturnValue({
+        data: [finalAssistantMessage],
+      } as ReturnType<typeof useAiMessagesQuery>);
+      streamResolve?.({
+        sessionId: 'session-1',
+        reply: '这是 **粗体**',
+        messages: [finalAssistantMessage],
+        retrievedChunks: 0,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('粗体').tagName).toBe('STRONG');
+    });
+    expect(screen.queryByTestId('ai-typing-indicator')).not.toBeInTheDocument();
+  });
+
+  it('keeps streaming output area visible while tokens are arriving', async () => {
+    mockStreamingAiChat();
+    const user = userEvent.setup();
+    renderPanel();
+
+    const textarea = screen.getByPlaceholderText('输入消息，按 Enter 发送…');
+    await user.type(textarea, 'hello');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-typing-indicator')).toBeInTheDocument();
+    });
+
+    act(() => {
+      lastStreamCallback?.({ type: 'delta', data: 'first token' });
+    });
+    expect(screen.getByText('first token')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-typing-indicator')).toBeInTheDocument();
+
+    act(() => {
+      lastStreamCallback?.({ type: 'delta', data: ' second token' });
+    });
+    expect(screen.getByText('first token second token')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-typing-indicator')).toBeInTheDocument();
   });
 });
