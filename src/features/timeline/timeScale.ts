@@ -152,6 +152,32 @@ export function getTickInterval(level: TickLevel): { unit: 'year' | 'month' | 'd
   }
 }
 
+/**
+ * 返回指定 TickLevel 对应的吸附时间间隔（毫秒）。
+ *
+ * 这里使用与 `getMsPerUnit` 一致的平均单位长度，使像素级阈值计算
+ * （`gridCellWidth = intervalMs / msPerUnit * zoom`）保持连续；
+ * 实际吸附点仍通过 `alignToTickBoundary` 对齐到真实日历边界。
+ */
+export function getSnapInterval(level: TickLevel): number {
+  switch (level) {
+    case 'hour':
+      return HOUR_MS;
+    case 'day':
+      return DAY_MS;
+    case 'week':
+      return 7 * DAY_MS;
+    case 'month':
+      return DAY_MS * 30.4375;
+    case 'quarter':
+      return DAY_MS * 30.4375 * 3;
+    case 'year':
+      return DAY_MS * 365.25;
+    default:
+      return DAY_MS;
+  }
+}
+
 /** 计算 ISO 8601 周数（1-53）。 */
 function getISOWeek(date: Date): number {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -242,7 +268,7 @@ export function getMinorTickTimestamps(min: number, max: number, level: TickLeve
 }
 
 /** 把时间戳对齐到指定 TickLevel 的自然日历边界（向下取整）。 */
-function alignToTickBoundary(ts: number, level: TickLevel): number {
+export function alignToTickBoundary(ts: number, level: TickLevel): number {
   const d = new Date(ts);
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth();
@@ -274,7 +300,7 @@ function alignToTickBoundary(ts: number, level: TickLevel): number {
 }
 
 /** 按给定间隔推进时间戳。 */
-function advanceByInterval(ts: number, interval: { unit: 'year' | 'month' | 'day' | 'hour'; value: number }): number {
+export function advanceByInterval(ts: number, interval: { unit: 'year' | 'month' | 'day' | 'hour'; value: number }): number {
   const d = new Date(ts);
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth();

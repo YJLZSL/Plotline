@@ -16,6 +16,7 @@ const ALL_SCENES: MotionScene[] = [
   'dragReturnWithConnections',
   'aiPanelExpand',
   'sidebarNavEnter',
+  'dragSnap',
 ];
 
 describe('motionOrchestrator', () => {
@@ -215,11 +216,34 @@ describe('motionOrchestrator', () => {
       expect(preset.content).toBeUndefined();
     });
 
+    it('should configure dragSnap with lift/snap/land phases and connection/trackHeight tokens', () => {
+      const preset = getScenePreset('dragSnap', { enhanced: true });
+      expect(preset.dragSnap).toBeDefined();
+      expect(preset.dragSnap?.lift.duration).toBeCloseTo(0.12);
+      expect(preset.dragSnap?.lift.scale).toBeCloseTo(1.02);
+      expect(preset.dragSnap?.lift.ease).toEqual(EASE_STANDARD);
+      expect(preset.dragSnap?.snap.duration).toBeCloseTo(0.08);
+      expect(preset.dragSnap?.snap.ease).toEqual(EASE_STANDARD);
+      expect(preset.dragSnap?.land.duration).toBeCloseTo(0.2);
+      expect(preset.dragSnap?.land.ease).toEqual(EASE_STANDARD);
+      expect(preset.dragSnap?.connections.opacityDuration).toBeCloseTo(0.18);
+      expect(preset.dragSnap?.connections.pathLengthDuration).toBeCloseTo(0.22);
+      expect(preset.dragSnap?.trackHeight.duration).toBeCloseTo(0.24);
+      expect(preset.dragSnap?.trackHeight.ease).toEqual(EASE_STANDARD);
+      expect(preset.totalDuration).toBeCloseTo(0.4);
+    });
+
     it('should preserve scene name and easing curve across all scenes', () => {
       for (const scene of ALL_SCENES) {
         const preset = getScenePreset(scene, { enhanced: true });
         expect(preset.scene).toBe(scene);
         expect(preset.enter.ease).toEqual(EASE_STANDARD);
+        if (preset.dragSnap) {
+          expect(preset.dragSnap.lift.ease).toEqual(EASE_STANDARD);
+          expect(preset.dragSnap.snap.ease).toEqual(EASE_STANDARD);
+          expect(preset.dragSnap.land.ease).toEqual(EASE_STANDARD);
+          expect(preset.dragSnap.trackHeight.ease).toEqual(EASE_STANDARD);
+        }
       }
     });
 
@@ -235,6 +259,19 @@ describe('motionOrchestrator', () => {
         if (preset.content) {
           expect(preset.content.duration).toBeGreaterThanOrEqual(0.12);
           expect(preset.content.duration).toBeLessThanOrEqual(0.3);
+        }
+        if (preset.dragSnap) {
+          // dragSnap 的 snap 阶段为 80ms 微动画，是整体序列中的特例，不强制 120ms 下限。
+          expect(preset.dragSnap.lift.duration).toBeGreaterThanOrEqual(0.12);
+          expect(preset.dragSnap.lift.duration).toBeLessThanOrEqual(0.3);
+          expect(preset.dragSnap.land.duration).toBeGreaterThanOrEqual(0.12);
+          expect(preset.dragSnap.land.duration).toBeLessThanOrEqual(0.3);
+          expect(preset.dragSnap.trackHeight.duration).toBeGreaterThanOrEqual(0.12);
+          expect(preset.dragSnap.trackHeight.duration).toBeLessThanOrEqual(0.3);
+          expect(preset.dragSnap.connections.opacityDuration).toBeGreaterThanOrEqual(0.12);
+          expect(preset.dragSnap.connections.opacityDuration).toBeLessThanOrEqual(0.3);
+          expect(preset.dragSnap.connections.pathLengthDuration).toBeGreaterThanOrEqual(0.12);
+          expect(preset.dragSnap.connections.pathLengthDuration).toBeLessThanOrEqual(0.3);
         }
       }
     });
@@ -292,6 +329,37 @@ describe('motionOrchestrator', () => {
       const preset = getScenePreset('aiPanelExpand', { enhanced: false });
       expect(preset.content).toBeDefined();
       expect(preset.content?.delay).toBe(0);
+    });
+
+    it('should degrade dragSnap to 120ms opacity fade with no scale or pathLength', () => {
+      const preset = getScenePreset('dragSnap', { enhanced: false });
+      expect(preset.dragSnap).toBeDefined();
+      expect(preset.dragSnap?.lift.duration).toBeCloseTo(0.12);
+      expect(preset.dragSnap?.lift.scale).toBe(1);
+      expect(preset.dragSnap?.snap.duration).toBeCloseTo(0.12);
+      expect(preset.dragSnap?.land.duration).toBeCloseTo(0.12);
+      expect(preset.dragSnap?.connections.opacityDuration).toBeCloseTo(0.12);
+      expect(preset.dragSnap?.connections.pathLengthDuration).toBe(0);
+      expect(preset.dragSnap?.trackHeight.duration).toBeCloseTo(0.12);
+      expect(preset.totalDuration).toBeCloseTo(0.12);
+    });
+
+    it('should degrade dragSnap when prefers-reduced-motion is active even if enhanced=true', () => {
+      vi.spyOn(window, 'matchMedia').mockReturnValue({
+        matches: true,
+        media: '(prefers-reduced-motion: reduce)',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      });
+      const preset = getScenePreset('dragSnap', { enhanced: true });
+      expect(preset.enhanced).toBe(false);
+      expect(preset.reduced).toBe(true);
+      expect(preset.dragSnap?.lift.scale).toBe(1);
+      expect(preset.dragSnap?.connections.pathLengthDuration).toBe(0);
     });
   });
 

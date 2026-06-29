@@ -13,8 +13,13 @@ import {
   LEFT_PADDING,
   getXAtTime,
   getTimeAtX,
+  getSnapTimeAtTime,
+  getSnapTimeAtX,
+  getSnapXAtTime,
+  getSnapThreshold,
   type ViewportState,
 } from './timelineGrid';
+import { getSnapInterval } from './timeScale';
 
 function makeEvent(overrides: Partial<Event> & { id: string; title: string; trackId: string }): Event {
   return {
@@ -463,5 +468,179 @@ describe('ViewportState single source of truth', () => {
     const x60 = getXAtTime(state60, t);
     // 双倍 zoom → 双倍像素间距
     expect(x60 - LEFT_PADDING).toBeCloseTo(2 * (x30 - LEFT_PADDING), 6);
+  });
+});
+
+// ===== 吸附网格 =====
+
+describe('getSnapInterval', () => {
+  it('returns reasonable millisecond intervals for each tick level', () => {
+    const HOUR_MS = 3600 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
+    expect(getSnapInterval('hour')).toBe(HOUR_MS);
+    expect(getSnapInterval('day')).toBe(DAY_MS);
+    expect(getSnapInterval('week')).toBe(7 * DAY_MS);
+    expect(getSnapInterval('month')).toBeCloseTo(30.4375 * DAY_MS, 6);
+    expect(getSnapInterval('quarter')).toBeCloseTo(3 * 30.4375 * DAY_MS, 6);
+    expect(getSnapInterval('year')).toBeCloseTo(365.25 * DAY_MS, 6);
+  });
+});
+
+describe('getSnapTimeAtTime', () => {
+  it('snaps to the nearest year boundary at year zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2025-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 220);
+    const input = new Date('2024-03-01T00:00:00Z');
+    const snapped = getSnapTimeAtTime(state, input);
+    expect(snapped.getTime()).toBe(start);
+  });
+
+  it('snaps to the nearest month boundary at month zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const input = new Date('2024-01-20T00:00:00Z');
+    const snapped = getSnapTimeAtTime(state, input);
+    expect(snapped.getTime()).toBe(new Date('2024-02-01T00:00:00Z').getTime());
+  });
+
+  it('snaps to the nearest day boundary at day zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-10T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const input = new Date('2024-01-01T14:00:00Z');
+    const snapped = getSnapTimeAtTime(state, input);
+    expect(snapped.getTime()).toBe(new Date('2024-01-02T00:00:00Z').getTime());
+  });
+
+  it('snaps to the nearest hour boundary at hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const input = new Date('2024-01-01T01:40:00Z');
+    const snapped = getSnapTimeAtTime(state, input);
+    expect(snapped.getTime()).toBe(new Date('2024-01-01T02:00:00Z').getTime());
+  });
+
+  it('returns the input time unchanged when viewport state is degenerate', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, start, 60);
+    const input = new Date('2024-01-01T12:34:00Z');
+    const snapped = getSnapTimeAtTime(state, input);
+    expect(snapped.getTime()).toBe(input.getTime());
+  });
+});
+
+describe('getSnapXAtTime', () => {
+  it('maps snapped times back to the correct grid x within 1px at year zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2025-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 220);
+    const input = new Date('2024-10-01T00:00:00Z');
+    const snappedX = getSnapXAtTime(state, input);
+    const expected = getXAtTime(state, getSnapTimeAtTime(state, input));
+    expect(Math.abs(snappedX - expected)).toBeLessThanOrEqual(1);
+  });
+
+  it('maps snapped times back to the correct grid x within 1px at month zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const input = new Date('2024-01-20T00:00:00Z');
+    const snappedX = getSnapXAtTime(state, input);
+    const expected = getXAtTime(state, getSnapTimeAtTime(state, input));
+    expect(Math.abs(snappedX - expected)).toBeLessThanOrEqual(1);
+  });
+
+  it('maps snapped times back to the correct grid x within 1px at day zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-10T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const input = new Date('2024-01-01T14:00:00Z');
+    const snappedX = getSnapXAtTime(state, input);
+    const expected = getXAtTime(state, getSnapTimeAtTime(state, input));
+    expect(Math.abs(snappedX - expected)).toBeLessThanOrEqual(1);
+  });
+
+  it('maps snapped times back to the correct grid x within 1px at hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const input = new Date('2024-01-01T01:40:00Z');
+    const snappedX = getSnapXAtTime(state, input);
+    const expected = getXAtTime(state, getSnapTimeAtTime(state, input));
+    expect(Math.abs(snappedX - expected)).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('getSnapTimeAtX', () => {
+  it('rounds x-derived time to the nearest grid line within 1px at year zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2025-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 220);
+    const x = getXAtTime(state, new Date('2024-10-01T00:00:00Z'));
+    const snapped = getSnapTimeAtX(state, x);
+    expect(snapped).not.toBeNull();
+    const expected = getSnapTimeAtTime(state, getTimeAtX(state, x)!.getTime());
+    expect(snapped!.getTime()).toBe(expected.getTime());
+  });
+
+  it('rounds x-derived time to the nearest grid line within 1px at month zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const x = getXAtTime(state, new Date('2024-01-20T00:00:00Z'));
+    const snapped = getSnapTimeAtX(state, x);
+    expect(snapped).not.toBeNull();
+    const expected = getSnapTimeAtTime(state, getTimeAtX(state, x)!.getTime());
+    expect(snapped!.getTime()).toBe(expected.getTime());
+  });
+
+  it('rounds x-derived time to the nearest grid line within 1px at day zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-10T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const x = getXAtTime(state, new Date('2024-01-01T14:00:00Z'));
+    const snapped = getSnapTimeAtX(state, x);
+    expect(snapped).not.toBeNull();
+    const expected = getSnapTimeAtTime(state, getTimeAtX(state, x)!.getTime());
+    expect(snapped!.getTime()).toBe(expected.getTime());
+  });
+
+  it('rounds x-derived time to the nearest grid line within 1px at hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const x = getXAtTime(state, new Date('2024-01-01T01:40:00Z'));
+    const snapped = getSnapTimeAtX(state, x);
+    expect(snapped).not.toBeNull();
+    const expected = getSnapTimeAtTime(state, getTimeAtX(state, x)!.getTime());
+    expect(snapped!.getTime()).toBe(expected.getTime());
+  });
+
+  it('returns null when viewport state is degenerate', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, start, 60);
+    expect(getSnapTimeAtX(state, LEFT_PADDING + 100)).toBeNull();
+  });
+});
+
+describe('getSnapThreshold', () => {
+  it('returns min(24px, gridCellWidth * 0.3) for each zoom level', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2025-01-01T00:00:00Z').getTime();
+
+    const hourState = makeViewportState(start, end, 60);
+    expect(getSnapThreshold(hourState)).toBeCloseTo(Math.min(24, 60 * 0.3), 6);
+
+    const dayState = makeViewportState(start, end, 90);
+    expect(getSnapThreshold(dayState)).toBe(24);
+
+    const monthState = makeViewportState(start, end, 140);
+    expect(getSnapThreshold(monthState)).toBe(24);
+
+    const yearState = makeViewportState(start, end, 220);
+    expect(getSnapThreshold(yearState)).toBe(24);
   });
 });

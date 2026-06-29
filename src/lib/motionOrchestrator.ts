@@ -9,11 +9,14 @@ export interface SceneTransitionSpec {
   delay: number;
 }
 
+/** 缓动函数类型别名，统一为项目标准 cubic-bezier(0.16, 1, 0.3, 1)。 */
+export type EasingFunction = typeof EASE_STANDARD;
+
 /**
  * 动画编排层 —— 场景级动效预设。
  *
  * 为多元素动画（视图切换、批量卡片入场、拖拽归位+连线、AI 面板展开、
- * 侧栏导航入场）提供统一的 stagger / delay / duration / exit timing，
+ * 侧栏导航入场、时间轴拖拽吸附）提供统一的 stagger / delay / duration / exit timing，
  * 避免各组件各自为政导致视觉割裂。
  *
  * 所有缓动均使用 `cubic-bezier(0.16, 1, 0.3, 1)`（EASE_STANDARD），
@@ -25,7 +28,8 @@ export type MotionScene =
   | 'cardBatchEnter'
   | 'dragReturnWithConnections'
   | 'aiPanelExpand'
-  | 'sidebarNavEnter';
+  | 'sidebarNavEnter'
+  | 'dragSnap';
 
 export interface MotionSceneOptions {
   /** "增强动效"开关值（来自 useUIStore.enhancedAnimations）。 */
@@ -59,6 +63,15 @@ export interface SceneContentConfig {
   ease: typeof EASE_STANDARD;
 }
 
+/** 时间轴拖拽吸附场景的分段动效配置。 */
+export interface DragSnapPreset {
+  lift: { duration: number; ease: EasingFunction; scale: number };
+  snap: { duration: number; ease: EasingFunction };
+  land: { duration: number; ease: EasingFunction };
+  connections: { opacityDuration: number; pathLengthDuration: number };
+  trackHeight: { duration: number; ease: EasingFunction };
+}
+
 export interface MotionPreset {
   scene: MotionScene;
   /** 最终是否启用增强效果（reduced motion 时强制为 false）。 */
@@ -77,6 +90,8 @@ export interface MotionPreset {
   content?: SceneContentConfig;
   /** 整个场景的预期总时长（秒）。 */
   totalDuration: number;
+  /** 拖拽吸附场景专属配置；仅 dragSnap 场景返回。 */
+  dragSnap?: DragSnapPreset;
 }
 
 /**
@@ -126,7 +141,7 @@ interface SceneSpec {
   totalDuration: number;
 }
 
-const SCENE_SPECS: Record<MotionScene, SceneSpec> = {
+const SCENE_SPECS: Record<Exclude<MotionScene, 'dragSnap'>, SceneSpec> = {
   viewSwitch: {
     exit: { step: 0.03, duration: 0.12, ease: EASE_STANDARD },
     enter: { step: 0.04, duration: 0.18, ease: EASE_STANDARD },
@@ -154,6 +169,22 @@ const SCENE_SPECS: Record<MotionScene, SceneSpec> = {
   },
 };
 
+const DRAG_SNAP_ENHANCED: DragSnapPreset = {
+  lift: { duration: 0.12, ease: EASE_STANDARD, scale: 1.02 },
+  snap: { duration: 0.08, ease: EASE_STANDARD },
+  land: { duration: 0.2, ease: EASE_STANDARD },
+  connections: { opacityDuration: 0.18, pathLengthDuration: 0.22 },
+  trackHeight: { duration: 0.24, ease: EASE_STANDARD },
+};
+
+const DRAG_SNAP_DEGRADED: DragSnapPreset = {
+  lift: { duration: 0.12, ease: EASE_STANDARD, scale: 1 },
+  snap: { duration: 0.12, ease: EASE_STANDARD },
+  land: { duration: 0.12, ease: EASE_STANDARD },
+  connections: { opacityDuration: 0.12, pathLengthDuration: 0 },
+  trackHeight: { duration: 0.12, ease: EASE_STANDARD },
+};
+
 const DEGRADED_SPEC: SceneSpec = {
   enter: { step: 0, duration: 0.2, ease: EASE_STANDARD },
   exit: { step: 0, duration: 0.2, ease: EASE_STANDARD },
@@ -168,10 +199,29 @@ const DEGRADED_SPEC: SceneSpec = {
  *
  * 当 `prefers-reduced-motion` 被检测到、或"增强动效"开关关闭时，
  * 返回退化版预设：所有元素同步 200ms 淡入，无 stagger，无 pathLength。
+ *
+ * 对于 `dragSnap` 场景，返回分段配置（lift / snap / land / connections / trackHeight）；
+ * 退化模式下所有子 token 退化为 120ms opacity 淡入淡出，无 scale/pathLength。
  */
 export function getScenePreset(scene: MotionScene, options: MotionSceneOptions): MotionPreset {
   const reduced = prefersReducedMotion();
   const enhanced = options.enhanced && !reduced;
+
+  if (scene === 'dragSnap') {
+    const dragSnap = enhanced ? DRAG_SNAP_ENHANCED : DRAG_SNAP_DEGRADED;
+    return {
+      scene,
+      enhanced,
+      reduced,
+      enter: DEGRADED_SPEC.enter,
+      exit: DEGRADED_SPEC.exit,
+      overlap: 0,
+      connection: { ...dragSnap.connections, delay: 0 },
+      totalDuration: enhanced ? 0.4 : 0.12,
+      dragSnap,
+    };
+  }
+
   const spec = enhanced ? SCENE_SPECS[scene] : DEGRADED_SPEC;
   return {
     scene,

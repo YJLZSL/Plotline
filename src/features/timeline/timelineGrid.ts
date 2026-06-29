@@ -1,5 +1,14 @@
 import type { Event, Track } from '@/types';
-import { createTimeScale, type TimeScale, type ZoomLevel } from './timeScale';
+import {
+  createTimeScale,
+  type TimeScale,
+  type ZoomLevel,
+  chooseTickLevel,
+  getSnapInterval,
+  getTickInterval,
+  alignToTickBoundary,
+  advanceByInterval,
+} from './timeScale';
 import { getEventCardWidth } from './timelineLayout';
 
 export type { TimeScale, ZoomLevel };
@@ -141,6 +150,66 @@ export function getTimeAtX(state: ViewportState, x: number): Date | null {
  */
 export function getViewportTimeScale(state: ViewportState): TimeScale {
   return buildTimeScale(state);
+}
+
+/**
+ * 将任意时间取整到当前 tickLevel 对应的时间网格。
+ *
+ * 使用 `chooseTickLevel(state.zoom)` 决定网格粒度，然后向下对齐到自然日历边界，
+ * 再与下一个网格边界比较，返回最近的一个边界对应的 Date。
+ *
+ * @param state 视口状态（决定当前 tickLevel 与坐标映射）
+ * @param time  待吸附时间（Date / ms 时间戳 / ISO 字符串）
+ * @returns 吸附后的 Date；退化状态下返回原时间
+ */
+export function getSnapTimeAtTime(state: ViewportState, time: number | string | Date): Date {
+  const t = toMs(time);
+  if (!Number.isFinite(t) || isDegenerate(state)) return new Date(t);
+
+  const level = chooseTickLevel(state.zoom);
+  const floor = alignToTickBoundary(t, level);
+  const interval = getTickInterval(level);
+  const next = advanceByInterval(floor, interval);
+
+  return t - floor <= next - t ? new Date(floor) : new Date(next);
+}
+
+/**
+ * 将内容坐标 x 对应的时间取整到当前网格。
+ *
+ * @returns 吸附后的 Date；退化状态或非法 x 时返回 null
+ */
+export function getSnapTimeAtX(state: ViewportState, x: number): Date | null {
+  const time = getTimeAtX(state, x);
+  if (!time) return null;
+  return getSnapTimeAtTime(state, time);
+}
+
+/**
+ * 将任意时间先吸附到当前网格，再换算为内容坐标 x。
+ *
+ * 这是时间轴拖拽吸附的推荐入口：保证返回值始终落在网格线上。
+ */
+export function getSnapXAtTime(state: ViewportState, time: number | string | Date): number {
+  return getXAtTime(state, getSnapTimeAtTime(state, time));
+}
+
+/**
+ * 返回当前 zoom 下是否应当触发吸附的像素阈值。
+ *
+ * `gridCellWidth` 由当前 tickLevel 的吸附间隔与 `TimeScale` 的 `msPerUnit` 换算得到，
+ * 阈值取 `min(24px, gridCellWidth * 0.3)`。
+ */
+export function getSnapThreshold(state: ViewportState): number {
+  if (isDegenerate(state)) return 0;
+
+  const level = chooseTickLevel(state.zoom);
+  const intervalMs = getSnapInterval(level);
+  const scale = buildTimeScale(state);
+  const msPerUnit = scale.getMsPerUnit();
+  const gridCellWidth = (intervalMs / msPerUnit) * state.zoom;
+
+  return Math.min(24, gridCellWidth * 0.3);
 }
 
 export interface TimelineGrid {

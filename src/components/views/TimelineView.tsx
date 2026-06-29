@@ -42,6 +42,9 @@ import {
   LEFT_PADDING,
   getXAtTime,
   getViewportTimeScale,
+  getSnapTimeAtX,
+  getSnapXAtTime,
+  getSnapThreshold,
   type ViewportState,
   type EventLayoutItem,
 } from '@/features/timeline/timelineGrid';
@@ -129,6 +132,61 @@ const VISIBLE_EVENT_BUFFER = EVENT_CARD_MAX_WIDTH * 4;
 interface TimelineViewProps {
   workspaceId: string;
   workspaceName?: string;
+}
+
+/** 根据指针位置定位其下方的轨道（优先精确命中，其次按纵向位置兜底）。
+ *  `excludeEventId` 用于拖拽时临时忽略被拖动的事件卡片，避免它挡住命中测试。 */
+function resolveTrackAtPointer(
+  clientX: number,
+  clientY: number,
+  tracks: Track[],
+  excludeEventId?: string,
+): Track | null {
+  const cardEl = excludeEventId ? (document.querySelector(`[data-event-id="${excludeEventId}"]`) as HTMLElement | null) : null;
+  const originalPointerEvents = cardEl?.style.pointerEvents;
+  try {
+    if (cardEl) cardEl.style.pointerEvents = 'none';
+
+    const elements = document.elementsFromPoint(clientX, clientY);
+    for (const el of elements) {
+      const trackId = el.closest('[data-track-id]')?.getAttribute('data-track-id') ?? null;
+      if (!trackId) continue;
+      const tr = tracks.find((t) => t.id === trackId);
+      if (tr) return tr;
+    }
+  } finally {
+    if (cardEl) cardEl.style.pointerEvents = originalPointerEvents ?? '';
+  }
+
+  // 兜底：通过所有轨道包围盒定位
+  const laneEls = document.querySelectorAll('[data-track-id]');
+  let found: Track | null = null;
+  for (const el of laneEls) {
+    const id = el.getAttribute('data-track-id');
+    if (!id) continue;
+    const rect = el.getBoundingClientRect();
+    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+      const tr = tracks.find((t) => t.id === id);
+      if (tr) {
+        found = tr;
+        break;
+      }
+    }
+  }
+  if (found) return found;
+  for (const el of laneEls) {
+    const id = el.getAttribute('data-track-id');
+    if (!id) continue;
+    const rect = el.getBoundingClientRect();
+    if (clientY >= rect.top && clientY <= rect.bottom) {
+      const tr = tracks.find((t) => t.id === id);
+      if (tr) {
+        found = tr;
+        break;
+      }
+    }
+  }
+  return found;
 }
 
 export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) {
@@ -221,6 +279,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     offsetX: number;
     clientX: number;
     clientY: number;
+  } | null>(null);
+  const [dragState, setDragState] = useState<{
+    eventId: string;
+    contentX: number;
+    clientX: number;
+    clientY: number;
+    targetTrackId: string | null;
   } | null>(null);
   const connectEvents = useConnectEvents(workspaceId);
   const disconnectEvents = useDisconnectEvents(workspaceId);
@@ -359,6 +424,19 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return ev ? { type: 'event' as const, id: ev.id, label: ev.title, content: ev.description ?? '' } : null;
   }, [events, selectedEventId]);
 
+  // 拖拽吸附：根据当前拖动 content-x 计算最近的网格线及阈值内是否触发吸附
+  const snapInfo = useMemo(() => {
+    if (!dragState) return null;
+    const snapTime = getSnapTimeAtX(viewportState, dragState.contentX);
+    if (!snapTime) return null;
+    const snapX = getSnapXAtTime(viewportState, snapTime);
+    const threshold = getSnapThreshold(viewportState);
+    const distance = Math.abs(dragState.contentX - snapX);
+    const snapped = distance <= threshold;
+    const label = snapped ? formatMajorTick(snapTime, chooseTickLevel(viewportState.zoom)) : '';
+    return { snapX, snapTime, distance, snapped, label };
+  }, [dragState, viewportState]);
+
   const handleConsistencyCheck = useCallback(async () => {
     setCheckingConsistency(true);
     try {
@@ -465,14 +543,24 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         updates.trackId = targetTrack.id;
       }
 
+      // 吸附：若释放位置与网格线距离在阈值内，则把最终 x 对齐到网格
+      const snapTime = getSnapTimeAtX(viewportState, clampedX);
+      const snapX = snapTime ? getSnapXAtTime(viewportState, snapTime) : null;
+      const threshold = getSnapThreshold(viewportState);
+      const isSnapped = snapX !== null && Math.abs(clampedX - snapX) <= threshold;
+      const snappedFinalX = isSnapped
+        ? Math.max(lanePadding, Math.min(totalWidth - cardWidth, snapX))
+        : clampedX;
+
       if (ev.dateType === 'absolute') {
-        const newTimeDate = viewportGetTimeAtX(clampedX);
+        // 直接采用吸附网格时间，避免 timeScale 正反向换算的舍入误差导致日期偏离网格。
+        const newTimeDate = isSnapped && snapTime ? snapTime : viewportGetTimeAtX(snappedFinalX);
         if (!newTimeDate) return;
         updates.dateType = 'absolute';
         updates.dateValue = newTimeDate.toISOString().slice(0, 10);
       } else {
         const trackEvents = eventsByTrack.get(targetTrack.id) ?? [];
-        const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, viewportState);
+        const newSort = computeNewSortOrder(ev, snappedFinalX, trackEvents, eventPositions, viewportState);
         if (newSort !== ev.sortOrder || updates.trackId !== undefined) {
           updates.sortOrder = newSort;
         }
@@ -598,21 +686,53 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [toggleTrackCollapse],
   );
 
+  const getEventInitialX = useCallback(
+    (id: string) => {
+      const position = eventPositions.get(id);
+      if (position !== undefined) return getXAtTime(viewportState, position);
+      return eventLayout.layouts.get(id)?.x ?? 0;
+    },
+    [eventPositions, eventLayout, viewportState],
+  );
+
   const handleDragStart = useCallback(
     (id: string, clientX: number, clientY: number) => {
       setDraggingEvent({ id, offsetX: 0, clientX, clientY });
+      const initialX = getEventInitialX(id);
+      const ev = events.find((e) => e.id === id);
+      const targetTrack = resolveTrackAtPointer(clientX, clientY, visibleTracks, id);
+      setDragState({
+        eventId: id,
+        contentX: initialX,
+        clientX,
+        clientY,
+        targetTrackId: targetTrack?.id ?? ev?.trackId ?? null,
+      });
     },
-    [],
+    [events, getEventInitialX, visibleTracks],
   );
 
   const handleDrag = useCallback(
     (id: string, offsetX: number, clientX: number, clientY: number) => {
       setDraggingEvent({ id, offsetX, clientX, clientY });
+      const initialX = getEventInitialX(id);
+      const contentX = initialX + offsetX;
+      const targetTrack = resolveTrackAtPointer(clientX, clientY, visibleTracks, id);
+      setDragState({
+        eventId: id,
+        contentX,
+        clientX,
+        clientY,
+        targetTrackId: targetTrack?.id ?? null,
+      });
     },
-    [],
+    [getEventInitialX, visibleTracks],
   );
 
-  const handleDragEndNotify = useCallback(() => setDraggingEvent(null), []);
+  const handleDragEndNotify = useCallback(() => {
+    setDraggingEvent(null);
+    setDragState(null);
+  }, []);
 
   const handleTrackVisibleToggle = useCallback(
     (track: Track) => updateTrack.mutateAsync({ id: track.id, isVisible: !track.isVisible }),
@@ -985,6 +1105,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                     onlySelectedConnections={onlySelectedConnections}
                     eventConnections={eventConnections}
                     draggingEvent={draggingEvent}
+                    dragTargetTrackId={dragState?.targetTrackId ?? null}
                     onDisconnect={(sourceId, targetId) => void disconnectEvents.mutateAsync({ sourceId, targetId })}
                   />
                   )}
@@ -1010,6 +1131,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   conflictEventIds={conflictEventIds}
                   copiedEvent={copiedEvent}
                   draggingEvent={draggingEvent}
+                  snapX={snapInfo?.snapped ? snapInfo.snapX : null}
+                  isDropTarget={dragState?.targetTrackId === tr.id}
                   characters={characters}
                   locations={locations}
                   onSelectEvent={handleSelectEvent}
@@ -1056,6 +1179,14 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       )}
         </motion.div>
       </AnimatePresence>
+
+      {snapInfo?.snapped && dragState && (
+        <DragSnapTooltip
+          label={snapInfo.label}
+          clientX={dragState.clientX}
+          clientY={dragState.clientY}
+        />
+      )}
 
       <EventEditDialog
         open={eventDialogOpen}
@@ -1317,7 +1448,7 @@ const DateRuler = memo(function DateRuler({
   onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
   const { min, max } = useMemo(() => getViewportTimeScale(viewportState), [viewportState]);
-  const { t, i18n } = useI18n();
+  const { t } = useI18n();
   const [hovered, setHovered] = useState<{ x: number; label: string } | null>(null);
 
   // 刻度级别由连续 zoom 值决定（四档：year/quarter/month/week/day/hour），
@@ -1392,15 +1523,14 @@ const DateRuler = memo(function DateRuler({
           return (
             <div
               key={i}
+              data-testid="timeline-major-tick"
+              data-tick-label={tick.label}
               className="absolute top-0 bottom-0 border-l border-border/50 cursor-crosshair"
               style={{ left: x }}
               onMouseEnter={() =>
                 setHovered({
                   x,
-                  label: new Intl.DateTimeFormat(
-                    i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US',
-                    { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' },
-                  ).format(new Date(tick.time)),
+                  label: formatMajorTick(new Date(tick.time), tickLevel),
                 })
               }
             >
@@ -1519,6 +1649,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
   onlySelectedConnections,
   eventConnections,
   draggingEvent,
+  dragTargetTrackId,
   onDisconnect,
 }: {
   events: Event[];
@@ -1534,6 +1665,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
   onlySelectedConnections: boolean;
   eventConnections: EventConnection[];
   draggingEvent: { id: string; offsetX: number } | null;
+  dragTargetTrackId: string | null;
   onDisconnect: (sourceId: string, targetId: string) => void;
 }) {
   const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
@@ -1583,7 +1715,9 @@ const ConnectionLayer = memo(function ConnectionLayer({
       const x = getXAtTime(viewportState, eventPositions.get(ev.id) ?? 0);
       const layout = eventLayout.layouts.get(ev.id);
       const width = layout?.width ?? getEventCardWidth(ev.title);
-      const trackIndex = tracks.findIndex((t) => t.id === ev.trackId);
+      const effectiveTrackId =
+        draggingEvent?.id === ev.id && dragTargetTrackId ? dragTargetTrackId : ev.trackId;
+      const trackIndex = tracks.findIndex((t) => t.id === effectiveTrackId);
       const trackTop = trackTopByIndex.get(trackIndex) ?? RULER_HEIGHT;
       const offsetX = draggingEvent?.id === ev.id ? draggingEvent.offsetX : 0;
       const cardTopY = trackTop + (layout?.y ?? EVENT_BASE_TOP);
@@ -1596,11 +1730,11 @@ const ConnectionLayer = memo(function ConnectionLayer({
         topY: cardTopY,
         bottomY: cardBottomY,
         centerY: cardCenterY,
-        trackId: ev.trackId,
+        trackId: effectiveTrackId,
       });
     }
     return map;
-  }, [events, eventPositions, eventLayout, viewportState, tracks, trackTopByIndex, draggingEvent]);
+  }, [events, eventPositions, eventLayout, viewportState, tracks, trackTopByIndex, draggingEvent, dragTargetTrackId]);
 
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
@@ -1693,6 +1827,8 @@ interface TrackLaneProps {
   conflictEventIds: Set<string>;
   copiedEvent: Event | null;
   draggingEvent: { id: string; offsetX: number; clientX: number; clientY: number } | null;
+  snapX: number | null;
+  isDropTarget: boolean;
   characters: Character[];
   locations: { id: string; name: string; color?: string }[];
   onSelectEvent: (eventId: string) => void;
@@ -1734,6 +1870,8 @@ const TrackLane = memo(function TrackLane({
   conflictEventIds,
   copiedEvent,
   draggingEvent,
+  snapX,
+  isDropTarget,
   characters,
   locations,
   onSelectEvent,
@@ -1872,12 +2010,16 @@ const TrackLane = memo(function TrackLane({
             height: MOTION_FAST,
           }}
           className={cn(
-            'group relative border-b border-border/40 overflow-hidden',
-            index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
+            'group relative border-b border-border/40 overflow-hidden transition-colors',
+            isDropTarget
+              ? 'bg-accent/5'
+              : index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
           )}
           style={{ minWidth: totalWidth, height: targetHeight }}
           onDoubleClick={(e) => {
             if (collapsed) return;
+            // 避免事件卡片的双击冒泡到轨道空白处，从而误创建新事件
+            if ((e.target as HTMLElement).closest('[data-event-id]')) return;
             const rect = containerRef.current?.getBoundingClientRect();
             if (rect) onCanvasDoubleClick(track.id, e.clientX - rect.left + (containerRef.current?.parentElement?.scrollLeft ?? 0));
           }}
@@ -1948,18 +2090,16 @@ const TrackLane = memo(function TrackLane({
                 })}
               </AnimatePresence>
 
-              {/* 拖拽 Ghost 占位与吸附参考线 */}
+              {/* 拖拽 Ghost 占位 */}
               {draggingEvent && (() => {
                 const ev = visibleEvents.find((e) => e.id === draggingEvent.id);
                 const layout = ev && eventLayout.layouts.get(ev.id);
                 if (!ev || !layout) return null;
-                return (
-                  <>
-                    <EventCardGhost layout={layout} color={ev.color ?? track.color} />
-                    <DragSnapHint x={layout.x + draggingEvent.offsetX} />
-                  </>
-                );
+                return <EventCardGhost layout={layout} color={ev.color ?? track.color} />;
               })()}
+
+              {/* 吸附参考线：仅在指针位于当前轨道且存在有效吸附点时绘制 */}
+              {isDropTarget && snapX !== null && <DragSnapHint x={snapX} />}
 
               {/* 添加按钮 */}
               <button
@@ -2053,13 +2193,42 @@ function EventCardGhost({
 // ===== 拖拽吸附参考线 =====
 function DragSnapHint({ x }: { x: number }) {
   return (
-    <div
+    <motion.div
       data-testid="drag-snap-hint"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15, ease: EASE_STANDARD }}
       className="absolute top-0 bottom-0 pointer-events-none z-40 flex flex-col items-center"
       style={{ left: x }}
     >
-      <div className="w-px h-full bg-accent/40 border-l border-dashed border-accent/60" />
-      <div className="absolute top-1 h-1.5 w-1.5 rounded-full bg-accent/70" />
+      <div className="w-px h-full bg-accent/50 border-l border-dashed border-accent/60" />
+      <div className="absolute top-1 h-1.5 w-1.5 rounded-full bg-accent/80" />
+    </motion.div>
+  );
+}
+
+// ===== 拖拽吸附提示（跟随指针） =====
+function DragSnapTooltip({
+  label,
+  clientX,
+  clientY,
+}: {
+  label: string;
+  clientX: number;
+  clientY: number;
+}) {
+  return (
+    <div
+      data-testid="drag-snap-tooltip"
+      className="fixed z-50 pointer-events-none px-2 py-1 rounded-[5px] border border-border bg-bg-elevated shadow-[var(--shadow-card)] text-xs text-text-primary whitespace-nowrap"
+      style={{
+        left: clientX,
+        top: clientY - 36,
+        transform: 'translateX(-50%)',
+      }}
+    >
+      {label}
     </div>
   );
 }

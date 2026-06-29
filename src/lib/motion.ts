@@ -105,3 +105,6 @@ export const MOTION_SCENE_SIDEBAR_NAV: MotionTokenSpec = {
   duration: 0.12,
   ease: EASE_STANDARD,
 };
+
+/** 时间轴拖拽吸附场景标识常量。 */
+export const MOTION_SCENE_DRAG_SNAP = 'dragSnap';

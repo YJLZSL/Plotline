@@ -1,5 +1,5 @@
-import { memo, useMemo } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { memo, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
 import { Copy, Link2, MapPin, Pencil, Sparkles, Trash2 } from 'lucide-react';
 
 import {
@@ -18,8 +18,9 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn, stripHtml } from '@/lib/utils';
 import { MOTION_LAYOUT } from '@/lib/motion';
 import { useUIStore } from '@/stores/ui';
+import { getScenePreset } from '@/lib/motionOrchestrator';
 import { computeEventDragConstraints } from '@/features/timeline/timelineLayout';
-import type { EventLayoutItem } from '@/features/timeline/timelineGrid';
+import type { EventLayoutItem, ViewportState } from '@/features/timeline/timelineGrid';
 import { formatEventDuration, formatEventTimeRange, NO_DURATION } from '@/lib/time';
 import type { Character, Event, EventStatus, Track } from '@/types';
 
@@ -43,6 +44,8 @@ export interface EventCardProps {
   isConflict: boolean;
   isNew: boolean;
   isDragging: boolean;
+  snapX?: number;
+  viewportState?: ViewportState;
   characters?: Character[];
   locations?: { id: string; name: string; color?: string }[];
   height?: number;
@@ -70,6 +73,8 @@ export const EventCard = memo(function EventCard({
   isConflict,
   isNew,
   isDragging,
+  snapX,
+  viewportState: _viewportState,
   characters = [],
   locations = [],
   height = 64,
@@ -94,6 +99,11 @@ export const EventCard = memo(function EventCard({
   const isRelative = event.dateType !== 'absolute';
   const { x, y, width: cardWidth } = layout;
 
+  const [isDraggingLocal, setIsDraggingLocal] = useState(false);
+  const [isSnapAnimating, setIsSnapAnimating] = useState(false);
+  const dragX = useMotionValue(0);
+  const dragStartLayoutXRef = useRef(x);
+
   const timeRange = useMemo(() => formatEventTimeRange(event, i18n.language), [event, i18n.language]);
   const duration = useMemo(() => formatEventDuration(event, i18n.language), [event, i18n.language]);
   const hasDuration = duration !== NO_DURATION;
@@ -113,18 +123,34 @@ export const EventCard = memo(function EventCard({
     [cardWidth, totalWidth, x],
   );
 
+  const preset = useMemo(
+    () => getScenePreset('dragSnap', { enhanced: enhancedAnimations }),
+    [enhancedAnimations],
+  );
+  const dragSnap = preset.dragSnap;
+
   const initial = isNew
     ? { opacity: 1, scale: 1.05, y: 0 }
     : { opacity: 0, scale: 0.9, y: 8 };
-  const animate = { opacity: 1, scale: 1, y: 0 };
+  const animateTo = { opacity: 1, scale: 1, y: 0 };
   const shouldAnimate = reducedMotion === false;
-  const whileHover = ambient.animate && !isDragging ? { scale: 1.02, y: -2 } : { y: -2 };
+  const effectiveIsDragging = isDragging || isDraggingLocal || isSnapAnimating;
+  const whileHover = ambient.animate && !effectiveIsDragging ? { scale: 1.02, y: -2 } : { y: -2 };
   const whileTap = enhancedAnimations ? { scale: 0.96 } : { scale: 0.98 };
+  const whileDrag = shouldAnimate
+    ? {
+        scale: dragSnap?.lift.scale ?? 1.02,
+        transition: {
+          duration: dragSnap?.lift.duration ?? 0.12,
+          ease: dragSnap?.lift.ease,
+        },
+      }
+    : undefined;
   const transition = useMemo(
     () => ({ ...ambient.transition, delay: Math.min(index * 0.015, 0.1), layout: MOTION_LAYOUT }),
     [ambient.transition, index],
   );
-  const shouldLayout = enhancedAnimations && !isDragging && shouldAnimate;
+  const shouldLayout = enhancedAnimations && !effectiveIsDragging && shouldAnimate;
 
   return (
     <ContextMenu>
@@ -134,11 +160,11 @@ export const EventCard = memo(function EventCard({
           data-row={layout.row}
           data-layout-y={layout.y}
           data-layout-x={layout.x}
-          data-dragging={isDragging}
+          data-dragging={effectiveIsDragging}
           data-selected={selected}
           data-testid="event-card"
           initial={initial}
-          animate={animate}
+          animate={animateTo}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={transition}
           layout={shouldLayout}
@@ -146,8 +172,10 @@ export const EventCard = memo(function EventCard({
           dragMomentum={false}
           dragElastic={0}
           dragConstraints={dragConstraints}
-          whileDrag={shouldAnimate ? { scale: 1.02 } : undefined}
+          whileDrag={whileDrag}
           onDragStart={(_, info) => {
+            dragStartLayoutXRef.current = x;
+            setIsDraggingLocal(true);
             onDragStart(event.id, info.point.x, info.point.y);
           }}
           onDrag={(_, info) => {
@@ -156,8 +184,24 @@ export const EventCard = memo(function EventCard({
           onDragEnd={(e, info) => {
             const clientX = 'clientX' in e ? e.clientX : info.point.x;
             const clientY = 'clientY' in e ? e.clientY : info.point.y;
-            onDragEnd(event.id, x + info.offset.x, clientX, clientY);
-            onDragEndNotify();
+
+            if (snapX != null && dragSnap != null) {
+              setIsSnapAnimating(true);
+              animate(dragX, snapX - x, {
+                duration: dragSnap.land.duration,
+                ease: dragSnap.land.ease,
+                onComplete: () => {
+                  setIsSnapAnimating(false);
+                  setIsDraggingLocal(false);
+                  onDragEnd(event.id, snapX, clientX, clientY);
+                  onDragEndNotify();
+                },
+              });
+            } else {
+              setIsDraggingLocal(false);
+              onDragEnd(event.id, x + info.offset.x, clientX, clientY);
+              onDragEndNotify();
+            }
           }}
           onClick={() => onSelect(event.id)}
           onDoubleClick={() => onEdit(event)}
@@ -174,13 +218,14 @@ export const EventCard = memo(function EventCard({
               : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
             pendingConnection && 'border-accent animate-pulse',
             isConflict && 'ring-2 ring-red-500/50 border-red-400',
-            isDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
+            effectiveIsDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
           )}
           style={{
             left: x,
             top: y,
             width: cardWidth,
             height,
+            x: dragX,
           }}
         >
           {/* 左侧轨道色条 */}
