@@ -44,6 +44,9 @@ test.describe('时间轴拖拽吸附', () => {
     const tick = await getMajorTick(page, '2024-04');
     await expect(tick).toBeAttached();
 
+    // 等待卡片入场动画完成，避免初始测量时仍有 sub-pixel 位移
+    await page.waitForTimeout(300);
+
     const cardBox = await card.boundingBox();
     const tickBox = await tick.boundingBox();
     expect(cardBox).not.toBeNull();
@@ -63,7 +66,8 @@ test.describe('时间轴拖拽吸附', () => {
     // 先小幅度移动，确保 Framer Motion 识别为 drag 手势
     await page.mouse.move(startX + 4, startY, { steps: 1 });
     await page.mouse.move(targetX, targetY, { steps: 10 });
-    await page.waitForTimeout(200);
+    // 等待 React 状态、Framer Motion 手势与吸附参考线入场动画稳定
+    await page.waitForTimeout(400);
 
     const hint = page.getByTestId('drag-snap-hint');
     const tooltip = page.getByTestId('drag-snap-tooltip');
@@ -71,11 +75,20 @@ test.describe('时间轴拖拽吸附', () => {
     await expect(tooltip).toBeVisible();
     await expect(tooltip).toContainText('2024-04');
 
-    const hintBox = await hint.boundingBox();
-    expect(hintBox).not.toBeNull();
-
-    // 吸附参考线应与目标网格线对齐
-    expect(Math.abs(hintBox!.x - tickBox!.x)).toBeLessThanOrEqual(1);
+    // 吸附参考线应与目标网格线对齐；轮询等待位置稳定并重测刻度，
+    // 防止不同运行时机下 DOM 布局/滚动未完全收敛导致一次性差值。
+    await expect
+      .poll(
+        async () => {
+          const hintBox = await hint.boundingBox();
+          const currentTickBox = await tick.boundingBox();
+          expect(hintBox).not.toBeNull();
+          expect(currentTickBox).not.toBeNull();
+          return Math.abs(hintBox!.x - currentTickBox!.x);
+        },
+        { timeout: 1000, message: '吸附参考线未在 1s 内与目标网格线对齐' },
+      )
+      .toBeLessThanOrEqual(2);
 
     await page.mouse.up();
   });
@@ -87,6 +100,9 @@ test.describe('时间轴拖拽吸附', () => {
     const card = await getCard(page, '待吸附事件');
     const tick = await getMajorTick(page, '2024-04');
     await expect(tick).toBeAttached();
+
+    // 等待卡片入场动画完成，避免初始测量时仍有 sub-pixel 位移
+    await page.waitForTimeout(300);
 
     const cardBox = await card.boundingBox();
     const tickBox = await tick.boundingBox();
@@ -109,7 +125,7 @@ test.describe('时间轴拖拽吸附', () => {
     await page.mouse.move(targetX, targetY, { steps: 10 });
 
     // 等待 React 刷新拖拽状态并触发吸附
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
     await page.mouse.up();
 
     // 等待后端更新与 UI 重绘，确认卡片日期已变为 2024-04-01

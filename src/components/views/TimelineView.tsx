@@ -1669,9 +1669,8 @@ const ConnectionLayer = memo(function ConnectionLayer({
   onDisconnect: (sourceId: string, targetId: string) => void;
 }) {
   const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
-  // 连接线绘制属于 cardBatchEnter 场景的一部分：opacity 180ms + pathLength 220ms。
-  // 退化模式下 pathLength 关闭，仅保留 200ms 同步淡入。
-  const connectionPreset = getScenePreset('cardBatchEnter', { enhanced: enhancedAnimations });
+  // 拖动相关动画统一消费 dragSnap 预设；退化模式下 pathLength 关闭，仅保留 200ms 同步淡入。
+  const connectionPreset = getScenePreset('dragSnap', { enhanced: enhancedAnimations });
   const connectionConfig = connectionPreset.connection;
 
   const buffer = EVENT_CARD_MAX_WIDTH * 2;
@@ -1753,9 +1752,11 @@ const ConnectionLayer = memo(function ConnectionLayer({
   }, [eventConnections, eventGeometry, visibleMin, visibleMax, onlySelectedConnections, selectedEventId]);
 
   return (
-    <svg
+    <motion.svg
       className="absolute top-0 left-0 w-full h-full pointer-events-none"
       data-testid="timeline-connection-layer"
+      animate={{ opacity: draggingEvent ? 0.4 : 1 }}
+      transition={{ duration: connectionConfig?.opacityDuration ?? 0.2, ease: EASE_STANDARD }}
     >
       {visibleConnections.map((conn) => {
         const sg = eventGeometry.get(conn.sourceId);
@@ -1804,7 +1805,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
           </g>
         );
       })}
-    </svg>
+    </motion.svg>
   );
 });
 
@@ -1897,6 +1898,8 @@ const TrackLane = memo(function TrackLane({
   const { t } = useI18n();
   const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
   const cardPreset = getScenePreset('cardBatchEnter', { enhanced: enhancedAnimations });
+  const dragSnapPreset = getScenePreset('dragSnap', { enhanced: enhancedAnimations });
+  const trackHeightTransition = dragSnapPreset.dragSnap?.trackHeight;
   const containerRef = useRef<HTMLDivElement>(null);
   const prevEventIdsRef = useRef<Set<string>>(new Set(events.map((e) => e.id)));
 
@@ -1937,6 +1940,11 @@ const TrackLane = memo(function TrackLane({
   );
 
   const targetHeight = collapsed ? TRACK_COLLAPSED_HEIGHT : (eventLayout.trackHeights.get(track.id) ?? TRACK_HEIGHT);
+
+  // 仅当本轨道是当前拖动事件的源轨道或目标轨道，且存在有效吸附坐标时，才将 snapX 透传给 EventCard，
+  // 避免非相关轨道的事件卡片误触发归位动画。
+  const isDragSourceTrack = draggingEvent != null && events.some((e) => e.id === draggingEvent.id);
+  const effectiveSnapX = (isDragSourceTrack || isDropTarget) && snapX != null ? snapX : undefined;
 
   const resolveTargetTrack = useCallback(
     (clientX: number, clientY: number, draggedId: string) => {
@@ -2007,7 +2015,7 @@ const TrackLane = memo(function TrackLane({
             duration: cardPreset.enter.duration,
             ease: cardPreset.enter.ease,
             delay: getElementDelay(index, cardPreset.enter.step),
-            height: MOTION_FAST,
+            height: trackHeightTransition ?? MOTION_FAST,
           }}
           className={cn(
             'group relative border-b border-border/40 overflow-hidden transition-colors',
@@ -2072,6 +2080,7 @@ const TrackLane = memo(function TrackLane({
                       isConflict={conflictEventIds.has(ev.id)}
                       isNew={newEventIds.has(ev.id)}
                       isDragging={isDragging}
+                      snapX={effectiveSnapX}
                       characters={characters}
                       locations={locations}
                       onSelect={onSelectEvent}

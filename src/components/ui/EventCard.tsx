@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
 import { Copy, Link2, MapPin, Pencil, Sparkles, Trash2 } from 'lucide-react';
 
@@ -101,8 +101,20 @@ export const EventCard = memo(function EventCard({
 
   const [isDraggingLocal, setIsDraggingLocal] = useState(false);
   const [isSnapAnimating, setIsSnapAnimating] = useState(false);
+  const [committedSnapX, setCommittedSnapX] = useState<number | null>(null);
   const dragX = useMotionValue(0);
   const dragStartLayoutXRef = useRef(x);
+
+  // 当父级根据吸附后的时间重新计算 layout.x 时，复位 dragX，
+  // 避免 transform 叠加导致卡片最终位置偏离吸附目标。
+  const prevXRef = useRef(x);
+  useLayoutEffect(() => {
+    if (prevXRef.current !== x) {
+      dragX.set(0);
+      setCommittedSnapX(null);
+      prevXRef.current = x;
+    }
+  }, [x, dragX]);
 
   const timeRange = useMemo(() => formatEventTimeRange(event, i18n.language), [event, i18n.language]);
   const duration = useMemo(() => formatEventDuration(event, i18n.language), [event, i18n.language]);
@@ -191,6 +203,8 @@ export const EventCard = memo(function EventCard({
                 duration: dragSnap.land.duration,
                 ease: dragSnap.land.ease,
                 onComplete: () => {
+                  dragX.set(0);
+                  setCommittedSnapX(snapX);
                   setIsSnapAnimating(false);
                   setIsDraggingLocal(false);
                   onDragEnd(event.id, snapX, clientX, clientY);
@@ -221,7 +235,7 @@ export const EventCard = memo(function EventCard({
             effectiveIsDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
           )}
           style={{
-            left: x,
+            left: committedSnapX ?? x,
             top: y,
             width: cardWidth,
             height,

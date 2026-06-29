@@ -553,6 +553,17 @@ describe('getSnapXAtTime', () => {
     expect(Math.abs(snappedX - expected)).toBeLessThanOrEqual(1);
   });
 
+  it('round-trips snap x to time and back at month zoom for April boundary', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const snapX = getXAtTime(state, new Date('2024-04-01T00:00:00Z'));
+    const snapTime = getSnapTimeAtX(state, snapX);
+    expect(snapTime).not.toBeNull();
+    const roundTripX = getSnapXAtTime(state, snapTime!);
+    expect(Math.abs(roundTripX - snapX)).toBeLessThanOrEqual(1);
+  });
+
   it('maps snapped times back to the correct grid x within 1px at day zoom', () => {
     const start = new Date('2024-01-01T00:00:00Z').getTime();
     const end = new Date('2024-01-10T00:00:00Z').getTime();
