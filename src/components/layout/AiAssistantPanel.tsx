@@ -31,6 +31,8 @@ import { Button, EmptyState, Input, Markdown, Textarea } from '@/components/ui';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
+import { getScenePreset } from '@/lib/motionOrchestrator';
+import { useUIStore } from '@/stores/ui';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { getWorkspace } from '@/features/workspace/api';
 import { toastError, toastSuccess } from '@/stores/toast';
@@ -148,6 +150,10 @@ export function AiAssistantPanel({
   workspaceId,
 }: AiAssistantPanelProps) {
   const { t } = useI18n();
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+  // AI 面板展开场景：面板滑入 220ms，内容淡入 180ms（延迟 40ms）。
+  // 退化模式下两者同步 200ms 淡入，无延迟。
+  const panelPreset = getScenePreset('aiPanelExpand', { enhanced: enhancedAnimations });
   const { data: settings } = useSettingsQuery();
   const connectionTest = useAiConnectionTest(
     settings?.aiBaseUrl ?? '',
@@ -655,13 +661,26 @@ export function AiAssistantPanel({
             onClick={onClose}
           />
           <motion.aside
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={MOTION_BASE}
+            initial={panelPreset.reduced ? { opacity: 0 } : { x: '100%' }}
+            animate={panelPreset.reduced ? { opacity: 1 } : { x: 0 }}
+            exit={panelPreset.reduced ? { opacity: 0 } : { x: '100%' }}
+            transition={{
+              duration: panelPreset.enter.duration,
+              ease: panelPreset.enter.ease,
+            }}
             data-testid="ai-assistant-panel"
             className="fixed right-0 top-12 bottom-0 w-full max-w-lg border-l border-border bg-bg-surface shadow-[var(--shadow-elevated-soft)] z-40 flex flex-col"
           >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: panelPreset.content?.duration ?? 0.2,
+                delay: panelPreset.content?.delay ?? 0,
+                ease: panelPreset.content?.ease ?? panelPreset.enter.ease,
+              }}
+              className="flex flex-col flex-1 min-h-0"
+            >
             <header className="h-12 flex items-center justify-between px-4 border-b border-border bg-bg-base flex-shrink-0">
               <div className="flex items-center gap-2 text-text-primary">
                 {(() => {
@@ -915,6 +934,7 @@ export function AiAssistantPanel({
                 </section>
               </div>
             )}
+            </motion.div>
           </motion.aside>
         </>
       )}

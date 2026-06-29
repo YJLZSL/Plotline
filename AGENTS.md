@@ -44,17 +44,22 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v3.0.0 已发布：跨视图叙事导航 + AI 创作工作流）
-- **时间轴逻辑重写**：新增 `timelineGrid.ts`、`timeScale.ts`、`useTimelineViewport.ts`，重写 `timelineLayout.ts` 碰撞检测与 drag constraints；`TimelineView` 集成新布局引擎，支持以指针为锚点的缩放与画布平移。
-- **Timeline / Script 双视图双向同步**：新增 `workspaceSelection.ts` 全局选择状态与 `ScriptView.tsx` 独立剧本视图；Sidebar 与路由注册 `/workspaces/:id/script`；点击剧本视图事件可跳转回时间轴并自动选中/滚动定位。
-- **AI 创作助手侧边模块**：新增 `src/features/ai-assistant/` 模块，含 7 个 Agent（对话/续写/脑暴/查漏/润色/角色关系/文风迁移）、会话管理、上下文选择器；Sidebar 新增 `AI 创作`/`AI Studio` 导航入口，路由注册 `/workspaces/:id/ai-assistant`。
-- **Rust clippy 清理**：修复 `src-tauri/src/models/ai.rs` 与 `src-tauri/src/services/ai.rs` 中 6 处已有告警，确保 `-D warnings` 通过。
-- **测试覆盖**：新增 Timeline 平移缩放、Script 同步、AI 助手 E2E 测试；新增 `scriptSort` 单元测试。前端 `pnpm lint/typecheck/build/test:run/test:e2e` 全绿。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `3.0.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 更新至 v3.0.0 状态。
-- **本地构建状态**：前端 `pnpm lint/typecheck/build/test:run` 全绿；本地 Rust 编译环境出现 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，但 CI 中 `cargo test` 与 `cargo clippy -- -D warnings` 全绿。
-- **GitHub Release v3.0.0**：<https://github.com/YJLZSL/Plotline/releases/tag/v3.0.0>
+### 当前迭代状态（v3.1.0 已发布：时间轴对齐重写与动画编排层）
+- **时间轴坐标单一源重构**：新增 `ViewportState` 类型与 `getXAtTime`/`getTimeAtX` 纯函数（`src/features/timeline/timelineGrid.ts`），统一标尺、事件卡片、连接线、Today 线的坐标计算，消除多源 `timeToX` 实现导致的错位。
+- **时间轴标尺 6 档刻度自适应**：`chooseTickLevel(zoom)` 在 `year` / `quarter` / `month` / `week` / `day` / `hour` 之间切换，主刻度显示完整年月日，并对 `0` / `NaN` / `Infinity` 极端 zoom 做兜底。
+- **事件卡片三 zone 重构**：`EventCard` 拆分为 header（状态点 + 标题 + 连接句柄）/ body（时间范围 + 持续时间）/ footer（地点 + 角色头像堆叠），时间文本统一 `tabular-nums` 与 `whitespace-normal`。
+- **连接线时间锚点边缘对齐**：起点/终点改为事件卡片"时间锚点边缘"（同轨道左右沿中点 / 跨轨道上下沿中点），不再使用视觉中心，拖动事件后连接线始终贴合锚点。
+- **动画编排层 `motionOrchestrator`**：新增 `src/lib/motionOrchestrator.ts`，提供 5 个场景预设（`viewSwitch` / `cardBatchEnter` / `dragReturnWithConnections` / `aiPanelExpand` / `sidebarNavEnter`），支持分层缓动与 `prefers-reduced-motion` 退化；`enhanced` 关闭时统一退化为 200ms 同步淡入。
+- **工具栏四分组 + segmented control**：时间轴工具栏拆分为 Create / Filter / View mode（segmented control）/ More（下拉菜单），降低视觉噪音。
+- **Sidebar 三分组 + 12 tooltip + 首次进入高亮**：Sidebar 重组为工作区视图 / 创作辅助 / 系统，新增 12 个 `nav.tooltip.*` 文案；首次进入工作区高亮"时间轴"与"AI 创作"入口（持续 3 秒 `ring-2 ring-accent/40`）；删除重复的"AI Studio"入口。
+- **测试覆盖**：新增 `motionOrchestrator.test.ts`（25 个测试）、`timelineGrid.test.ts` 中 `getXAtTime`/`getTimeAtX` 精度测试、`time.test.ts` 时间格式化测试、`EventCard.test.tsx` 三 zone 结构测试、`timeline-connection-alignment.spec.ts`（3 个 E2E）、`timeline-toolbar.spec.ts`（9 个 E2E）、visual E2E 套件 14 个测试（含 dev server 不可用时自动 skip 机制）。前端 `pnpm lint/typecheck/build/test:run` 全绿。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `3.1.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md`、`docs/前端优化指南.md` 更新至 v3.1.0 状态。
+- **本地构建状态**：前端 `pnpm lint/typecheck/build/test:run` 全绿；本地 Rust 编译环境仍存在 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，依赖 CI 验证 `cargo test` 与 `cargo clippy -- -D warnings`。
+- **GitHub Release v3.1.0**：<https://github.com/YJLZSL/Plotline/releases/tag/v3.1.0>
 
-### 上一版本（v2.8.0 / v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+### 上一版本（v3.0.0 / v2.8.0 / v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
+- v3.0.0：跨视图叙事导航 + AI 创作工作流。时间轴布局引擎重写（`timelineGrid.ts` / `timeScale.ts` / `useTimelineViewport.ts`）、Timeline / Script 双视图双向同步（`workspaceSelection.ts` 全局选择状态 + `ScriptView.tsx`）、AI 创作助手侧边模块（7 个 Agent + 会话管理 + 上下文选择器）、Rust clippy 清理。前端 `pnpm lint/typecheck/build/test:run/test:e2e` 全绿。
+- GitHub Release v3.0.0：<https://github.com/YJLZSL/Plotline/releases/tag/v3.0.0>
 - v2.8.0：前端丝滑化与时间轴逻辑升级。时间轴事件重叠修复与拖拽升级、动效系统 spring/layout token 与增强动效开关、TimelineView 性能优化、设置页重构、首次进入工作区新手引导与各视图空状态优化、新增 `docs/前端优化指南.md`。
 - GitHub Release v2.8.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.0>
 - v2.7.5：修复 v2.7.4 CI 中发现的 RAG 关键词检索 `LIKE` 子查询缺少 `%` 通配符问题（`src-tauri/src/services/ai.rs`），导致检索结果始终返回 0 条；补全通配符后确保 AI RAG 检索能正确返回相关实体，CI/Release workflow 全绿。
@@ -78,7 +83,7 @@
 - GitHub Release v2.3.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.3.0>
 - GitHub Release v2.2.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
 
-### 下一迭代方向（v2.9+ 候选）
+### 下一迭代方向（v3.2+ 候选）
 - 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
 - VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
 - 世界观：种族/物种/宗教等实体管理、设定冲突检测。
@@ -154,6 +159,12 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 - IPC 错误统一在 TanStack Query 的 `onError` 里通过 `useToast` 显示。
 - **禁止** 在组件内 `try/catch` 后 `console.log` 然后吞掉。
 - 可预期错误（如校验）用 `AppError` 的 `code` 字段区分。
+
+### 2.8 时间轴与动画编排约定（v3.1.0+）
+- **时间轴坐标单一源**：所有时间↔像素换算必须通过 `viewportState` + `getXAtTime` / `getTimeAtX` 纯函数（`src/features/timeline/timelineGrid.ts`）完成，**禁止**组件内独立实现 `timeToX` / `xToTime`，避免多源坐标计算导致标尺、事件卡片、连接线、Today 线错位。
+- **动画场景预设统一消费**：跨视图切换、批量元素入场、拖拽归位 + 连接线、AI 面板展开、Sidebar 导航入场等动画必须通过 `src/lib/motionOrchestrator.ts` 的 `getScenePreset(scene, { enhanced })` 消费场景预设，统一管理 stagger / delay / exit timing；`prefers-reduced-motion` 或"增强动效"开关关闭时退化为 200ms 同步淡入。
+- **时间轴工具栏四分组结构**：`TimelineView` 工具栏必须保持四分组结构（Create / Filter / View mode / More），View mode 使用 segmented control，More 收纳低频操作；**禁止**将筛选或视图模式控件散落到其他分组。
+- **Sidebar 三分组结构**：Sidebar 必须保持三分组结构（工作区视图 / 创作辅助 / 系统），新增导航项归入对应分组并补全 `nav.tooltip.*` 文案；**禁止**新增重复或重叠的入口（如 AI 相关入口仅保留"AI 创作"）。
 
 ---
 
@@ -348,5 +359,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.5.8  
-> 最后更新：2026-06-28（v2.8.0 已发布：前端丝滑化与时间轴逻辑升级）
+> 文档版本：v0.6.0  
+> 最后更新：2026-06-29（v3.1.0 已发布：时间轴对齐重写与动画编排层）

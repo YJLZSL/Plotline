@@ -2907,7 +2907,7 @@ dependencies = [
 
 [[package]]
 name = "plotline"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",

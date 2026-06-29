@@ -74,3 +74,34 @@ export const MOTION_TOKENS = {
 } as const;
 
 export type MotionToken = keyof typeof MOTION_TOKENS;
+
+/**
+ * 场景级动效 token（与 motionOrchestrator 的场景预设对应）。
+ * 供仅需单个 duration+ease 的调用点直接消费；完整 stagger / delay / exit
+ * 编排请使用 `getScenePreset`（@/lib/motionOrchestrator）。
+ * 新增常量不替换旧 token，仅作为场景预设的便捷快捷方式。
+ */
+export const MOTION_SCENE_VIEW_SWITCH: MotionTokenSpec = {
+  duration: 0.18,
+  ease: EASE_STANDARD,
+};
+
+export const MOTION_SCENE_CARD_BATCH_ENTER: MotionTokenSpec = {
+  duration: 0.18,
+  ease: EASE_STANDARD,
+};
+
+export const MOTION_SCENE_DRAG_RETURN: MotionTokenSpec = {
+  duration: 0.2,
+  ease: EASE_STANDARD,
+};
+
+export const MOTION_SCENE_AI_PANEL_EXPAND: MotionTokenSpec = {
+  duration: 0.22,
+  ease: EASE_STANDARD,
+};
+
+export const MOTION_SCENE_SIDEBAR_NAV: MotionTokenSpec = {
+  duration: 0.12,
+  ease: EASE_STANDARD,
+};

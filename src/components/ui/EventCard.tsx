@@ -3,14 +3,12 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { Copy, Link2, MapPin, Pencil, Sparkles, Trash2 } from 'lucide-react';
 
 import {
-  Badge,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSection,
   ContextMenuSeparator,
   ContextMenuTrigger,
-  StatusDot,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -22,7 +20,7 @@ import { MOTION_LAYOUT } from '@/lib/motion';
 import { useUIStore } from '@/stores/ui';
 import { computeEventDragConstraints } from '@/features/timeline/timelineLayout';
 import type { EventLayoutItem } from '@/features/timeline/timelineGrid';
-import { formatEventDuration, formatEventTime } from '@/lib/time';
+import { formatEventDuration, formatEventTimeRange, NO_DURATION } from '@/lib/time';
 import type { Character, Event, EventStatus, Track } from '@/types';
 
 const EVENT_STATUS_STYLES: Record<
@@ -96,8 +94,9 @@ export const EventCard = memo(function EventCard({
   const isRelative = event.dateType !== 'absolute';
   const { x, y, width: cardWidth } = layout;
 
-  const displayTime = useMemo(() => formatEventTime(event, i18n.language), [event, i18n.language]);
+  const timeRange = useMemo(() => formatEventTimeRange(event, i18n.language), [event, i18n.language]);
   const duration = useMemo(() => formatEventDuration(event, i18n.language), [event, i18n.language]);
+  const hasDuration = duration !== NO_DURATION;
 
   const associatedCharacters = useMemo(() => {
     const set = new Set(event.characterIds);
@@ -196,8 +195,14 @@ export const EventCard = memo(function EventCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="relative z-10 px-3 py-2 flex flex-col justify-between h-full min-w-0">
-                <div className="flex items-start gap-2 min-w-0">
+              <div className="relative z-10 px-3 py-2 flex flex-col justify-between h-full min-w-0 gap-1">
+                {/* Zone 1: Header — 标题 + 状态点 + 连线手柄 */}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    role="img"
+                    className={cn('h-2 w-2 rounded-full flex-shrink-0', status.dot)}
+                    aria-label={isRelative ? t('timeline.relativeBadge') : t(status.labelKey)}
+                  />
                   <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0 leading-tight">
                     {event.title}
                   </span>
@@ -214,26 +219,57 @@ export const EventCard = memo(function EventCard({
                   </button>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                  <Badge variant="status" className="shrink-0">
-                    <StatusDot status={event.status} />
-                    {isRelative ? t('timeline.relativeBadge') : t(status.labelKey)}
-                  </Badge>
-                  <span className="text-xs text-text-secondary break-words leading-tight">
-                    {displayTime}
+                {/* Zone 2: Body — 时间范围 + 持续时间 */}
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0 min-w-0">
+                  <span className="text-xs text-text-secondary tabular-nums leading-tight whitespace-normal break-words">
+                    {timeRange}
                   </span>
-                  {duration && (
-                    <span className="text-xs text-text-secondary/80 leading-tight">
-                      ({duration})
+                  {hasDuration && (
+                    <span className="text-[10px] text-text-secondary/70 tabular-nums leading-tight">
+                      {duration}
                     </span>
                   )}
                 </div>
+
+                {/* Zone 3: Footer — 地点 + 角色头像 */}
+                {(locationName || associatedCharacters.length > 0) && (
+                  <div className="flex items-center gap-2 min-w-0">
+                    {locationName && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-text-secondary/70 min-w-0">
+                        <MapPin className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">{locationName}</span>
+                      </span>
+                    )}
+                    {associatedCharacters.length > 0 && (
+                      <div
+                        className="flex items-center -space-x-1 ml-auto"
+                        aria-label={t('timeline.event.characters')}
+                      >
+                        {associatedCharacters.slice(0, 3).map((c) => (
+                          <span
+                            key={c.id}
+                            className="h-4 w-4 rounded-full border border-bg-surface flex items-center justify-center text-[8px] font-medium text-white"
+                            style={{ backgroundColor: c.color }}
+                            title={c.name}
+                          >
+                            {c.name.charAt(0)}
+                          </span>
+                        ))}
+                        {associatedCharacters.length > 3 && (
+                          <span className="h-4 w-4 rounded-full border border-bg-surface bg-bg-elevated flex items-center justify-center text-[8px] font-medium text-text-secondary">
+                            {t('timeline.event.moreCharacters', { count: associatedCharacters.length - 3 })}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </TooltipTrigger>
             <TooltipContent side="top" align="start" sideOffset={6}>
               <EventTooltipContent_
                 event={event}
-                displayTime={displayTime}
+                timeRange={timeRange}
                 duration={duration}
                 locationName={locationName}
                 associatedCharacters={associatedCharacters}
@@ -280,25 +316,26 @@ export const EventCard = memo(function EventCard({
 
 export function EventTooltipContent_({
   event,
-  displayTime,
+  timeRange,
   duration,
   locationName,
   associatedCharacters,
 }: {
   event: Event;
-  displayTime: string;
-  duration: string | null;
+  timeRange: string;
+  duration: string;
   locationName: string | null;
   associatedCharacters: Character[];
 }) {
   const { t } = useI18n();
   const status = EVENT_STATUS_STYLES[event.status];
+  const hasDuration = duration !== NO_DURATION;
 
   return (
     <div className="space-y-1.5 max-w-xs">
       <div className="font-medium text-text-primary">{event.title}</div>
-      <div className="text-xs text-text-secondary">{displayTime}</div>
-      {duration && (
+      <div className="text-xs text-text-secondary tabular-nums">{timeRange}</div>
+      {hasDuration && (
         <div className="text-xs text-text-secondary">
           {t('timeline.event.duration')}: {duration}
         </div>

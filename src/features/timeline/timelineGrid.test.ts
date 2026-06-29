@@ -10,6 +10,10 @@ import {
   MIN_ZOOM,
   MAX_ZOOM,
   ZOOM_FACTOR,
+  LEFT_PADDING,
+  getXAtTime,
+  getTimeAtX,
+  type ViewportState,
 } from './timelineGrid';
 
 function makeEvent(overrides: Partial<Event> & { id: string; title: string; trackId: string }): Event {
@@ -267,5 +271,197 @@ describe('computeTimelineLayout', () => {
     expect(computeRelativeDurationUnits(dayGrid, 200, 16)).toBe(3);
     expect(computeRelativeDurationUnits(monthGrid, 200, 16)).toBe(2);
     expect(computeRelativeDurationUnits(yearGrid, 200, 16)).toBe(2);
+  });
+});
+
+// ===== 单一坐标源：ViewportState / getXAtTime / getTimeAtX =====
+
+function makeViewportState(
+  startTime: number,
+  endTime: number,
+  zoom: number,
+  overrides: Partial<ViewportState> = {},
+): ViewportState {
+  return {
+    zoom,
+    scrollLeft: 0,
+    viewportWidth: 1024,
+    timeRange: { startTime, endTime },
+    leftPadding: LEFT_PADDING,
+    ...overrides,
+  };
+}
+
+describe('getXAtTime', () => {
+  it('should return leftPadding when time equals startTime at hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    expect(getXAtTime(state, new Date(start))).toBe(LEFT_PADDING);
+  });
+
+  it('should map 6 hours after start to LEFT + 6*zoom at hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const t = new Date('2024-01-01T06:00:00Z').getTime();
+    expect(getXAtTime(state, t)).toBe(LEFT_PADDING + 6 * 60);
+  });
+
+  it('should map 2.5 days after start at day zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-10T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const t = new Date('2024-01-03T12:00:00Z').getTime();
+    expect(getXAtTime(state, t)).toBeCloseTo(LEFT_PADDING + 2.5 * 90, 6);
+  });
+
+  it('should use real calendar months at month zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-04-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const jan31 = new Date('2024-01-31T00:00:00Z').getTime();
+    expect(getXAtTime(state, jan31)).toBeCloseTo(LEFT_PADDING + (30 / 31) * 140, 6);
+  });
+
+  it('should use real calendar years at year zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2025-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 220);
+    // 2024 is a leap year (366 days). Jan 1 -> Jul 1 = 182 days.
+    const jul1 = new Date('2024-07-01T00:00:00Z').getTime();
+    expect(getXAtTime(state, jul1)).toBeCloseTo(LEFT_PADDING + (182 / 366) * 220, 6);
+  });
+
+  it('should accept both Date and number inputs producing identical results', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const t = new Date('2024-01-01T12:00:00Z');
+    expect(getXAtTime(state, t)).toBe(getXAtTime(state, t.getTime()));
+  });
+
+  it('should be backward compatible with grid.timeToX for the same zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const grid = createTimelineGrid(start, end, 90, LEFT_PADDING);
+    const sample = new Date('2024-03-15T00:00:00Z').getTime();
+    expect(getXAtTime(state, sample)).toBe(grid.timeToX(sample));
+  });
+});
+
+describe('getTimeAtX', () => {
+  it('should return null when viewport state is degenerate (zero viewportWidth)', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60, { viewportWidth: 0 });
+    expect(getTimeAtX(state, LEFT_PADDING + 100)).toBeNull();
+  });
+
+  it('should return null when time range is degenerate', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, start, 60);
+    expect(getTimeAtX(state, LEFT_PADDING + 100)).toBeNull();
+  });
+
+  it('should return null for NaN x input', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    expect(getTimeAtX(state, Number.NaN)).toBeNull();
+  });
+
+  it('should return the start Date at leftPadding for hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const result = getTimeAtX(state, LEFT_PADDING);
+    expect(result).not.toBeNull();
+    expect(result!.getTime()).toBe(start);
+  });
+
+  it('should round-trip within 1px precision at hour zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 60);
+    const original = new Date('2024-01-01T06:00:00Z').getTime();
+    const x = getXAtTime(state, original);
+    const back = getTimeAtX(state, x);
+    expect(back).not.toBeNull();
+    const roundTripX = getXAtTime(state, back!.getTime());
+    expect(Math.abs(roundTripX - x)).toBeLessThanOrEqual(1);
+  });
+
+  it('should round-trip within 1px precision at day zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-10T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const original = new Date('2024-01-03T12:00:00Z').getTime();
+    const x = getXAtTime(state, original);
+    const back = getTimeAtX(state, x);
+    expect(back).not.toBeNull();
+    const roundTripX = getXAtTime(state, back!.getTime());
+    expect(Math.abs(roundTripX - x)).toBeLessThanOrEqual(1);
+  });
+
+  it('should round-trip within 1px precision at month zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const original = new Date('2024-06-15T00:00:00Z').getTime();
+    const x = getXAtTime(state, original);
+    const back = getTimeAtX(state, x);
+    expect(back).not.toBeNull();
+    const roundTripX = getXAtTime(state, back!.getTime());
+    expect(Math.abs(roundTripX - x)).toBeLessThanOrEqual(1);
+  });
+
+  it('should round-trip within 1px precision at year zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2025-01-01T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 220);
+    const original = new Date('2024-07-01T00:00:00Z').getTime();
+    const x = getXAtTime(state, original);
+    const back = getTimeAtX(state, x);
+    expect(back).not.toBeNull();
+    const roundTripX = getXAtTime(state, back!.getTime());
+    expect(Math.abs(roundTripX - x)).toBeLessThanOrEqual(1);
+  });
+
+  it('should be backward compatible with grid.xToTime for the same zoom', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-10T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 90);
+    const grid = createTimelineGrid(start, end, 90, LEFT_PADDING);
+    const x = LEFT_PADDING + 2.5 * 90;
+    const result = getTimeAtX(state, x);
+    expect(result).not.toBeNull();
+    expect(result!.getTime()).toBe(grid.xToTime(x));
+  });
+});
+
+describe('ViewportState single source of truth', () => {
+  it('should produce identical x for the same time regardless of scrollLeft', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    const stateA = makeViewportState(start, end, 60, { scrollLeft: 0 });
+    const stateB = makeViewportState(start, end, 60, { scrollLeft: 500 });
+    const t = new Date('2024-01-01T12:00:00Z').getTime();
+    // scrollLeft 是视口偏移，不影响 time→content-x 映射
+    expect(getXAtTime(stateA, t)).toBe(getXAtTime(stateB, t));
+  });
+
+  it('should reflect zoom changes in the time→x mapping', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-01-02T00:00:00Z').getTime();
+    // 使用同一 hour 级别内的两档 zoom，避免跨级别刻度切换
+    const state30 = makeViewportState(start, end, 30);
+    const state60 = makeViewportState(start, end, 60);
+    const t = new Date('2024-01-01T06:00:00Z').getTime();
+    const x30 = getXAtTime(state30, t);
+    const x60 = getXAtTime(state60, t);
+    // 双倍 zoom → 双倍像素间距
+    expect(x60 - LEFT_PADDING).toBeCloseTo(2 * (x30 - LEFT_PADDING), 6);
   });
 });

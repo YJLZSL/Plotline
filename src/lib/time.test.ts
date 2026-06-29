@@ -5,6 +5,10 @@ import {
   formatEventTime,
   formatDurationLocalized,
   formatEventDuration,
+  formatEventTimeRange,
+  formatRelativeOffset,
+  getEventAbsoluteRange,
+  NO_DURATION,
 } from './time';
 import type { Event } from '@/types';
 
@@ -26,6 +30,9 @@ function makeEvent(overrides: Partial<Event> & { dateValue: string; dateType: Ev
     connectedEventIds: [],
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
+    endDateTime: overrides.endDateTime ?? null,
+    relativeTo: overrides.relativeTo ?? null,
+    relativeOffsetDays: overrides.relativeOffsetDays ?? null,
   };
 }
 
@@ -99,18 +106,174 @@ describe('formatDurationLocalized', () => {
 });
 
 describe('formatEventDuration', () => {
-  it('returns null for relative events', () => {
+  it('should return NO_DURATION when event is relative', () => {
     const event = makeEvent({ dateType: 'relative', dateValue: '' });
-    expect(formatEventDuration(event)).toBeNull();
+    expect(formatEventDuration(event)).toBe(NO_DURATION);
+    expect(formatEventDuration(event)).toBe('——');
   });
 
-  it('returns null when no end time is present', () => {
+  it('should return NO_DURATION when absolute event has no end time', () => {
     const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15' });
-    expect(formatEventDuration(event)).toBeNull();
+    expect(formatEventDuration(event)).toBe('——');
   });
 
-  it('computes duration for a same-day range', () => {
+  it('should compute short duration for a same-day range with hours and minutes', () => {
     const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 11:30' });
-    expect(formatEventDuration(event)).toBe('2 小时 30 分钟');
+    expect(formatEventDuration(event)).toBe('2h 30m');
+  });
+
+  it('should compute short duration for a pure hours range', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 11:00' });
+    expect(formatEventDuration(event)).toBe('2h');
+  });
+
+  it('should compute short duration for a minutes-only range', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 09:30' });
+    expect(formatEventDuration(event)).toBe('30m');
+  });
+
+  it('should compute short duration for a multi-day range', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 2024-03-17 11:00' });
+    expect(formatEventDuration(event)).toBe('2d 2h');
+  });
+
+  it('should use endDateTime field when provided', () => {
+    const event = makeEvent({
+      dateType: 'absolute',
+      dateValue: '2024-03-15 09:00',
+      endDateTime: '2024-03-15 11:00',
+    });
+    expect(formatEventDuration(event)).toBe('2h');
+  });
+});
+
+describe('formatRelativeOffset', () => {
+  it('should return empty string for absolute events', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15' });
+    expect(formatRelativeOffset(event)).toBe('');
+  });
+
+  it('should return empty string when relativeOffsetDays is null', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '', relativeOffsetDays: null });
+    expect(formatRelativeOffset(event)).toBe('');
+  });
+
+  it('should return empty string when relativeOffsetDays is undefined', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '' });
+    event.relativeOffsetDays = undefined;
+    expect(formatRelativeOffset(event)).toBe('');
+  });
+
+  it('should return synced label when offset is 0', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '', relativeOffsetDays: 0 });
+    expect(formatRelativeOffset(event)).toBe('同步');
+    expect(formatRelativeOffset(event, 'en')).toBe('Synced');
+  });
+
+  it('should return positive offset with plus sign', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '', relativeOffsetDays: 2 });
+    expect(formatRelativeOffset(event)).toBe('+2d');
+  });
+
+  it('should return negative offset with minus sign', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '', relativeOffsetDays: -1 });
+    expect(formatRelativeOffset(event)).toBe('−1d');
+  });
+});
+
+describe('formatEventTimeRange', () => {
+  it('should show relative index when no relativeTo and no offset', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '', sortOrder: 2 });
+    expect(formatEventTimeRange(event)).toBe('相对 #3');
+  });
+
+  it('should show relative label in English locale', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '', sortOrder: 2 });
+    expect(formatEventTimeRange(event, 'en')).toBe('Relative #3');
+  });
+
+  it('should show anchor id and offset when relativeTo and relativeOffsetDays are set', () => {
+    const event = makeEvent({
+      dateType: 'relative',
+      dateValue: '',
+      relativeTo: 'evt-42',
+      relativeOffsetDays: 2,
+    });
+    expect(formatEventTimeRange(event)).toBe('相对 #evt-42 · +2d');
+  });
+
+  it('should show synced label when offset is 0', () => {
+    const event = makeEvent({
+      dateType: 'relative',
+      dateValue: '',
+      relativeTo: 'evt-42',
+      relativeOffsetDays: 0,
+    });
+    expect(formatEventTimeRange(event)).toBe('相对 #evt-42 · 同步');
+  });
+
+  it('should show only date for date-only absolute events', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15' });
+    expect(formatEventTimeRange(event)).toBe('2024-03-15');
+  });
+
+  it('should show date and time for absolute events with a time component', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00' });
+    expect(formatEventTimeRange(event)).toBe('2024-03-15 09:00');
+  });
+
+  it('should show a same-day time range', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 11:00' });
+    expect(formatEventTimeRange(event)).toBe('2024-03-15 09:00 – 11:00');
+  });
+
+  it('should omit year on end for same-year cross-day range', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 2024-03-16 18:00' });
+    expect(formatEventTimeRange(event)).toBe('2024-03-15 09:00 – 03-16 18:00');
+  });
+
+  it('should show full dates for cross-year range', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-12-30 09:00 – 2025-01-02 18:00' });
+    expect(formatEventTimeRange(event)).toBe('2024-12-30 09:00 – 2025-01-02 18:00');
+  });
+
+  it('should use endDateTime field when provided', () => {
+    const event = makeEvent({
+      dateType: 'absolute',
+      dateValue: '2024-03-15 14:00',
+      endDateTime: '2024-03-15 16:00',
+    });
+    expect(formatEventTimeRange(event)).toBe('2024-03-15 14:00 – 16:00');
+  });
+
+  it('should fall back to raw value when parsing fails', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: 'unknown' });
+    expect(formatEventTimeRange(event)).toBe('unknown');
+  });
+});
+
+describe('getEventAbsoluteRange', () => {
+  it('should return null for relative events', () => {
+    const event = makeEvent({ dateType: 'relative', dateValue: '' });
+    expect(getEventAbsoluteRange(event)).toBeNull();
+  });
+
+  it('should parse range from dateValue when endDateTime is absent', () => {
+    const event = makeEvent({ dateType: 'absolute', dateValue: '2024-03-15 09:00 – 11:00' });
+    const range = getEventAbsoluteRange(event);
+    expect(range).not.toBeNull();
+    expect(range!.end).toBeDefined();
+  });
+
+  it('should use endDateTime when provided', () => {
+    const event = makeEvent({
+      dateType: 'absolute',
+      dateValue: '2024-03-15 09:00',
+      endDateTime: '2024-03-15 11:00',
+    });
+    const range = getEventAbsoluteRange(event);
+    expect(range).not.toBeNull();
+    expect(range!.start.getHours()).toBe(9);
+    expect(range!.end!.getHours()).toBe(11);
   });
 });

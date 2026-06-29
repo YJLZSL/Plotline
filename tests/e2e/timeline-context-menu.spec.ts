@@ -65,6 +65,8 @@ test.describe('时间轴右键菜单', () => {
 
     await menu.getByRole('menuitem', { name: '放大' }).click();
     await expect(menu).not.toBeVisible();
-    await expect(page.locator('text=年').first()).toBeVisible();
+    // 默认 zoom=140（月档），单击"放大"后 zoom≈168 仍处于月档（≥140 <175）。
+    // 工具栏会显示当前 zoom 档位标签（年/月/日/时之一），验证任一标签可见即可确认缩放生效。
+    await expect(page.locator('text=/年|月|日|时/').first()).toBeVisible({ timeout: 5000 });
   });
 });

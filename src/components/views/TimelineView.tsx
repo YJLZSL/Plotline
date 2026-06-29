@@ -1,5 +1,6 @@
 import { memo, useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Plus,
@@ -25,6 +26,8 @@ import {
   ChevronDown,
   ChevronsUpDown,
   MoreHorizontal,
+  FileText,
+  Download,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
@@ -37,8 +40,9 @@ import {
   adjustZoom,
   DEFAULT_ZOOM,
   LEFT_PADDING,
-  type TimeScale,
-  type ZoomLevel,
+  getXAtTime,
+  getViewportTimeScale,
+  type ViewportState,
   type EventLayoutItem,
 } from '@/features/timeline/timelineGrid';
 import { useTimelineViewport } from '@/features/timeline/useTimelineViewport';
@@ -63,7 +67,8 @@ import {
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
+import { MOTION_FAST, EASE_STANDARD } from '@/lib/motion';
+import { getScenePreset, getElementDelay } from '@/lib/motionOrchestrator';
 import type { Character, Event, EventConnection, EventStatus, Track } from '@/types';
 import {
   useCreateEvent,
@@ -89,6 +94,14 @@ import {
   getEventCardWidth,
   estimateLabelWidth,
 } from '@/features/timeline/timelineLayout';
+import {
+  chooseTickLevel,
+  formatMajorTick,
+  formatMinorTick,
+  getMajorTickTimestamps,
+  getMinorTickTimestamps,
+  type TickLevel,
+} from '@/features/timeline/timeScale';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useUIStore } from '@/stores/ui';
@@ -112,14 +125,6 @@ const DAY_MS = 24 * 3600 * 1000;
 
 const EVENT_COLOR_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
 const VISIBLE_EVENT_BUFFER = EVENT_CARD_MAX_WIDTH * 4;
-
-// 每个缩放级别的主刻度单位（用于标尺）
-const ZOOM_RULER_FORMAT: Record<ZoomLevel, Intl.DateTimeFormatOptions> = {
-  hour: { hour: '2-digit', minute: '2-digit' },
-  day: { month: 'short', day: 'numeric' },
-  month: { year: 'numeric', month: 'short' },
-  year: { year: 'numeric' },
-};
 
 interface TimelineViewProps {
   workspaceId: string;
@@ -169,6 +174,32 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [viewMode, setViewMode] = useState<'timeline' | 'gantt' | 'tree' | 'text'>('timeline');
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
   const [copiedEvent, setCopiedEvent] = useState<Event | null>(null);
+  const [filterBarVisible, setFilterBarVisible] = useState(true);
+  const navigate = useNavigate();
+  const filteredEvents = useMemo(
+    () => filterEvents(events, filters),
+    [events, filters],
+  );
+
+  // 从绝对事件中计算时间范围，作为视口坐标源的唯一时间边界。
+  // 不依赖 zoom，可在 hook 之前计算，保证 viewportState.timeRange 与 grid 在同一帧一致。
+  const timeBounds = useMemo(() => {
+    const absoluteEvents = filteredEvents.filter((e) => e.dateType === 'absolute' && e.dateValue);
+    let baseTime = 0;
+    let maxTime = 365 * DAY_MS;
+    if (absoluteEvents.length > 0) {
+      const times = absoluteEvents.map((e) => new Date(e.dateValue).getTime()).filter((n) => !Number.isNaN(n));
+      if (times.length > 0) {
+        const firstTime = Math.min(...times);
+        const lastTime = Math.max(...times);
+        const span = lastTime - firstTime || 365 * DAY_MS;
+        baseTime = firstTime;
+        maxTime = lastTime + span * 0.15;
+      }
+    }
+    return { startTime: baseTime, endTime: maxTime };
+  }, [filteredEvents]);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const {
     zoom,
@@ -179,7 +210,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     setViewportWidth,
     zoomAt,
     panBy,
-  } = useTimelineViewport({ canvasRef, initialZoom: DEFAULT_ZOOM });
+    viewportState,
+    getTimeAtX: viewportGetTimeAtX,
+  } = useTimelineViewport({ canvasRef, initialZoom: DEFAULT_ZOOM, timeRange: timeBounds });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null);
   const panElementRef = useRef<HTMLElement | null>(null);
@@ -247,34 +280,17 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
   const visibleTracks = useMemo(() => tracks.filter((tr) => tr.isVisible), [tracks]);
 
-  const filteredEvents = useMemo(
-    () => filterEvents(events, filters),
-    [events, filters],
+  // 计算连续 zoom 网格（timeBounds 已在 hook 之前算出，这里直接复用）
+  const grid = useMemo(
+    () => createTimelineGrid(timeBounds.startTime, timeBounds.endTime, zoom, LEFT_PADDING),
+    [timeBounds, zoom],
   );
-
-  // 计算时间轴范围与连续 zoom 网格：baseTime 为最小绝对事件时间，无绝对事件时为 0
-  const grid = useMemo(() => {
-    const absoluteEvents = filteredEvents.filter((e) => e.dateType === 'absolute' && e.dateValue);
-    let baseTime = 0;
-    let maxTime = 365 * DAY_MS;
-    if (absoluteEvents.length > 0) {
-      const times = absoluteEvents.map((e) => new Date(e.dateValue).getTime()).filter((n) => !Number.isNaN(n));
-      if (times.length > 0) {
-        const firstTime = Math.min(...times);
-        const lastTime = Math.max(...times);
-        const span = lastTime - firstTime || 365 * DAY_MS;
-        baseTime = firstTime;
-        maxTime = lastTime + span * 0.15;
-      }
-    }
-    return createTimelineGrid(baseTime, maxTime, zoom, LEFT_PADDING);
-  }, [filteredEvents, zoom]);
 
   const timeScale = useMemo(() => grid.getTimeScale(), [grid]);
 
   const totalWidth = useMemo(
-    () => Math.max(800, grid.timeToX(grid.maxTime) + LEFT_PADDING + EVENT_CARD_MAX_WIDTH),
-    [grid],
+    () => Math.max(800, getXAtTime(viewportState, timeBounds.endTime) + LEFT_PADDING + EVENT_CARD_MAX_WIDTH),
+    [viewportState, timeBounds.endTime],
   );
 
   const relativeDurationUnits = useMemo(
@@ -366,6 +382,35 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     }
   }, [workspaceId, t]);
 
+  // 导出时间轴为 Markdown：按轨道分组列出事件，含日期/标题/状态
+  const handleExportTimeline = useCallback(() => {
+    const lines: string[] = [`# ${t('timeline.title')}`, ''];
+    for (const tr of visibleTracks) {
+      const trackEvents = eventsByTrack.get(tr.id) ?? [];
+      if (trackEvents.length === 0) continue;
+      lines.push(`## ${tr.name}`, '');
+      for (const ev of trackEvents) {
+        const dateStr = ev.dateType === 'absolute' && ev.dateValue
+          ? new Date(ev.dateValue).toISOString().slice(0, 10)
+          : t('timeline.relativeBadge');
+        const statusBadge = ev.status === 'done' ? '✅' : ev.status === 'revise' ? '⚠️' : '📝';
+        lines.push(`- ${statusBadge} **${dateStr}** ${ev.title}`);
+        if (ev.description) lines.push(`  ${ev.description}`);
+      }
+      lines.push('');
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timeline-${workspaceId}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toastInfo(t('timeline.exported'));
+  }, [t, visibleTracks, eventsByTrack, workspaceId]);
+
   const handleAddTrack = useCallback(async () => {
     if (!newTrackName.trim()) return;
     await createTrack.mutateAsync({ workspaceId, name: newTrackName.trim() });
@@ -391,7 +436,9 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
   const handleCanvasDoubleClick = useCallback(
     async (trackId: string, x: number) => {
-      const time = timeScale.xToTime(x);
+      const timeDate = viewportGetTimeAtX(x);
+      if (!timeDate) return;
+      const time = timeDate.getTime();
       const ev = await createEvent.mutateAsync({
         workspaceId,
         trackId,
@@ -404,7 +451,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       setEventDialogOpen(true);
       selectEvent(ev.id);
     },
-    [createEvent, eventsByTrack, timeScale, workspaceId, selectEvent],
+    [createEvent, eventsByTrack, viewportGetTimeAtX, workspaceId, selectEvent],
   );
 
   const handleEventDragEnd = useCallback(
@@ -419,12 +466,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       }
 
       if (ev.dateType === 'absolute') {
-        const newTime = timeScale.xToTime(clampedX);
+        const newTimeDate = viewportGetTimeAtX(clampedX);
+        if (!newTimeDate) return;
         updates.dateType = 'absolute';
-        updates.dateValue = new Date(newTime).toISOString().slice(0, 10);
+        updates.dateValue = newTimeDate.toISOString().slice(0, 10);
       } else {
         const trackEvents = eventsByTrack.get(targetTrack.id) ?? [];
-        const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, timeScale);
+        const newSort = computeNewSortOrder(ev, clampedX, trackEvents, eventPositions, viewportState);
         if (newSort !== ev.sortOrder || updates.trackId !== undefined) {
           updates.sortOrder = newSort;
         }
@@ -434,7 +482,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         await updateEvent.mutateAsync(updates);
       }
     },
-    [eventPositions, eventsByTrack, timeScale, totalWidth, updateEvent],
+    [eventPositions, eventsByTrack, viewportGetTimeAtX, viewportState, totalWidth, updateEvent],
   );
 
   const handleSaveEvent = useCallback(
@@ -626,19 +674,56 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         workspaceId={workspaceId}
         workspaceName={workspaceName}
         right={
-          <div className="flex items-center gap-1">
-            <ViewModeSegment value={viewMode} onChange={setViewMode} />
+          <div className="flex items-center gap-1" data-testid="timeline-toolbar">
+            {/* Group 1: Create */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={() => handleAddEvent(visibleTracks[0]?.id ?? '')}
+              title={t('timeline.addEvent')}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('timeline.addEvent')}</span>
+            </Button>
             <div className="w-px h-5 bg-border mx-1" />
-            <Button variant="ghost" size="sm" onClick={handleZoomOut} title={t('timeline.zoomOut')}>
+
+            {/* Group 2: Filter */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('h-8', hasActiveFilters && 'text-accent')}
+              onClick={() => setFilterBarVisible((v) => !v)}
+              title={t('timeline.filter')}
+              data-testid="timeline-toolbar-filter"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              {hasActiveFilters && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] rounded-full bg-accent/15 text-accent">
+                  •
+                </span>
+              )}
+            </Button>
+            <div className="w-px h-5 bg-border mx-1" />
+
+            {/* Group 3: View mode + zoom */}
+            <ViewModeSegment
+              value={viewMode}
+              onChange={setViewMode}
+              onScriptClick={() => navigate(`/workspaces/${workspaceId}/script`)}
+            />
+            <Button variant="ghost" size="sm" className="h-8" onClick={handleZoomOut} title={t('timeline.zoomOut')}>
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <span className="text-xs text-text-secondary min-w-[40px] text-center">
               {t(`timeline.${zoomLabel}`)}
             </span>
-            <Button variant="ghost" size="sm" onClick={handleZoomIn} title={t('timeline.zoomIn')}>
+            <Button variant="ghost" size="sm" className="h-8" onClick={handleZoomIn} title={t('timeline.zoomIn')}>
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
             <div className="w-px h-5 bg-border mx-1" />
+
+            {/* Group 4: More */}
             <TimelineMoreMenu
               showConnections={showConnections}
               onToggleConnections={() => setShowConnections((v) => !v)}
@@ -649,12 +734,13 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               checkingConsistency={checkingConsistency}
               onCheckConsistency={handleConsistencyCheck}
               aiSelection={aiSelection}
+              onExport={() => handleExportTimeline()}
             />
           </div>
         }
       />
 
-      {viewMode === 'timeline' && (
+      {viewMode === 'timeline' && filterBarVisible && (
         <FilterBar
           characters={characters}
           locations={locations}
@@ -857,7 +943,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 <>
                   {/* 日期标尺 */}
                   <DateRuler
-                    timeScale={timeScale}
+                    viewportState={viewportState}
                     totalWidth={totalWidth}
                     isPanning={isPanning}
                     onPointerDown={(e) => {
@@ -891,7 +977,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                     collapsedTrackIds={filters.collapsedTrackIds}
                     eventPositions={eventPositions}
                     eventLayout={eventLayout}
-                    timeScale={timeScale}
+                    viewportState={viewportState}
                     scrollLeft={scrollLeft}
                     viewportWidth={viewportWidth}
                     pendingConnection={pendingConnection}
@@ -914,7 +1000,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   events={eventsByTrack.get(tr.id) ?? []}
                   eventPositions={eventPositions}
                   eventLayout={eventLayout}
-                  timeScale={timeScale}
+                  viewportState={viewportState}
                   totalWidth={totalWidth}
                   zoom={zoom}
                   scrollLeft={scrollLeft}
@@ -1022,9 +1108,11 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 function ViewModeSegment({
   value,
   onChange,
+  onScriptClick,
 }: {
   value: 'timeline' | 'gantt' | 'tree' | 'text';
   onChange: (v: 'timeline' | 'gantt' | 'tree' | 'text') => void;
+  onScriptClick: () => void;
 }) {
   const { t } = useI18n();
   const modes: Array<{ id: typeof value; icon: React.ComponentType<{ className?: string }>; labelKey: string }> = [
@@ -1034,7 +1122,10 @@ function ViewModeSegment({
     { id: 'text', icon: List, labelKey: 'timeline.textMode' },
   ];
   return (
-    <div className="flex bg-bg-elevated rounded-[6px] p-0.5 mr-1">
+    <div
+      className="flex bg-bg-elevated rounded-[6px] p-0.5 mr-1"
+      data-testid="timeline-viewmode-segment"
+    >
       {modes.map((m) => {
         const Icon = m.icon;
         return (
@@ -1044,16 +1135,30 @@ function ViewModeSegment({
             className={cn(
               'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
               value === m.id
-                ? 'bg-bg-surface text-text-primary shadow-sm'
+                ? 'bg-accent/10 text-accent'
                 : 'text-text-secondary hover:text-text-primary',
             )}
             title={t(m.labelKey)}
+            data-testid={`timeline-viewmode-${m.id}`}
           >
             <Icon className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t(m.labelKey)}</span>
           </button>
         );
       })}
+      {/* 剧本视图：独立路由，点击跳转 */}
+      <button
+        onClick={onScriptClick}
+        className={cn(
+          'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
+          'text-text-secondary hover:text-text-primary',
+        )}
+        title={t('script.title')}
+        data-testid="timeline-viewmode-script"
+      >
+        <FileText className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{t('script.title')}</span>
+      </button>
     </div>
   );
 }
@@ -1068,6 +1173,7 @@ function TimelineMoreMenu({
   checkingConsistency,
   onCheckConsistency,
   aiSelection,
+  onExport,
 }: {
   showConnections: boolean;
   onToggleConnections: () => void;
@@ -1078,6 +1184,7 @@ function TimelineMoreMenu({
   checkingConsistency: boolean;
   onCheckConsistency: () => void;
   aiSelection: { type: 'event'; id: string; label: string; content: string } | null;
+  onExport: () => void;
 }) {
   const { t } = useI18n();
   const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
@@ -1175,6 +1282,17 @@ function TimelineMoreMenu({
               <Sparkles className="h-3.5 w-3.5" />
               {t('ai.ask')}
             </button>
+            <div className="h-px bg-border my-0.5" />
+            <button
+              onClick={() => {
+                onExport();
+                setOpen(false);
+              }}
+              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left text-text-secondary hover:bg-bg-elevated transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {t('timeline.export')}
+            </button>
           </div>
         </Popover.Content>
       </Popover.Portal>
@@ -1184,37 +1302,40 @@ function TimelineMoreMenu({
 
 // ===== 日期标尺 =====
 const DateRuler = memo(function DateRuler({
-  timeScale,
+  viewportState,
   totalWidth,
   isPanning,
   onPointerDown,
   onPointerMove,
   onPointerUp,
 }: {
-  timeScale: TimeScale;
+  viewportState: ViewportState;
   totalWidth: number;
   isPanning: boolean;
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
-  const { min, max, zoom } = timeScale;
+  const { min, max } = useMemo(() => getViewportTimeScale(viewportState), [viewportState]);
   const { t, i18n } = useI18n();
   const [hovered, setHovered] = useState<{ x: number; label: string } | null>(null);
 
-  const { majorTicks, minorTicks, todayX } = useMemo(() => {
-    const fmt = new Intl.DateTimeFormat(i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US', {
-      ...ZOOM_RULER_FORMAT[zoom],
-    });
-    const { major, minor } = timeScale.getTicks();
-    const majors = major.map((time) => ({ time, label: fmt.format(new Date(time)) }));
-    const minors = minor.map((time) => ({ time }));
+  // 刻度级别由连续 zoom 值决定（四档：year/quarter/month/week/day/hour），
+  // 不再依赖离散 ZoomLevel 枚举，保证缩放过程中刻度密度平滑过渡。
+  const { majorTicks, minorTicks, todayX, tickLevel } = useMemo(() => {
+    const level: TickLevel = chooseTickLevel(viewportState.zoom);
+    const majors = getMajorTickTimestamps(min, max, level).map((time) => ({
+      time,
+      label: formatMajorTick(new Date(time), level),
+    }));
+    const minors = getMinorTickTimestamps(min, max, level).map((time) => ({ time }));
 
     // 动态采样主刻度，避免标签重叠：间隔小于预估宽度 + 8px 时跳过
+    // 水平坐标必须通过 getXAtTime 计算，保证与事件卡片/连接线/Today 线像素级对齐
     const sampled: typeof majors = [];
     let lastX: number | null = null;
     for (const tick of majors) {
-      const x = timeScale.timeToX(tick.time);
+      const x = getXAtTime(viewportState, tick.time);
       const width = estimateLabelWidth(tick.label);
       if (lastX === null || x - lastX >= width + 8) {
         sampled.push(tick);
@@ -1223,9 +1344,12 @@ const DateRuler = memo(function DateRuler({
     }
 
     const now = Date.now();
-    const today = now >= min && now <= max ? timeScale.timeToX(now) : null;
-    return { majorTicks: sampled, minorTicks: minors, todayX: today };
-  }, [min, max, zoom, timeScale, i18n.language]);
+    const today = now >= min && now <= max ? getXAtTime(viewportState, now) : null;
+    return { majorTicks: sampled, minorTicks: minors, todayX: today, tickLevel: level };
+  }, [viewportState, min, max]);
+
+  // 次刻度标签：仅在 day/hour 等细粒度级别下显示，避免在 year/quarter 级别下噪点过多
+  const showMinorLabels = tickLevel === 'day' || tickLevel === 'hour' || tickLevel === 'week';
 
   return (
     <div
@@ -1244,20 +1368,26 @@ const DateRuler = memo(function DateRuler({
       <div className="relative h-full">
         {/* 次刻度 */}
         {minorTicks.map((tick, i) => {
-          const x = timeScale.timeToX(tick.time);
+          const x = getXAtTime(viewportState, tick.time);
           if (x < 0 || x > totalWidth) return null;
           return (
             <div
               key={`m-${i}`}
               className="absolute top-0 bottom-0 border-l border-border/20 pointer-events-none"
               style={{ left: x }}
-            />
+            >
+              {showMinorLabels && (
+                <span className="absolute top-2 left-1 text-[9px] text-text-tertiary whitespace-nowrap pointer-events-none">
+                  {formatMinorTick(new Date(tick.time), tickLevel)}
+                </span>
+              )}
+            </div>
           );
         })}
 
         {/* 主刻度 */}
         {majorTicks.map((tick, i) => {
-          const x = timeScale.timeToX(tick.time);
+          const x = getXAtTime(viewportState, tick.time);
           if (x < 0 || x > totalWidth) return null;
           return (
             <div
@@ -1313,6 +1443,67 @@ const DateRuler = memo(function DateRuler({
   );
 });
 
+// ===== 单条连接线（带 pathLength 入场动画） =====
+const ConnectionPath = memo(function ConnectionPath({
+  d,
+  stroke,
+  strokeWidth,
+  strokeDasharray,
+  isActive,
+  enhanced,
+  opacityDuration,
+  pathLengthDuration,
+  delay,
+  onClick,
+}: {
+  d: string;
+  stroke: string;
+  strokeWidth: number;
+  strokeDasharray: string;
+  isActive: boolean;
+  enhanced: boolean;
+  opacityDuration: number;
+  pathLengthDuration: number;
+  delay: number;
+  onClick: () => void;
+}) {
+  const ref = useRef<SVGPathElement>(null);
+  const targetOpacity = isActive ? 0.9 : 0.25;
+  return (
+    <motion.path
+      ref={ref}
+      d={d}
+      fill="none"
+      stroke={stroke}
+      strokeDasharray={strokeDasharray}
+      initial={enhanced ? { pathLength: 0, opacity: 0 } : { opacity: 0 }}
+      animate={{
+        ...(enhanced ? { pathLength: 1 } : {}),
+        opacity: targetOpacity,
+        strokeWidth,
+      }}
+      whileHover={{ opacity: 0.9, strokeWidth: 2 }}
+      transition={{
+        pathLength: enhanced
+          ? { duration: pathLengthDuration, ease: EASE_STANDARD, delay }
+          : { duration: 0 },
+        opacity: enhanced
+          ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
+          : { duration: 0.2, ease: EASE_STANDARD },
+        strokeWidth: { duration: 0.15, ease: EASE_STANDARD },
+      }}
+      onAnimationComplete={() => {
+        if (ref.current && enhanced) {
+          ref.current.style.strokeDasharray = '';
+          ref.current.style.strokeDashoffset = '';
+        }
+      }}
+      className="pointer-events-auto cursor-pointer"
+      onClick={onClick}
+    />
+  );
+});
+
 // ===== 连线层（SVG，纯计算，不随滚动测量 DOM） =====
 const ConnectionLayer = memo(function ConnectionLayer({
   events,
@@ -1320,7 +1511,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
   collapsedTrackIds,
   eventPositions,
   eventLayout,
-  timeScale,
+  viewportState,
   scrollLeft,
   viewportWidth,
   pendingConnection,
@@ -1335,7 +1526,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
   collapsedTrackIds: string[];
   eventPositions: Map<string, number>;
   eventLayout: { layouts: Map<string, EventLayoutItem>; trackHeights: Map<string, number> };
-  timeScale: TimeScale;
+  viewportState: ViewportState;
   scrollLeft: number;
   viewportWidth: number;
   pendingConnection: string | null;
@@ -1345,6 +1536,12 @@ const ConnectionLayer = memo(function ConnectionLayer({
   draggingEvent: { id: string; offsetX: number } | null;
   onDisconnect: (sourceId: string, targetId: string) => void;
 }) {
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+  // 连接线绘制属于 cardBatchEnter 场景的一部分：opacity 180ms + pathLength 220ms。
+  // 退化模式下 pathLength 关闭，仅保留 200ms 同步淡入。
+  const connectionPreset = getScenePreset('cardBatchEnter', { enhanced: enhancedAnimations });
+  const connectionConfig = connectionPreset.connection;
+
   const buffer = EVENT_CARD_MAX_WIDTH * 2;
   const visibleMin = scrollLeft - buffer;
   const visibleMax = scrollLeft + viewportWidth + buffer;
@@ -1364,73 +1561,112 @@ const ConnectionLayer = memo(function ConnectionLayer({
     return map;
   }, [tracks, collapsedTrackIds, eventLayout]);
 
-  const eventPoints = useMemo(() => {
-    const map = new Map<string, { source: { x: number; y: number }; target: { x: number; y: number } }>();
+  // 连接线端点的水平坐标 SHALL 通过 getXAtTime(viewportState, ...) 计算，
+  // 保证与事件卡片左边距、标尺刻度、Today 线像素级对齐。
+  // 垂直锚点继续基于 layout/trackTopByIndex 推导，不依赖 DOM 测量。
+  // 每个事件预计算完整几何（leftX/rightX/centerX/topY/bottomY/centerY/trackId），
+  // 连接锚点按"同轨道/跨轨道"分别取边沿，确保不依赖 DOM 测量即可对齐。
+  const eventGeometry = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        leftX: number;
+        rightX: number;
+        centerX: number;
+        topY: number;
+        bottomY: number;
+        centerY: number;
+        trackId: string;
+      }
+    >();
     for (const ev of events) {
-      const x = timeScale.timeToX(eventPositions.get(ev.id) ?? 0);
+      const x = getXAtTime(viewportState, eventPositions.get(ev.id) ?? 0);
       const layout = eventLayout.layouts.get(ev.id);
       const width = layout?.width ?? getEventCardWidth(ev.title);
       const trackIndex = tracks.findIndex((t) => t.id === ev.trackId);
       const trackTop = trackTopByIndex.get(trackIndex) ?? RULER_HEIGHT;
       const offsetX = draggingEvent?.id === ev.id ? draggingEvent.offsetX : 0;
-      const cardCenterY = trackTop + (layout?.y ?? EVENT_BASE_TOP) + EVENT_HEIGHT / 2;
+      const cardTopY = trackTop + (layout?.y ?? EVENT_BASE_TOP);
+      const cardBottomY = cardTopY + EVENT_HEIGHT;
+      const cardCenterY = cardTopY + EVENT_HEIGHT / 2;
       map.set(ev.id, {
-        source: { x: x + width + offsetX, y: cardCenterY },
-        target: { x: x + offsetX, y: cardCenterY },
+        leftX: x + offsetX,
+        rightX: x + width + offsetX,
+        centerX: x + width / 2 + offsetX,
+        topY: cardTopY,
+        bottomY: cardBottomY,
+        centerY: cardCenterY,
+        trackId: ev.trackId,
       });
     }
     return map;
-  }, [events, eventPositions, eventLayout, timeScale, tracks, trackTopByIndex, draggingEvent]);
+  }, [events, eventPositions, eventLayout, viewportState, tracks, trackTopByIndex, draggingEvent]);
 
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
-      const sp = eventPoints.get(conn.sourceId)?.source;
-      const tp = eventPoints.get(conn.targetId)?.target;
-      if (!sp || !tp) return false;
+      const sg = eventGeometry.get(conn.sourceId);
+      const tg = eventGeometry.get(conn.targetId);
+      if (!sg || !tg) return false;
       if (onlySelectedConnections && selectedEventId) {
         if (conn.sourceId !== selectedEventId && conn.targetId !== selectedEventId) return false;
       }
-      return sp.x >= visibleMin && sp.x <= visibleMax && tp.x >= visibleMin && tp.x <= visibleMax;
+      // 用源/目标的中心 X 做可见性裁剪，避免同轨道连接因端点在视口外被误裁
+      return (
+        (sg.centerX >= visibleMin && sg.centerX <= visibleMax) ||
+        (tg.centerX >= visibleMin && tg.centerX <= visibleMax)
+      );
     });
-  }, [eventConnections, eventPoints, visibleMin, visibleMax, onlySelectedConnections, selectedEventId]);
+  }, [eventConnections, eventGeometry, visibleMin, visibleMax, onlySelectedConnections, selectedEventId]);
 
   return (
     <svg
       className="absolute top-0 left-0 w-full h-full pointer-events-none"
+      data-testid="timeline-connection-layer"
     >
       {visibleConnections.map((conn) => {
-        const sp = eventPoints.get(conn.sourceId)?.source;
-        const tp = eventPoints.get(conn.targetId)?.target;
-        if (!sp || !tp) return null;
-        const midX = (sp.x + tp.x) / 2;
+        const sg = eventGeometry.get(conn.sourceId);
+        const tg = eventGeometry.get(conn.targetId);
+        if (!sg || !tg) return null;
+        // 同轨道：源右沿中点 → 目标左沿中点（水平贝塞尔）
+        // 跨轨道：源下沿中点 → 目标上沿中点（垂直贝塞尔）
+        const sameTrack = sg.trackId === tg.trackId;
+        let sx: number, sy: number, tx: number, ty: number, path: string;
+        if (sameTrack) {
+          sx = sg.rightX;
+          sy = sg.centerY;
+          tx = tg.leftX;
+          ty = tg.centerY;
+          const midX = (sx + tx) / 2;
+          path = `M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ty}, ${tx} ${ty}`;
+        } else {
+          sx = sg.centerX;
+          sy = sg.bottomY;
+          tx = tg.centerX;
+          ty = tg.topY;
+          const midY = (sy + ty) / 2;
+          path = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
+        }
         const isActive =
           pendingConnection === conn.sourceId ||
           pendingConnection === conn.targetId ||
           selectedEventId === conn.sourceId ||
           selectedEventId === conn.targetId;
         const isForeshadow = conn.connectionType === 'foreshadow';
-        const path = `M ${sp.x} ${sp.y} C ${midX} ${sp.y}, ${midX} ${tp.y}, ${tp.x} ${tp.y}`;
         return (
           <g key={`${conn.sourceId}-${conn.targetId}`}>
-            <path
+            <ConnectionPath
               d={path}
-              fill="none"
               stroke={isForeshadow ? 'var(--accent-soft)' : isActive ? 'var(--accent)' : 'var(--text-secondary)'}
               strokeWidth={isActive ? 2 : 1}
               strokeDasharray={isForeshadow ? '6 4' : '4 3'}
-              opacity={isActive ? 0.9 : 0.25}
-              className="pointer-events-auto cursor-pointer"
+              isActive={isActive}
+              enhanced={connectionPreset.enhanced}
+              opacityDuration={connectionConfig?.opacityDuration ?? 0.2}
+              pathLengthDuration={connectionConfig?.pathLengthDuration ?? 0}
+              delay={connectionConfig?.delay ?? 0}
               onClick={() => onDisconnect(conn.sourceId, conn.targetId)}
-              onMouseEnter={(e) => {
-                e.currentTarget.setAttribute('stroke-width', '2');
-                e.currentTarget.setAttribute('opacity', '0.9');
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.setAttribute('stroke-width', isActive ? '2' : '1');
-                e.currentTarget.setAttribute('opacity', isActive ? '0.9' : '0.25');
-              }}
             />
-            <circle cx={tp.x} cy={tp.y} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} className="pointer-events-none" />
+            <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} className="pointer-events-none" />
           </g>
         );
       })}
@@ -1447,7 +1683,7 @@ interface TrackLaneProps {
   events: Event[];
   eventPositions: Map<string, number>;
   eventLayout: { layouts: Map<string, EventLayoutItem>; trackHeights: Map<string, number> };
-  timeScale: TimeScale;
+  viewportState: ViewportState;
   totalWidth: number;
   zoom: number;
   scrollLeft: number;
@@ -1488,7 +1724,7 @@ const TrackLane = memo(function TrackLane({
   events,
   eventPositions,
   eventLayout,
-  timeScale,
+  viewportState,
   totalWidth,
   zoom,
   scrollLeft,
@@ -1521,6 +1757,8 @@ const TrackLane = memo(function TrackLane({
   onDragEndNotify,
 }: TrackLaneProps) {
   const { t } = useI18n();
+  const enhancedAnimations = useUIStore((s) => s.enhancedAnimations);
+  const cardPreset = getScenePreset('cardBatchEnter', { enhanced: enhancedAnimations });
   const containerRef = useRef<HTMLDivElement>(null);
   const prevEventIdsRef = useRef<Set<string>>(new Set(events.map((e) => e.id)));
 
@@ -1551,8 +1789,8 @@ const TrackLane = memo(function TrackLane({
   }, [events, eventLayout, scrollLeft, viewportWidth]);
 
   const eventXs = useMemo(
-    () => events.map((ev) => eventLayout.layouts.get(ev.id)?.x ?? timeScale.timeToX(eventPositions.get(ev.id) ?? 0)),
-    [events, eventLayout, eventPositions, timeScale],
+    () => events.map((ev) => eventLayout.layouts.get(ev.id)?.x ?? getXAtTime(viewportState, eventPositions.get(ev.id) ?? 0)),
+    [events, eventLayout, eventPositions, viewportState],
   );
 
   const addButtonLeft = useMemo(
@@ -1628,8 +1866,9 @@ const TrackLane = memo(function TrackLane({
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0, height: targetHeight }}
           transition={{
-            ...MOTION_BASE,
-            delay: Math.min(index * 0.025, 0.05),
+            duration: cardPreset.enter.duration,
+            ease: cardPreset.enter.ease,
+            delay: getElementDelay(index, cardPreset.enter.step),
             height: MOTION_FAST,
           }}
           className={cn(
@@ -1830,14 +2069,14 @@ function computeNewSortOrder(
   finalX: number,
   trackEvents: Event[],
   eventPositions: Map<string, number>,
-  timeScale: TimeScale,
+  viewportState: ViewportState,
 ): number {
   const sameType = trackEvents.filter((e) => e.dateType === ev.dateType && e.id !== ev.id);
   const sorted = [...sameType].sort((a, b) => a.sortOrder - b.sortOrder);
   let index = sorted.length;
   for (let i = 0; i < sorted.length; i++) {
     const other = sorted[i]!;
-    const ox = timeScale.timeToX(eventPositions.get(other.id) ?? 0);
+    const ox = getXAtTime(viewportState, eventPositions.get(other.id) ?? 0);
     if (finalX < ox) {
       index = i;
       break;

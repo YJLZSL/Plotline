@@ -15,8 +15,22 @@
     "worldbuilding": "Worldbuilding",
     "statistics": "Statistics",
     "notebook": "Notebook",
-    "aiAssistant": "AI Studio",
-    "settings": "Settings"
+    "aiAssistant": "AI Create",
+    "settings": "Settings",
+    "tooltip": {
+      "timeline": "Timeline — Orchestrate story events",
+      "script": "Script — Write scene dialogue",
+      "characters": "Characters — Manage character profiles",
+      "outline": "Outline — Structure chapters",
+      "map": "Map — Mark location layouts",
+      "vn": "Visual Novel — Edit sprite scenes",
+      "worldbuilding": "Worldbuilding — Maintain lore entries",
+      "novel": "Novel — Write chapter prose",
+      "notebook": "Notebook — Collect research notes",
+      "aiAssistant": "AI Create — Conversational writing assistant",
+      "statistics": "Statistics — Track writing progress",
+      "settings": "Settings — Adjust preferences and AI config"
+    }
   },
   "workspace": {
     "title": "Workspaces",
@@ -120,6 +134,8 @@
     "consistencyConflicts": "Found {{count}} consistency conflict(s) (same character on multiple tracks at the same time)",
     "connectionTypeCausal": "Causal",
     "connectionTypeForeshadow": "Foreshadow",
+    "connectionType": "Connection type",
+    "connectionMode": "Connection mode",
     "treeMode": "Tree",
     "textMode": "Text",
     "relativeBadge": "Relative",
@@ -127,6 +143,10 @@
     "today": "Today",
     "foreshadowTracker": "Foreshadow Tracker",
     "connectionHint": "Click target event to create a {{type}} connection, or",
+    "export": "Export timeline",
+    "exported": "Timeline exported as Markdown",
+    "quarter": "Quarter",
+    "week": "Week",
     "event": {
       "title": "Event title",
       "description": "Description",
@@ -137,6 +157,11 @@
       "characters": "Characters",
       "location": "Location",
       "duration": "Duration",
+      "timeRange": "Time range",
+      "relativeOffset": "Relative offset",
+      "synced": "Synced",
+      "noDuration": "——",
+      "moreCharacters": "+{{count}}",
       "track": "Track",
       "color": "Event color",
       "colorDefault": "Default (track color)",
@@ -582,7 +607,7 @@
     "promptWorldbuilding": "Please add 3-5 creative setting entries for the current worldbuilding category and explain their potential impact on the story."
   },
   "aiAssistant": {
-    "title": "AI Studio",
+    "title": "AI Create",
     "emptyTitle": "Start Creating",
     "emptyDescription": "Choose an agent and context on the left, then type a message to start.",
     "placeholder": "Type a message and press Enter…",

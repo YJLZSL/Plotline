@@ -6,6 +6,7 @@ import type { EventLayoutItem } from '@/features/timeline/timelineGrid';
 
 import { EventCard, EventTooltipContent_ } from './EventCard';
 import { TooltipProvider } from './Tooltip';
+import { NO_DURATION } from '@/lib/time';
 
 
 
@@ -89,6 +90,9 @@ function makeEvent(overrides: Partial<Event> & { title: string; dateValue: strin
     connectedEventIds: [],
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
+    endDateTime: overrides.endDateTime ?? null,
+    relativeTo: overrides.relativeTo ?? null,
+    relativeOffsetDays: overrides.relativeOffsetDays ?? null,
   };
 }
 
@@ -143,20 +147,20 @@ describe('EventCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders title, time range, duration and status pill', () => {
+  it('renders title, time range, duration and status dot', () => {
     renderCard({ event: makeEvent({ title: '决战', dateValue: '2024-03-15 09:00 – 11:30', dateType: 'absolute', status: 'done' }) });
 
     expect(screen.getByText('决战')).toBeInTheDocument();
     expect(screen.getByText('2024-03-15 09:00 – 11:30')).toBeInTheDocument();
-    expect(screen.getByText('(2 小时 30 分钟)')).toBeInTheDocument();
-    expect(screen.getByText('timeline.event.statusDone')).toBeInTheDocument();
+    expect(screen.getByText('2h 30m')).toBeInTheDocument();
+    // Status dot uses role="img" with aria-label instead of visible badge text
+    expect(screen.getByRole('img', { name: 'timeline.event.statusDone' })).toBeInTheDocument();
   });
 
-  it('renders a relative badge with index for relative events', () => {
+  it('renders a relative time range with index for relative events', () => {
     renderCard({ event: makeEvent({ title: '序幕', dateValue: '', dateType: 'relative', sortOrder: 0 }) });
 
     expect(screen.getByText('序幕')).toBeInTheDocument();
-    expect(screen.getByText('timeline.relativeBadge')).toBeInTheDocument();
     expect(screen.getByText('相对 #1')).toBeInTheDocument();
   });
 
@@ -207,8 +211,8 @@ describe('EventCard', () => {
       <TooltipProvider>
         <EventTooltipContent_
           event={event}
-          displayTime={event.dateValue}
-          duration={null}
+          timeRange={event.dateValue}
+          duration={NO_DURATION}
           locationName={locationName}
           associatedCharacters={characters}
         />

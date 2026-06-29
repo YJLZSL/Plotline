@@ -35,6 +35,114 @@ export function adjustZoom(zoom: number, direction: 1 | -1): number {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
 }
 
+// ===== 单一坐标源：ViewportState =====
+
+/**
+ * 时间轴可视范围。
+ * `startTime`/`endTime` 既可以是 ms 时间戳（number），也可以是 ISO 字符串或 Date。
+ * 内部统一转换为 ms 时间戳参与计算。
+ */
+export interface ViewportTimeRange {
+  startTime: number | string | Date;
+  endTime: number | string | Date;
+}
+
+/**
+ * 时间轴视口的唯一坐标源。
+ *
+ * 所有"时间 ↔ 像素"换算 SHALL 通过 `getXAtTime` / `getTimeAtX` 进行，
+ * 不允许组件各自独立计算 time→x。
+ *
+ * - `zoom`：连续 pixels-per-unit（与 {@link adjustZoom} 配合使用）。
+ * - `scrollLeft`：当前水平滚动偏移（px）。注意：scrollLeft 是视口偏移，
+ *   不影响 time→content-x 的映射；它仅在需要把 content-x 换算为 viewport-x 时使用。
+ * - `viewportWidth`：可见区域宽度（px）。用于检测退化状态。
+ * - `timeRange`：时间轴起止时间，决定 `TimeScale` 的 min/max。
+ * - `leftPadding`：时间轴左侧留白（默认 {@link LEFT_PADDING}）。
+ */
+export interface ViewportState {
+  zoom: number;
+  scrollLeft: number;
+  viewportWidth: number;
+  timeRange: ViewportTimeRange;
+  leftPadding: number;
+}
+
+function toMs(time: number | string | Date): number {
+  if (time instanceof Date) return time.getTime();
+  if (typeof time === 'number') return time;
+  return new Date(time).getTime();
+}
+
+/**
+ * 判断 ViewportState 是否处于退化状态（无法进行有效坐标换算）。
+ * 退化条件：zoom 非正、viewportWidth 非正、时间范围非正、或起止时间为 NaN。
+ */
+function isDegenerate(state: ViewportState): boolean {
+  if (!Number.isFinite(state.zoom) || state.zoom <= 0) return true;
+  if (!Number.isFinite(state.viewportWidth) || state.viewportWidth <= 0) return true;
+  const start = toMs(state.timeRange.startTime);
+  const end = toMs(state.timeRange.endTime);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return true;
+  if (end <= start) return true;
+  return false;
+}
+
+/**
+ * 基于 ViewportState 内部构造一个 TimeScale。
+ * 复用 {@link createTimeScale} 的实现以保证向后兼容。
+ */
+function buildTimeScale(state: ViewportState): TimeScale {
+  const start = toMs(state.timeRange.startTime);
+  const end = toMs(state.timeRange.endTime);
+  const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, state.zoom));
+  const zoomLabel = getZoomLabel(clampedZoom);
+  return createTimeScale(start, end, zoomLabel, state.leftPadding, clampedZoom);
+}
+
+/**
+ * 把时间映射为时间轴内容坐标 x（px）。
+ *
+ * 这是时间轴唯一的 time→x 换算入口。所有标尺刻度、事件卡片左边距、
+ * 连接线端点、Today 参考线 SHALL 通过此函数计算水平坐标。
+ *
+ * @param state 视口状态（唯一坐标源）
+ * @param time  时间，可为 Date / ms 时间戳 / ISO 字符串
+ * @returns 内容坐标 x（px）；若 state 退化则返回 leftPadding
+ */
+export function getXAtTime(state: ViewportState, time: number | string | Date): number {
+  if (isDegenerate(state)) return state.leftPadding;
+  const t = toMs(time);
+  if (!Number.isFinite(t)) return state.leftPadding;
+  const scale = buildTimeScale(state);
+  return scale.timeToX(t);
+}
+
+/**
+ * 把时间轴内容坐标 x（px）映射回时间。
+ *
+ * @param state 视口状态（唯一坐标源）
+ * @param x     内容坐标 x（px）
+ * @returns 对应的 Date；若 state 退化或 x 非法则返回 null
+ */
+export function getTimeAtX(state: ViewportState, x: number): Date | null {
+  if (isDegenerate(state)) return null;
+  if (!Number.isFinite(x)) return null;
+  const scale = buildTimeScale(state);
+  return new Date(scale.xToTime(x));
+}
+
+/**
+ * 基于 ViewportState 构造一个 TimeScale，供需要 `getTicks()` 等方法的组件使用。
+ *
+ * 这是 `getXAtTime` / `getTimeAtX` 的配套入口：组件 SHALL 通过此函数获取
+ * TimeScale，而不是自行调用 `createTimeScale`，以保证坐标源唯一。
+ * 返回的 TimeScale 与 `getXAtTime`/`getTimeAtX` 内部使用的 TimeScale 完全一致。
+ */
+export function getViewportTimeScale(state: ViewportState): TimeScale {
+  return buildTimeScale(state);
+}
+
 export interface TimelineGrid {
   /** 相对事件的时间基准：最小绝对事件时间，无绝对事件时为 0。 */
   baseTime: number;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Timer } from 'lucide-react';
 
 import { Sidebar } from './Sidebar';
@@ -11,7 +11,7 @@ import { AiAssistantPanel } from './AiAssistantPanel';
 import { PomodoroTimer } from '@/components/ui';
 import { FirstVisitGuide } from '@/components/onboarding/FirstVisitGuide';
 import { cn } from '@/lib/utils';
-import { MOTION_BASE, MOTION_SPRING } from '@/lib/motion';
+import { getScenePreset } from '@/lib/motionOrchestrator';
 import { APP_VERSION } from '@/lib/version';
 import { useUIStore } from '@/stores/ui';
 import { useWorkspaceSelectionStore } from '@/stores/workspaceSelection';
@@ -23,8 +23,10 @@ export function WorkspaceLayout() {
   const [pomoOpen, setPomoOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const { aiPanelOpen, setAiPanelOpen, firstWorkspaceVisit, setFirstWorkspaceVisit, enhancedAnimations } = useUIStore();
-  const reduced = useReducedMotion();
-  const viewTransition = reduced ? { duration: 0 } : enhancedAnimations ? MOTION_SPRING : MOTION_BASE;
+  const viewPreset = getScenePreset('viewSwitch', { enhanced: enhancedAnimations });
+  const viewTransition = viewPreset.reduced
+    ? { duration: 0 }
+    : { duration: viewPreset.enter.duration, ease: viewPreset.enter.ease };
   const { data: workspaces = [] } = useWorkspacesQuery();
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId);
   const clearSelection = useWorkspaceSelectionStore((s) => s.clear);
@@ -53,7 +55,7 @@ export function WorkspaceLayout() {
       <div className="flex flex-1 flex-col min-w-0">
         <motion.div
           key={location.pathname}
-          initial={reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
+          initial={viewPreset.reduced ? { opacity: 1 } : { opacity: 0, x: 8 }}
           animate={{ opacity: 1, x: 0 }}
           transition={viewTransition}
           className="flex-1 min-h-0 flex flex-col"

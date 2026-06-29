@@ -26,14 +26,14 @@ async function enableAiInStorage(page: Page) {
 }
 
 async function navigateToAiAssistant(page: Page) {
-  await page.locator('nav a').filter({ hasText: /AI 创作|AI Studio/ }).click();
+  await page.locator('nav a').filter({ hasText: /AI 创作|AI Create/ }).click();
   await expect(page).toHaveURL(/\/workspaces\/.+\/ai-assistant/);
 }
 
 test.describe('AI 创作助手侧边模块', () => {
   test('侧边栏显示 AI 创作入口，未启用 AI 时显示未启用提示', async ({ page }) => {
     await createWorkspace(page, 'AI 测试');
-    await expect(page.locator('nav a').filter({ hasText: /AI 创作|AI Studio/ })).toBeVisible();
+    await expect(page.locator('nav a').filter({ hasText: /AI 创作|AI Create/ })).toBeVisible();
 
     await navigateToAiAssistant(page);
     await expect(page.locator('text=AI 助手未启用')).toBeVisible();
