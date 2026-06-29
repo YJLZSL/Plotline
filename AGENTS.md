@@ -44,15 +44,17 @@
 - `docs/数据模型.md` — 数据模型与 ER 图
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v3.2.0 开发中：时间轴拖动吸附）
+### 当前迭代状态（v3.2.1 已发布：时间轴拖动吸附补丁）
+- **v3.2.1 补丁说明**：v3.2.1 是 v3.2.0 的补丁版本，包含 `snapX` 透传修复、`dragSnap` 动画预设统一、以及 `timeline-drag-snap` E2E 稳定性修复。
 - **时间轴拖动吸附**：新增 `getSnapTimeAtX` / `getSnapXAtTime` 纯函数（`src/features/timeline/timelineGrid.ts`），基于当前标尺档位计算吸附目标时间与像素位置；拖动事件时自动吸附到最近的时间网格。
 - **吸附提示组件**：新增 `DragSnapHint` 与 `DragSnapTooltip`，在拖拽过程中实时显示当前吸附时间与偏移量，释放前即可预览落点。
 - **EventCard 拖动归位动画**：拖拽释放后，事件卡片沿 `motionOrchestrator` 的 `dragSnap` 场景预设播放归位动画，连接线同步跟随锚点。
 - **动画编排层扩展**：`motionOrchestrator` 新增 `dragSnap` 场景预设，统一管理吸附确认、卡片归位、连接线重绘的 stagger / delay / easing；`prefers-reduced-motion` 或"增强动效"关闭时退化为 200ms 同步淡入。
 - **真实创作意图 E2E**：新增覆盖完整创作流程的 E2E 测试（创建事件 → 拖动吸附 → 验证时间与视觉位置一致）。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `3.2.0`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 同步更新。
+- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `3.2.1`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 同步更新。
 - **本地构建状态**：前端 `pnpm lint/typecheck/build/test:run` 全绿；本地 Rust 编译环境仍存在 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，依赖 CI 验证 `cargo test` 与 `cargo clippy -- -D warnings`。
-- **GitHub Release v3.2.0**：待发布
+- **GitHub Release v3.2.1**：<https://github.com/YJLZSL/Plotline/releases/tag/v3.2.1>
+- **上一版本**：v3.2.0 已发布 <https://github.com/YJLZSL/Plotline/releases/tag/v3.2.0>
 
 ### 上一版本（v3.1.0 / v3.0.0 / v2.8.0 / v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
 - v3.1.0：时间轴对齐重写与动画编排层。时间轴坐标单一源（`ViewportState` + `getXAtTime`/`getTimeAtX`）、标尺 6 档自适应、事件卡片三 zone 重构、连接线时间锚点边缘对齐、动画编排层 5 场景预设、工具栏四分组 + Sidebar 三分组、14 个 visual E2E 测试。前端 `pnpm lint/typecheck/build/test:run` 全绿。
@@ -360,4 +362,4 @@ docs(agents): 补充 IPC 调用规范
 ---
 
 > 文档版本：v0.6.0  
-> 最后更新：2026-06-29（v3.2.0 开发中：时间轴拖动吸附）
+> 最后更新：2026-06-29（v3.2.1 已发布：时间轴拖动吸附补丁）
