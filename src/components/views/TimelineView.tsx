@@ -385,6 +385,15 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [visibleTracks, isCollapsed, eventLayout],
   );
 
+  // 贯穿轨道区的 Today 参考线：与标尺内 Today 线同一坐标源（getXAtTime），
+  // 且同样要求"今天"落在当前时间范围内，保证与标尺标记像素级对齐。
+  const trackAreaTodayX = useMemo(() => {
+    const { min, max } = getViewportTimeScale(viewportState);
+    const now = Date.now();
+    if (now < min || now > max) return null;
+    return getXAtTime(viewportState, now);
+  }, [viewportState]);
+
   // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 baseTime 的伪时间戳
   const eventPositions = useMemo(() => {
     const positions = new Map<string, number>();
@@ -1110,6 +1119,18 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   />
                   )}
 
+                  {/* 贯穿轨道区的 Today 参考线：放在轨道之前渲染，
+                      事件卡片在其上方，避免遮挡；坐标与标尺内 Today 线同源（getXAtTime） */}
+                  {trackAreaTodayX !== null && trackAreaTodayX >= 0 && trackAreaTodayX <= totalWidth && (
+                    <div
+                      className="absolute top-0 bottom-0 z-10 pointer-events-none"
+                      style={{ left: trackAreaTodayX }}
+                      aria-hidden="true"
+                    >
+                      <div className="h-full w-px bg-accent/25 border-l border-dashed border-accent/15" />
+                    </div>
+                  )}
+
                   {/* 轨道 */}
                   {visibleTracks.map((tr, idx) => (
                 <TrackLane
@@ -1156,6 +1177,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   onToggleCollapse={handleToggleCollapse}
                 />
               ))}
+
                 </>
               )}
             </div>
