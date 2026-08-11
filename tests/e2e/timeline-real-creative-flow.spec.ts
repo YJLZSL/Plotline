@@ -173,7 +173,16 @@ test.describe('时间轴真实创作流程', () => {
     await page.mouse.move(targetX, targetY, { steps: 10 });
     await page.waitForTimeout(200);
     await page.mouse.up();
-    await page.waitForTimeout(300);
+    // 吸附经 mutation → layout 重算是异步的，等待卡片收敛到目标刻度而非固定等待
+    await expect
+      .poll(
+        async () => {
+          const box = await card.boundingBox();
+          return box ? Math.abs(box.x - targetTick!.x) : -1;
+        },
+        { timeout: 5000 },
+      )
+      .toBeLessThanOrEqual(SNAP_TOLERANCE);
 
     let finalBox = await card.boundingBox();
     expect(finalBox).not.toBeNull();
@@ -181,7 +190,18 @@ test.describe('时间轴真实创作流程', () => {
 
     // 阶段 2：缩小到日档，切换刻度级别后再次拖动验证吸附
     await zoomOut(page, 2);
-    await page.waitForTimeout(300);
+    // 等待缩放后卡片位置收敛（连续两次采样一致）再拖动，避免时序抖动导致 1px 断言 flaky
+    await expect
+      .poll(
+        async () => {
+          const box1 = await card.boundingBox();
+          await page.waitForTimeout(60);
+          const box2 = await card.boundingBox();
+          return box1 && box2 && Math.abs(box1.x - box2.x) < 0.5 ? box1.x : -1;
+        },
+        { timeout: 5000 },
+      )
+      .toBeGreaterThanOrEqual(0);
 
     cardBox = await card.boundingBox();
     expect(cardBox).not.toBeNull();
@@ -205,7 +225,16 @@ test.describe('时间轴真实创作流程', () => {
     await page.mouse.move(targetX, targetY, { steps: 10 });
     await page.waitForTimeout(200);
     await page.mouse.up();
-    await page.waitForTimeout(300);
+    // 吸附经 mutation → layout 重算是异步的，等待卡片收敛到目标刻度而非固定等待
+    await expect
+      .poll(
+        async () => {
+          const box = await card.boundingBox();
+          return box ? Math.abs(box.x - targetTick!.x) : -1;
+        },
+        { timeout: 5000 },
+      )
+      .toBeLessThanOrEqual(SNAP_TOLERANCE);
 
     finalBox = await card.boundingBox();
     expect(finalBox).not.toBeNull();
@@ -249,7 +278,16 @@ test.describe('时间轴真实创作流程', () => {
     expect(Math.abs(hintBox!.x - tickBox!.x)).toBeLessThanOrEqual(20);
 
     await page.mouse.up();
-    await page.waitForTimeout(500);
+    // 释放后吸附经 mutation → layout 重算是异步的，等待卡片收敛到目标刻度
+    await expect
+      .poll(
+        async () => {
+          const box = await card.boundingBox();
+          return box ? Math.abs(box.x - tickBox!.x) : -1;
+        },
+        { timeout: 5000 },
+      )
+      .toBeLessThanOrEqual(SNAP_TOLERANCE);
 
     // 释放后无 scale/pathLength 动画导致的异常：卡片应正常显示且日期已吸附
     await expect(card).toBeVisible();

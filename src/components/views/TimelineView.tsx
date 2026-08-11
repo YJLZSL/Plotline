@@ -1621,59 +1621,44 @@ const ConnectionPath = memo(function ConnectionPath({
 }) {
   const ref = useRef<SVGPathElement>(null);
   // v3.3.0: 非激活连线可读性提升 —— opacity 0.25→0.45、线宽 1→1.5，
-  // 并叠加背景色 halo 描边与轨道网格分离，密集连线场景不再"看不见线"。
+  // 并用 drop-shadow 光晕把连线从轨道背景网格中分离（保持单 path，避免 DOM 膨胀）。
   const targetOpacity = isActive ? 0.9 : 0.45;
   return (
-    <g>
-      {/* halo：宽幅背景色描边，把连接线从轨道背景网格中分离出来 */}
-      <motion.path
-        d={d}
-        fill="none"
-        stroke="var(--bg-base)"
-        strokeWidth={strokeWidth + 2.5}
-        strokeLinecap="round"
-        strokeDasharray={strokeDasharray}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: isActive ? 0.6 : 0.4 }}
-        transition={{
-          opacity: enhanced
-            ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
-            : { duration: 0.2, ease: EASE_STANDARD },
-        }}
-        className="pointer-events-none"
-      />
-      <motion.path
-        ref={ref}
-        d={d}
-        fill="none"
-        stroke={stroke}
-        strokeDasharray={strokeDasharray}
-        initial={enhanced ? { pathLength: 0, opacity: 0 } : { opacity: 0 }}
-        animate={{
-          ...(enhanced ? { pathLength: 1 } : {}),
-          opacity: targetOpacity,
-          strokeWidth,
-        }}
-        whileHover={{ opacity: 0.9, strokeWidth: 2 }}
-        transition={{
-          pathLength: enhanced
-            ? { duration: pathLengthDuration, ease: EASE_STANDARD, delay }
-            : { duration: 0 },
-          opacity: enhanced
-            ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
-            : { duration: 0.2, ease: EASE_STANDARD },
-          strokeWidth: { duration: 0.15, ease: EASE_STANDARD },
-        }}
-        onAnimationComplete={() => {
-          if (ref.current && enhanced) {
-            ref.current.style.strokeDasharray = '';
-            ref.current.style.strokeDashoffset = '';
-          }
-        }}
-        className="pointer-events-auto cursor-pointer"
-        onClick={onClick}
-      />
-    </g>
+    <motion.path
+      ref={ref}
+      d={d}
+      fill="none"
+      stroke={stroke}
+      strokeDasharray={strokeDasharray}
+      initial={enhanced ? { pathLength: 0, opacity: 0 } : { opacity: 0 }}
+      animate={{
+        ...(enhanced ? { pathLength: 1 } : {}),
+        opacity: targetOpacity,
+        strokeWidth,
+      }}
+      whileHover={{ opacity: 0.9, strokeWidth: 2 }}
+      transition={{
+        pathLength: enhanced
+          ? { duration: pathLengthDuration, ease: EASE_STANDARD, delay }
+          : { duration: 0 },
+        opacity: enhanced
+          ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
+          : { duration: 0.2, ease: EASE_STANDARD },
+        strokeWidth: { duration: 0.15, ease: EASE_STANDARD },
+      }}
+      onAnimationComplete={() => {
+        if (ref.current && enhanced) {
+          ref.current.style.strokeDasharray = '';
+          ref.current.style.strokeDashoffset = '';
+        }
+      }}
+      style={{
+        filter:
+          'drop-shadow(1px 0 0 var(--bg-base)) drop-shadow(-1px 0 0 var(--bg-base)) drop-shadow(0 1px 0 var(--bg-base)) drop-shadow(0 -1px 0 var(--bg-base))',
+      }}
+      className="pointer-events-auto cursor-pointer"
+      onClick={onClick}
+    />
   );
 });
 
