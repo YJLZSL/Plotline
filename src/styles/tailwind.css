@@ -55,3 +55,10 @@
   --radius-button: 6px;
   --radius-dialog: 12px;
 }
+
+/* 引用 themes.css 运行时定义的字体变量，让 font-pixel / font-smiley 工具类可编译。
+   @theme inline 不生成 :root 重复定义，避免与 themes.css 的同名变量冲突。 */
+@theme inline {
+  --font-pixel: var(--font-pixel);
+  --font-smiley: var(--font-smiley);
+}

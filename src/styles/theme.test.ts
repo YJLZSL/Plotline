@@ -53,6 +53,13 @@ describe('tailwind.css @font-face', () => {
     expect(tailwindCss).toContain('local("SmileySans")');
     expect(tailwindCss).toContain('font-display: swap');
   });
+
+  it('should map @theme inline --font-pixel / --font-smiley so utilities compile', () => {
+    expect(tailwindCss).toContain('--font-pixel: var(--font-pixel);');
+    expect(tailwindCss).toContain('--font-smiley: var(--font-smiley);');
+    // 引用运行时变量，避免与 themes.css 的 :root 定义冲突（重复定义会覆盖运行时切换）
+    expect(tailwindCss).toContain('@theme inline');
+  });
 });
 
 describe('FONT_STACKS', () => {
