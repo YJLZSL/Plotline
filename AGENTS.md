@@ -42,55 +42,17 @@
 - `docs/测试规范.md` — 测试流程
 - `docs/技术决策.md` — 关键技术决策
 - `docs/数据模型.md` — 数据模型与 ER 图
+- `docs/长期迭代计划.md` — **长期目标事实源**（优化点清单 + 分阶段路线图，实施前必读）
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
-### 当前迭代状态（v3.2.1 已发布：时间轴拖动吸附补丁）
-- **v3.2.1 补丁说明**：v3.2.1 是 v3.2.0 的补丁版本，包含 `snapX` 透传修复、`dragSnap` 动画预设统一、以及 `timeline-drag-snap` E2E 稳定性修复。
-- **时间轴拖动吸附**：新增 `getSnapTimeAtX` / `getSnapXAtTime` 纯函数（`src/features/timeline/timelineGrid.ts`），基于当前标尺档位计算吸附目标时间与像素位置；拖动事件时自动吸附到最近的时间网格。
-- **吸附提示组件**：新增 `DragSnapHint` 与 `DragSnapTooltip`，在拖拽过程中实时显示当前吸附时间与偏移量，释放前即可预览落点。
-- **EventCard 拖动归位动画**：拖拽释放后，事件卡片沿 `motionOrchestrator` 的 `dragSnap` 场景预设播放归位动画，连接线同步跟随锚点。
-- **动画编排层扩展**：`motionOrchestrator` 新增 `dragSnap` 场景预设，统一管理吸附确认、卡片归位、连接线重绘的 stagger / delay / easing；`prefers-reduced-motion` 或"增强动效"关闭时退化为 200ms 同步淡入。
-- **真实创作意图 E2E**：新增覆盖完整创作流程的 E2E 测试（创建事件 → 拖动吸附 → 验证时间与视觉位置一致）。
-- **版本号与文档**：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.lock` 升级到 `3.2.1`；`AGENTS.md`、`更新日志.md`、`交接文档.md`、`docs/产品路线图.md` 同步更新。
-- **本地构建状态**：前端 `pnpm lint/typecheck/build/test:run` 全绿；本地 Rust 编译环境仍存在 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，依赖 CI 验证 `cargo test` 与 `cargo clippy -- -D warnings`。
-- **GitHub Release v3.2.1**：<https://github.com/YJLZSL/Plotline/releases/tag/v3.2.1>
-- **上一版本**：v3.2.0 已发布 <https://github.com/YJLZSL/Plotline/releases/tag/v3.2.0>
+### 当前版本状态
+- **最新版本**：v3.2.1（已发布：时间轴拖动吸附补丁）<https://github.com/YJLZSL/Plotline/releases/tag/v3.2.1>
+- **当前版本详情与遗留问题**：见 `交接文档.md`（含本地构建状态、历史版本发布记录）；逐版本变更内容见 `更新日志.md`。
+- **本地构建注意**：本地 Rust 编译环境存在 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，依赖 CI 验证 `cargo test` 与 `cargo clippy -- -D warnings`。
 
-### 上一版本（v3.1.0 / v3.0.0 / v2.8.0 / v2.7.5 / v2.7.4 / v2.7.3 / v2.7.2 / v2.7.0 / v2.6.2 / v2.6.1 / v2.6.0 / v2.5.4 / v2.3.0 / v2.2.0 已发布/已标记）
-- v3.1.0：时间轴对齐重写与动画编排层。时间轴坐标单一源（`ViewportState` + `getXAtTime`/`getTimeAtX`）、标尺 6 档自适应、事件卡片三 zone 重构、连接线时间锚点边缘对齐、动画编排层 5 场景预设、工具栏四分组 + Sidebar 三分组、14 个 visual E2E 测试。前端 `pnpm lint/typecheck/build/test:run` 全绿。
-- GitHub Release v3.1.0：<https://github.com/YJLZSL/Plotline/releases/tag/v3.1.0>
-- v3.0.0：跨视图叙事导航 + AI 创作工作流。时间轴布局引擎重写（`timelineGrid.ts` / `timeScale.ts` / `useTimelineViewport.ts`）、Timeline / Script 双视图双向同步（`workspaceSelection.ts` 全局选择状态 + `ScriptView.tsx`）、AI 创作助手侧边模块（7 个 Agent + 会话管理 + 上下文选择器）、Rust clippy 清理。前端 `pnpm lint/typecheck/build/test:run/test:e2e` 全绿。
-- GitHub Release v3.0.0：<https://github.com/YJLZSL/Plotline/releases/tag/v3.0.0>
-- v2.8.0：前端丝滑化与时间轴逻辑升级。时间轴事件重叠修复与拖拽升级、动效系统 spring/layout token 与增强动效开关、TimelineView 性能优化、设置页重构、首次进入工作区新手引导与各视图空状态优化、新增 `docs/前端优化指南.md`。
-- GitHub Release v2.8.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.8.0>
-- v2.7.5：修复 v2.7.4 CI 中发现的 RAG 关键词检索 `LIKE` 子查询缺少 `%` 通配符问题（`src-tauri/src/services/ai.rs`），导致检索结果始终返回 0 条；补全通配符后确保 AI RAG 检索能正确返回相关实体，CI/Release workflow 全绿。
-- GitHub Release v2.7.5：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.5>
-- v2.7.4：修复 v2.7.3 CI 中发现的 SQLite 错误 `ESCAPE expression must be a single character`（`src-tauri/src/services/ai.rs` RAG 检索中的 `LIKE ESCAPE` 子句）；v2.7.3 的所有功能改进完整保留，CI/Release workflow 全绿。
-- GitHub Release v2.7.4：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.4>
-- v2.7.3：修复 v2.7.2 CI 中发现的 Rust 编译错误（`src-tauri/src/services/ai.rs` 中 `NeedApi` 字段匹配不完整、`UpdateWorkspaceInput` 字段缺失、`entities` 借用/移动问题），v2.7.2 的所有功能改进完整保留。tag 已推送，但 CI/Release workflow 在 `cargo test` 阶段因 SQLite `ESCAPE expression must be a single character` 错误失败，未生成可用 Release。功能由 v2.7.4 完整发布。
-- GitHub Release v2.7.3：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.3>（tag 已推送，Release 未成功；请使用 v2.7.4）
-- v2.7.2：v2.7.0 体验问题深度修复（Markdown 渲染、动画性能、时间轴交互、AI 助手能力、番茄钟成就、MC 主题与字体兼容）。tag 已推送，但 CI/Release workflow 因 `src-tauri/src/services/ai.rs` 等处 Rust 编译错误失败，未生成可用 Release。功能由 v2.7.3 完整发布。
-- GitHub Release v2.7.2：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.2>（tag 已推送，Release 未成功；请使用 v2.7.3）
-- v2.7.0：全面打磨与 AI 增强（Markdown 渲染、动画性能、时间轴交互、AI 能力快捷栏、KV Cache/RAG、番茄钟成就重置、MC 主题趣味化）。
-- GitHub Release v2.7.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.7.0>
-- v2.6.2：修复 v2.6.1 Rust 测试编译错误，UI/UX 与 AI 助手改进完整保留。
-- v2.6.1：时间轴布局修复、动画与设置页质感提升、AI 连接状态可见性（tag 已推送，但 Release 因 Rust 测试编译错误失败，功能由 v2.6.2 完整发布）。
-- v2.6.0：AI 风格模板 chips、AI apply-to-doc、时间轴筛选折叠、模板向导空状态。
-- v2.5.4：番茄钟可拖动、时间轴右键菜单、主题质感升级、AI 上下文增强。
-- v2.3.0：时间轴连线修复、MC 主题配色重构、文本模式可见性、设置教程、番茄钟联动。
-- v2.2.0：时间轴/事件逻辑重写、动画与性能优化、MC 主题再设计、工作区保存改进、自定义字体导入、真实浏览器测试。
-- GitHub Release v2.6.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.6.0>
-- GitHub Release v2.5.4：<https://github.com/YJLZSL/Plotline/releases/tag/v2.5.4>
-- GitHub Release v2.3.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.3.0>
-- GitHub Release v2.2.0：<https://github.com/YJLZSL/Plotline/releases/tag/v2.2.0>
-
-### 下一迭代方向（v3.2+ 候选）
-- 地图：地点分组/图层、打印/PDF 导出、角色足迹连线。
-- VN：角色立绘插槽拖拽、完整预览播放器、导出 Ren'Py 增强。
-- 世界观：种族/物种/宗教等实体管理、设定冲突检测。
-- AI：Agent 式工作流，自动整理大纲/发现时间轴漏洞。
-- UI 美术：统一空状态插画、卡片质感升级、日文翻译补全。
-- 番茄钟：与写作目标绑定、每日统计、通知提醒。
+### 下一迭代方向
+- **长期目标**：见 `docs/长期迭代计划.md`（Phase 1「v3.3 清晰度与一致性」→ Phase 2「v3.4 写作闭环」→ Phase 3「v4.0 深度创作」→ Phase 4「v4.1+ 打磨发布」）。
+- **当前重点（v3.3）**：时间轴清晰度十条、字体主题修复（`font-pixel` 工具类）、i18n en 补全、提交 CI/Rust 门禁改动。
 
 ---
 
@@ -261,6 +223,7 @@ docs(agents): 补充 IPC 调用规范
 - [ ] 本地 `pnpm lint` 无报错
 - [ ] 本地 `pnpm typecheck` 无报错
 - [ ] 本地 `pnpm test:run` 全绿
+- [ ] 涉及时间轴改动时，本地 `pnpm test:e2e tests/e2e/timeline-` 全绿（CI 的 e2e job 以该 timeline 子集为准入门禁；待子集在 CI 上稳定运行一段时间后，再逐步扩展到全量 `pnpm test:e2e`，visual/ 截图对比需先解决跨平台基线问题）
 - [ ] 本地 `cargo test` 全绿且 `cargo clippy -- -D warnings` 无告警
 - [ ] 新增功能有对应测试
 - [ ] 改动 IPC 时同步了前后端类型
@@ -268,12 +231,12 @@ docs(agents): 补充 IPC 调用规范
 - [ ] UI 改动截图/录屏附在提交说明或相关 issue 中
 
 ### 4.4 发布检查清单（Release）
-- [x] 版本号已统一（`package.json`、`Cargo.toml`、`tauri.conf.json`）
-- [x] `更新日志.md` 已更新
-- [x] `releases/vX.Y.Z/latest.json` 已创建（signature 字段已填入真实签名，不是 `<PLACEHOLDER>`）
-- [x] **签名密钥检查**：本地 `keys/plotline.key` 存在，GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 已配置
-- [x] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
-- [x] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
+- [ ] 版本号已统一（`package.json`、`Cargo.toml`、`tauri.conf.json`）
+- [ ] `更新日志.md` 已更新
+- [ ] `releases/vX.Y.Z/latest.json` 已创建（signature 字段已填入真实签名，不是 `<PLACEHOLDER>`）
+- [ ] **签名密钥检查**：本地 `keys/plotline.key` 存在，GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 已配置
+- [ ] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
+- [ ] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）
 
 > **签名密钥说明**：`.github/workflows/release.yml` 已配置显式签名步骤，CI 会自动为 `.exe` 生成 `.sig` 并创建 `latest.json` 上传 Release。正常情况下无需手动干预；仅在 CI 失败或 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 失效等紧急情况下，才使用本地 `keys/plotline.key` 手动签名并上传作为 fallback。详见 `交接文档.md` 中的 "签名密钥状态" 部分。
 >
@@ -349,15 +312,16 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-## 8. AI 接手时的 5 步上手流程
+## 8. AI 接手时的 8 步上手流程
 
 1. `Read` 本文件 + `交接文档.md` + `docs/文档索引.md` + `docs/架构设计.md` + `产品需求与设计文档.md`。
 2. `git log --oneline -20` 看最近提交，了解项目节奏。
 3. **检查密钥环境**：确认 `keys/plotline.key` 存在；若需 CI 自动签名，确认 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 已配置（详见 `docs/密钥管理指南.md`）。
 4. 若 `pnpm` 不可用，可直接使用 `node_modules/.bin` 中的 `tsc`、`eslint`、`vitest`、`tauri` 等命令。
-5. `pnpm install && pnpm dev`（或 `./node_modules/.bin/vite`）跑起来，体验当前状态。
-6. 用 `Grep`/`Glob` 定位要改的文件，**不要凭文件名猜路径**。
-7. 改动后立即 `pnpm lint && pnpm typecheck && pnpm test:run && cargo test --manifest-path src-tauri/Cargo.toml`，全绿再提交。
+5. **Node 版本**：项目要求 Node >= 20（`package.json` engines），CI 与 Release workflow 统一使用 Node 22，本地开发建议对齐 Node 22。
+6. `pnpm install && pnpm dev`（或 `./node_modules/.bin/vite`）跑起来，体验当前状态。
+7. 用 `Grep`/`Glob` 定位要改的文件，**不要凭文件名猜路径**。
+8. 改动后立即 `pnpm lint && pnpm typecheck && pnpm test:run && cargo test --manifest-path src-tauri/Cargo.toml`，全绿再提交。
 
 ---
 

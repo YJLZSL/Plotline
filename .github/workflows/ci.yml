@@ -31,20 +31,60 @@ jobs:
       - run: pnpm build
 
   backend:
-    name: 后端 cargo test
-    runs-on: ubuntu-latest
+    name: 后端 cargo test + clippy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
       - name: Install Linux Tauri deps
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  e2e:
+    name: E2E timeline 门禁 (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # 准入门禁先跑 timeline 功能子集（tests/e2e/timeline-*.spec.ts，不含 visual/ 截图对比，
+      # 截图基线为 Windows 生成，跨平台对比不稳定）；扩展到全量 E2E 的计划见 AGENTS.md §4.3
+      - run: pnpm test:e2e tests/e2e/timeline-
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
