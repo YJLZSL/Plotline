@@ -28,7 +28,8 @@ const EVENT_STATUS_STYLES: Record<
   EventStatus,
   { dot: string; border: string; labelKey: string }
 > = {
-  draft: { dot: 'bg-text-secondary/60', border: 'border-status-draft', labelKey: 'timeline.event.statusDraft' },
+  // v3.3.0: draft 状态点改为实色（--text-secondary 不透明），不再被半透明弱化
+  draft: { dot: 'bg-status-draft', border: 'border-status-draft', labelKey: 'timeline.event.statusDraft' },
   done: { dot: 'bg-status-done', border: 'border-status-done', labelKey: 'timeline.event.statusDone' },
   revise: { dot: 'bg-status-revise', border: 'border-status-revise', labelKey: 'timeline.event.statusRevise' },
 };
@@ -255,13 +256,22 @@ export const EventCard = memo(function EventCard({
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="relative z-10 px-3 py-2 flex flex-col justify-between h-full min-w-0 gap-1">
-                {/* Zone 1: Header — 标题 + 状态点 + 连线手柄 */}
+                {/* Zone 1: Header — 状态点 + 相对标识 + 标题 + 连线手柄 */}
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span
                     role="img"
                     className={cn('h-2 w-2 rounded-full flex-shrink-0', status.dot)}
                     aria-label={isRelative ? t('timeline.relativeBadge') : t(status.labelKey)}
                   />
+                  {/* 相对事件标识：与绝对事件一眼区分（仅非绝对日期事件显示） */}
+                  {isRelative && (
+                    <span
+                      title={t('timeline.relativeBadge')}
+                      className="flex-shrink-0 text-[8px] leading-2 px-1 rounded-sm bg-accent/15 text-accent font-medium"
+                    >
+                      {t('timeline.relativeBadge')}
+                    </span>
+                  )}
                   <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0 leading-tight">
                     {event.title}
                   </span>

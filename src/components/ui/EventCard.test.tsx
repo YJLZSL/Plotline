@@ -279,6 +279,18 @@ describe('EventCard', () => {
     expect(screen.getByText('相对 #1')).toBeInTheDocument();
   });
 
+  it('shows a "relative" badge only for relative events', () => {
+    renderCard({ event: makeEvent({ title: '序幕', dateValue: '', dateType: 'relative', sortOrder: 0 }) });
+    // v3.3.0: 相对事件角标（timeline.relativeBadge）
+    expect(screen.getByTitle('timeline.relativeBadge')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'timeline.relativeBadge' })).toBeInTheDocument();
+  });
+
+  it('does not show a "relative" badge for absolute events', () => {
+    renderCard({ event: makeEvent({ title: '生日', dateValue: '2024-05-20', dateType: 'absolute' }) });
+    expect(screen.queryByTitle('timeline.relativeBadge')).not.toBeInTheDocument();
+  });
+
   it('renders only date for date-only absolute events', () => {
     renderCard({ event: makeEvent({ title: '生日', dateValue: '2024-05-20', dateType: 'absolute' }) });
 

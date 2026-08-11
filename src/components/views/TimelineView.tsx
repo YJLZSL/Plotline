@@ -1598,39 +1598,60 @@ const ConnectionPath = memo(function ConnectionPath({
   onClick: () => void;
 }) {
   const ref = useRef<SVGPathElement>(null);
-  const targetOpacity = isActive ? 0.9 : 0.25;
+  // v3.3.0: 非激活连线可读性提升 —— opacity 0.25→0.45、线宽 1→1.5，
+  // 并叠加背景色 halo 描边与轨道网格分离，密集连线场景不再"看不见线"。
+  const targetOpacity = isActive ? 0.9 : 0.45;
   return (
-    <motion.path
-      ref={ref}
-      d={d}
-      fill="none"
-      stroke={stroke}
-      strokeDasharray={strokeDasharray}
-      initial={enhanced ? { pathLength: 0, opacity: 0 } : { opacity: 0 }}
-      animate={{
-        ...(enhanced ? { pathLength: 1 } : {}),
-        opacity: targetOpacity,
-        strokeWidth,
-      }}
-      whileHover={{ opacity: 0.9, strokeWidth: 2 }}
-      transition={{
-        pathLength: enhanced
-          ? { duration: pathLengthDuration, ease: EASE_STANDARD, delay }
-          : { duration: 0 },
-        opacity: enhanced
-          ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
-          : { duration: 0.2, ease: EASE_STANDARD },
-        strokeWidth: { duration: 0.15, ease: EASE_STANDARD },
-      }}
-      onAnimationComplete={() => {
-        if (ref.current && enhanced) {
-          ref.current.style.strokeDasharray = '';
-          ref.current.style.strokeDashoffset = '';
-        }
-      }}
-      className="pointer-events-auto cursor-pointer"
-      onClick={onClick}
-    />
+    <g>
+      {/* halo：宽幅背景色描边，把连接线从轨道背景网格中分离出来 */}
+      <motion.path
+        d={d}
+        fill="none"
+        stroke="var(--bg-base)"
+        strokeWidth={strokeWidth + 2.5}
+        strokeLinecap="round"
+        strokeDasharray={strokeDasharray}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isActive ? 0.6 : 0.4 }}
+        transition={{
+          opacity: enhanced
+            ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
+            : { duration: 0.2, ease: EASE_STANDARD },
+        }}
+        className="pointer-events-none"
+      />
+      <motion.path
+        ref={ref}
+        d={d}
+        fill="none"
+        stroke={stroke}
+        strokeDasharray={strokeDasharray}
+        initial={enhanced ? { pathLength: 0, opacity: 0 } : { opacity: 0 }}
+        animate={{
+          ...(enhanced ? { pathLength: 1 } : {}),
+          opacity: targetOpacity,
+          strokeWidth,
+        }}
+        whileHover={{ opacity: 0.9, strokeWidth: 2 }}
+        transition={{
+          pathLength: enhanced
+            ? { duration: pathLengthDuration, ease: EASE_STANDARD, delay }
+            : { duration: 0 },
+          opacity: enhanced
+            ? { duration: opacityDuration, ease: EASE_STANDARD, delay }
+            : { duration: 0.2, ease: EASE_STANDARD },
+          strokeWidth: { duration: 0.15, ease: EASE_STANDARD },
+        }}
+        onAnimationComplete={() => {
+          if (ref.current && enhanced) {
+            ref.current.style.strokeDasharray = '';
+            ref.current.style.strokeDashoffset = '';
+          }
+        }}
+        className="pointer-events-auto cursor-pointer"
+        onClick={onClick}
+      />
+    </g>
   );
 });
 
@@ -1792,7 +1813,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
             <ConnectionPath
               d={path}
               stroke={isForeshadow ? 'var(--accent-soft)' : isActive ? 'var(--accent)' : 'var(--text-secondary)'}
-              strokeWidth={isActive ? 2 : 1}
+              strokeWidth={isActive ? 2 : 1.5}
               strokeDasharray={isForeshadow ? '6 4' : '4 3'}
               isActive={isActive}
               enhanced={connectionPreset.enhanced}
@@ -1801,7 +1822,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
               delay={connectionConfig?.delay ?? 0}
               onClick={() => onDisconnect(conn.sourceId, conn.targetId)}
             />
-            <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.5} className="pointer-events-none" />
+            <circle cx={tx} cy={ty} r={3} fill="var(--accent)" opacity={isActive ? 1 : 0.7} className="pointer-events-none" />
           </g>
         );
       })}
