@@ -493,7 +493,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return { min, max, level, majors, minors };
   }, [scaleState]);
 
-  // 相对事件刻度标记：在相对时间轴标尺上直接标出 #1/#2 等故事顺序点。
+  // 相对事件刻度标记：在相对时间轴标尺上直接标出 #1/#2 等故事顺序点，
+  // 并把事件的相对日期（如"第1天"）作为副标签，补充时间跨度感。
   const relativeMarkers = useMemo(() => {
     if (!timeBounds.relativeOnly) return [];
     return filteredEvents
@@ -502,14 +503,16 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       .map((ev) => ({
         id: ev.id,
         label: `#${ev.sortOrder + 1}`,
+        sublabel: ev.dateValue || '',
         x: getXAtTime(scaleState, eventPositions.get(ev.id) ?? 0),
       }));
   }, [filteredEvents, eventPositions, scaleState, timeBounds.relativeOnly]);
 
   const gridBackground = useMemo(() => {
+    if (timeBounds.relativeOnly) return 'none';
     const stops = toGridStops(rulerData.majors, (time) => getXAtTime(scaleState, time), totalWidth);
     return buildTimelineGridBackground(stops, { totalWidth, leftPadding: LEFT_PADDING });
-  }, [rulerData.majors, scaleState, totalWidth]);
+  }, [rulerData.majors, scaleState, totalWidth, timeBounds.relativeOnly]);
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -1183,36 +1186,65 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                 </div>
               ) : (
                 <>
-                  {/* 日期标尺 */}
-                  <DateRuler
-                    viewportState={viewportState}
-                    rulerData={rulerData}
-                    relativeOnly={timeBounds.relativeOnly}
-                    relativeMarkers={relativeMarkers}
-                    totalWidth={totalWidth}
-                    isPanning={isPanning}
-                    onPointerDown={(e) => {
-                      if (e.button !== 0) return;
-                      const el = e.currentTarget;
-                      panStartRef.current = { x: e.clientX, scrollLeft: canvasRef.current?.scrollLeft ?? 0 };
-                      panElementRef.current = el;
-                      setIsPanning(true);
-                      el.setPointerCapture(e.pointerId);
-                    }}
-                    onPointerMove={(e) => {
-                      if (!isPanning || !panStartRef.current) return;
-                      const deltaX = e.clientX - panStartRef.current.x;
-                      setScrollLeft(panStartRef.current.scrollLeft + deltaX);
-                    }}
-                    onPointerUp={(e) => {
-                      if (!isPanning) return;
-                      const el = panElementRef.current ?? e.currentTarget;
-                      panStartRef.current = null;
-                      panElementRef.current = null;
-                      setIsPanning(false);
-                      el.releasePointerCapture(e.pointerId);
-                    }}
-                  />
+                  {/* 日期标尺：绝对时间轴使用真实日历刻度；相对时间轴使用故事顺序标尺 */}
+                  {timeBounds.relativeOnly ? (
+                    <RelativeRuler
+                      markers={relativeMarkers}
+                      totalWidth={totalWidth}
+                      isPanning={isPanning}
+                      onPointerDown={(e) => {
+                        if (e.button !== 0) return;
+                        const el = e.currentTarget;
+                        panStartRef.current = { x: e.clientX, scrollLeft: canvasRef.current?.scrollLeft ?? 0 };
+                        panElementRef.current = el;
+                        setIsPanning(true);
+                        el.setPointerCapture(e.pointerId);
+                      }}
+                      onPointerMove={(e) => {
+                        if (!isPanning || !panStartRef.current) return;
+                        const deltaX = e.clientX - panStartRef.current.x;
+                        setScrollLeft(panStartRef.current.scrollLeft + deltaX);
+                      }}
+                      onPointerUp={(e) => {
+                        if (!isPanning) return;
+                        const el = panElementRef.current ?? e.currentTarget;
+                        panStartRef.current = null;
+                        panElementRef.current = null;
+                        setIsPanning(false);
+                        el.releasePointerCapture(e.pointerId);
+                      }}
+                    />
+                  ) : (
+                    <DateRuler
+                      viewportState={viewportState}
+                      rulerData={rulerData}
+                      relativeOnly={false}
+                      relativeMarkers={[]}
+                      totalWidth={totalWidth}
+                      isPanning={isPanning}
+                      onPointerDown={(e) => {
+                        if (e.button !== 0) return;
+                        const el = e.currentTarget;
+                        panStartRef.current = { x: e.clientX, scrollLeft: canvasRef.current?.scrollLeft ?? 0 };
+                        panElementRef.current = el;
+                        setIsPanning(true);
+                        el.setPointerCapture(e.pointerId);
+                      }}
+                      onPointerMove={(e) => {
+                        if (!isPanning || !panStartRef.current) return;
+                        const deltaX = e.clientX - panStartRef.current.x;
+                        setScrollLeft(panStartRef.current.scrollLeft + deltaX);
+                      }}
+                      onPointerUp={(e) => {
+                        if (!isPanning) return;
+                        const el = panElementRef.current ?? e.currentTarget;
+                        panStartRef.current = null;
+                        panElementRef.current = null;
+                        setIsPanning(false);
+                        el.releasePointerCapture(e.pointerId);
+                      }}
+                    />
+                  )}
 
                   {/* 连线层（SVG，覆盖在轨道上） */}
                   {showConnections && filteredEvents.length > 1 && (
@@ -1586,6 +1618,76 @@ function TimelineMoreMenu({
   );
 }
 
+// ===== 相对时间轴标尺（故事顺序刻度，取代伪日历刻度） =====
+const RelativeRuler = memo(function RelativeRuler({
+  markers,
+  totalWidth,
+  isPanning,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+}: {
+  markers: Array<{ id: string; label: string; sublabel: string; x: number }>;
+  totalWidth: number;
+  isPanning: boolean;
+  onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void;
+}) {
+  const { t } = useI18n();
+  const firstX = markers[0]?.x ?? LEFT_PADDING;
+  const lastX = markers[markers.length - 1]?.x ?? totalWidth - LEFT_PADDING;
+  const lineY = RULER_HEIGHT - 16;
+
+  return (
+    <div
+      data-testid="timeline-ruler"
+      data-ruler-level="relative"
+      className={cn(
+        'sticky top-0 z-10 bg-bg-surface border-b border-border',
+        isPanning ? 'cursor-grabbing' : 'cursor-grab',
+      )}
+      style={{ height: RULER_HEIGHT, minWidth: totalWidth }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      <div className="relative h-full">
+        <span className="absolute top-2 right-3 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent pointer-events-none">
+          {t('timeline.relativeOrderRuler')}
+        </span>
+
+        {/* 故事顺序主线：连接 #1 → #2 → #3 */}
+        <div
+          className="absolute h-px bg-accent/40"
+          style={{ left: firstX, width: Math.max(0, lastX - firstX), top: lineY }}
+        />
+
+        {markers.map((marker) => (
+          <div
+            key={marker.id}
+            data-testid="relative-marker"
+            className="absolute z-10 pointer-events-none -translate-x-1/2"
+            style={{ left: marker.x, top: lineY - 18 }}
+          >
+            <div className="flex flex-col items-center">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-accent text-white text-[11px] font-bold shadow-[var(--shadow-elevated)] ring-4 ring-bg-surface">
+                {marker.label}
+              </span>
+              {marker.sublabel && (
+                <span className="mt-1 max-w-[96px] truncate text-[9px] font-medium text-text-secondary">
+                  {marker.sublabel}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
 // ===== 日期标尺 =====
 const DateRuler = memo(function DateRuler({
   viewportState,
@@ -1601,7 +1703,7 @@ const DateRuler = memo(function DateRuler({
   viewportState: ViewportState;
   rulerData: { min: number; max: number; level: TickLevel; majors: number[]; minors: number[] };
   relativeOnly: boolean;
-  relativeMarkers: Array<{ id: string; label: string; x: number }>;
+  relativeMarkers: Array<{ id: string; label: string; sublabel: string; x: number }>;
   totalWidth: number;
   isPanning: boolean;
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
@@ -2256,6 +2358,7 @@ const TrackLane = memo(function TrackLane({
           ref={containerRef}
           data-track-id={track.id}
           data-testid="track-lane"
+          aria-label={track.name}
           initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0, height: targetHeight }}
           transition={{
@@ -2294,7 +2397,7 @@ const TrackLane = memo(function TrackLane({
           )}
 
           {/* 时间网格背景：由真实日历刻度边界生成（A9），与 DateRuler 像素级对齐 */}
-          {!collapsed && (
+          {!collapsed && gridBackground !== 'none' && (
             <div
               data-testid="timeline-grid-layer"
               className="absolute inset-0 pointer-events-none"

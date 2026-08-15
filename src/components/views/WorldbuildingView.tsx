@@ -10,6 +10,7 @@ import {
   Palette,
   HelpCircle,
   ChevronDown,
+  AlertTriangle,
 } from 'lucide-react';
 
 import { AppIcon, Button, Card, CardContent, EmptyState, Input, Textarea } from '@/components/ui';
@@ -24,6 +25,7 @@ import {
 } from '@/features/notebook/hooks';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import { detectLoreConflicts } from '@/features/worldbuilding/conflicts';
 import type { Note } from '@/types';
 
 interface WorldbuildingViewProps {
@@ -59,6 +61,7 @@ export function WorldbuildingView({ workspaceId, workspaceName }: WorldbuildingV
     () => notes.filter((n) => !n.isFolder && n.tags.some((tag) => tag.startsWith(CATEGORY_TAG_PREFIX))),
     [notes],
   );
+  const conflicts = useMemo(() => detectLoreConflicts(worldNotes), [worldNotes]);
 
   const byCategory = useMemo(() => {
     const map = new Map<string, Note[]>();
@@ -130,6 +133,24 @@ export function WorldbuildingView({ workspaceId, workspaceName }: WorldbuildingV
       />
 
       <div className="flex-1 overflow-auto p-6">
+        {conflicts.length > 0 && (
+          <div
+            data-testid="lore-conflicts-panel"
+            className="max-w-6xl mx-auto mb-6 rounded-[8px] border border-amber-400/50 bg-amber-500/10 px-4 py-3"
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+              {t('worldbuilding.conflictsTitle', { count: conflicts.length })}
+            </div>
+            <ul className="mt-2 space-y-1 text-xs text-text-secondary">
+              {conflicts.slice(0, 5).map((conflict) => (
+                <li key={`${conflict.aId}-${conflict.bId}`}>
+                  {t('worldbuilding.conflictDuplicate', { title: conflict.title, count: conflict.count })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[0, 1, 2].map((i) => (

@@ -8,6 +8,8 @@ import {
   X,
   Link2,
   Download,
+  Layers,
+  Pencil,
   Castle,
   TreePine,
   Mountain,
@@ -58,6 +60,11 @@ import {
 import { exportMapAsPng } from '@/features/map/export';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import {
+  MAP_LAYER_PALETTE,
+  useMapLayersStore,
+  type MapLayerGroup,
+} from '@/stores/mapLayers';
 
 const PALETTE = [
   'var(--accent)',
@@ -143,6 +150,18 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
   const [editingLink, setEditingLink] = useState<{ sourceId: string; targetId: string; label: string } | null>(null);
   const [showFootprints, setShowFootprints] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
+  const [layerEditorOpen, setLayerEditorOpen] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+
+  const groups = useMapLayersStore((s) => s.groups);
+  const createGroup = useMapLayersStore((s) => s.createGroup);
+  const renameGroup = useMapLayersStore((s) => s.renameGroup);
+  const deleteGroup = useMapLayersStore((s) => s.deleteGroup);
+  const setGroupColor = useMapLayersStore((s) => s.setGroupColor);
+  const toggleGroupVisible = useMapLayersStore((s) => s.toggleGroupVisible);
+  const assignLocationToGroup = useMapLayersStore((s) => s.assignLocationToGroup);
+  const removeLocationFromGroup = useMapLayersStore((s) => s.removeLocationFromGroup);
 
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const panRef = useRef<{ x: number; y: number; active: boolean; button: number } | null>(null);
@@ -284,6 +303,41 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
     [locations, events, characters],
   );
 
+  const hiddenLocationIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const group of groups) {
+      if (group.visible) continue;
+      for (const locationId of group.locationIds) ids.add(locationId);
+    }
+    return ids;
+  }, [groups]);
+
+  const visibleLocations = useMemo(
+    () => locations.filter((loc) => !hiddenLocationIds.has(loc.id)),
+    [locations, hiddenLocationIds],
+  );
+  const visibleLocationIds = useMemo(
+    () => new Set(visibleLocations.map((loc) => loc.id)),
+    [visibleLocations],
+  );
+  const visibleLinks = useMemo(
+    () =>
+      links.filter(
+        (lk) => visibleLocationIds.has(lk.sourceId) && visibleLocationIds.has(lk.targetId),
+      ),
+    [links, visibleLocationIds],
+  );
+  const visibleFootprints = useMemo(
+    () =>
+      footprints
+        .map((fp) => ({
+          ...fp,
+          points: fp.points.filter((p) => visibleLocationIds.has(p.locationId)),
+        }))
+        .filter((fp) => fp.points.length >= 2),
+    [footprints, visibleLocationIds],
+  );
+
   return (
     <>
       <Toolbar
@@ -297,6 +351,17 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
               checked={showFootprints}
               onCheckedChange={setShowFootprints}
             />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setLayerPanelOpen((v) => !v)}
+              className="gap-2"
+              data-testid="layers-toggle-btn"
+              aria-pressed={layerPanelOpen}
+            >
+              <Layers className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('map.layers')}</span>
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -389,7 +454,7 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
 
                 <g transform={`translate(${view.x}, ${view.y}) scale(${view.scale})`}>
                   {showFootprints &&
-                    footprints.map((fp) => (
+                    visibleFootprints.map((fp) => (
                       <g key={fp.characterId}>
                         <path
                           d={bezierPath(fp.points)}
@@ -413,7 +478,7 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
                       </g>
                     ))}
 
-                  {links.map((lk, i) => {
+                  {visibleLinks.map((lk, i) => {
                     const src = locations.find((l) => l.id === lk.sourceId);
                     const tgt = locations.find((l) => l.id === lk.targetId);
                     if (!src || !tgt) return null;
@@ -468,7 +533,7 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
                     );
                   })}
 
-                  {locations.map((loc, i) => (
+                  {visibleLocations.map((loc, i) => (
                     <LocationNode
                       key={loc.id}
                       location={loc}
@@ -503,6 +568,87 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
               </div>
             </>
           )}
+
+          <AnimatePresence>
+            {layerPanelOpen && (
+              <motion.div
+                key="layer-panel"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 16 }}
+                transition={MOTION_BASE}
+                className="absolute right-4 top-4 z-40 w-72 rounded-[12px] border border-border bg-bg-surface shadow-[var(--shadow-elevated)] overflow-hidden"
+              >
+                <div className="h-12 px-4 flex items-center justify-between border-b border-border">
+                  <h3 className="text-sm font-semibold text-text-primary">{t('map.layerPanel')}</h3>
+                  <button
+                    onClick={() => setLayerPanelOpen(false)}
+                    className="text-text-secondary hover:text-text-primary p-1 rounded transition-colors"
+                    title={t('common.close')}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-3 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 justify-center"
+                    onClick={() => {
+                      setEditingGroupId(null);
+                      setLayerEditorOpen(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t('map.newLayer')}
+                  </Button>
+                  {groups.length === 0 ? (
+                    <p className="text-xs text-text-secondary/70 py-6 text-center">{t('map.noLayers')}</p>
+                  ) : (
+                    groups.map((group) => (
+                      <div
+                        key={group.id}
+                        className="flex items-center gap-2 rounded-[8px] border border-border bg-bg-elevated/40 px-3 py-2"
+                      >
+                        <span
+                          className="h-4 w-4 rounded-full shrink-0"
+                          style={{ backgroundColor: group.color }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-text-primary">{group.name}</p>
+                          <p className="text-xs text-text-secondary/70">
+                            {t('map.locationsInLayer', { count: group.locationIds.length })}
+                          </p>
+                        </div>
+                        <Switch
+                          aria-label={group.name}
+                          checked={group.visible}
+                          onCheckedChange={() => toggleGroupVisible(group.id)}
+                        />
+                        <button
+                          onClick={() => {
+                            setEditingGroupId(group.id);
+                            setLayerEditorOpen(true);
+                          }}
+                          className="text-text-secondary hover:text-accent p-1 rounded transition-colors"
+                          title={t('common.edit')}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => deleteGroup(group.id)}
+                          className="text-text-secondary hover:text-red-500 p-1 rounded transition-colors"
+                          title={t('common.delete')}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 右侧详情面板 */}
@@ -539,6 +685,25 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
         </AnimatePresence>
       </div>
 
+      <LayerEditorDialog
+        open={layerEditorOpen}
+        onOpenChange={(v) => {
+          setLayerEditorOpen(v);
+          if (!v) setEditingGroupId(null);
+        }}
+        group={groups.find((g) => g.id === editingGroupId) ?? null}
+        onSave={(name, color) => {
+          if (editingGroupId) {
+            renameGroup(editingGroupId, name);
+            setGroupColor(editingGroupId, color);
+          } else {
+            createGroup(name, color);
+          }
+          setLayerEditorOpen(false);
+          setEditingGroupId(null);
+        }}
+      />
+
       <LocationEditDialog
         open={editOpen}
         onOpenChange={(v) => {
@@ -550,7 +715,13 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
         characters={characters}
         onSave={async (data) => {
           if (!editing) return;
-          await updateLoc.mutateAsync({ id: editing.id, ...data });
+          const { layerId, ...locationData } = data;
+          await updateLoc.mutateAsync({ id: editing.id, ...locationData });
+          if (layerId) {
+            assignLocationToGroup(layerId, editing.id);
+          } else {
+            removeLocationFromGroup(editing.id);
+          }
           setEditOpen(false);
           setEditing(null);
         }}
@@ -573,7 +744,12 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
         destructive
         confirmText={t('common.delete')}
         onConfirm={() => {
-          if (confirmDelete) void deleteLoc.mutateAsync(confirmDelete);
+          if (confirmDelete) {
+            const targetId = confirmDelete;
+            deleteLoc.mutate(targetId, {
+              onSuccess: () => removeLocationFromGroup(targetId),
+            });
+          }
           setSelectedId(null);
         }}
       />
@@ -789,6 +965,82 @@ function LocationDetailPanel({
   );
 }
 
+function LayerEditorDialog({
+  open,
+  onOpenChange,
+  group,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  group: MapLayerGroup | null;
+  onSave: (name: string, color: string) => void;
+}) {
+  const { t } = useI18n();
+  const [name, setName] = useState('');
+  const [color, setColor] = useState<string>(MAP_LAYER_PALETTE[0]);
+
+  useEffect(() => {
+    if (open) {
+      setName(group?.name ?? '');
+      setColor(group?.color ?? MAP_LAYER_PALETTE[0]);
+    }
+  }, [open, group]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        title={group ? t('common.edit') : t('map.newLayer')}
+        className="max-w-sm"
+      >
+        <div className="flex flex-col gap-4">
+          <div>
+            <Label>{t('map.layerName')}</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1.5"
+              autoFocus
+              data-testid="layer-name-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && name.trim()) onSave(name, color);
+              }}
+            />
+          </div>
+          <div>
+            <Label>{t('map.layerColor')}</Label>
+            <div className="flex gap-2 mt-1.5">
+              {MAP_LAYER_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    'h-7 w-7 rounded-full transition-transform',
+                    color === c ? 'ring-2 ring-offset-2 ring-accent scale-110' : 'hover:scale-110',
+                  )}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={() => onSave(name, color)}
+              disabled={!name.trim()}
+              data-testid="layer-save-btn"
+            >
+              {t('common.save')}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface LocationEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -802,6 +1054,7 @@ interface LocationEditDialogProps {
     icon: string;
     linkedEventId: string | null;
     characterIds: string[];
+    layerId: string | null;
   }) => void;
 }
 
@@ -814,12 +1067,14 @@ function LocationEditDialog({
   onSave,
 }: LocationEditDialogProps) {
   const { t } = useI18n();
+  const groups = useMapLayersStore((s) => s.groups);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(PALETTE[0]!);
   const [icon, setIcon] = useState('📍');
   const [linkedEventId, setLinkedEventId] = useState<string | null>(null);
   const [characterIds, setCharacterIds] = useState<string[]>([]);
+  const [layerId, setLayerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (location) {
@@ -829,8 +1084,9 @@ function LocationEditDialog({
       setIcon(location.icon);
       setLinkedEventId(location.linkedEventId);
       setCharacterIds(location.characterIds);
+      setLayerId(groups.find((g) => g.locationIds.includes(location.id))?.id ?? null);
     }
-  }, [location]);
+  }, [location, groups]);
 
   if (!location) return null;
 
@@ -911,6 +1167,21 @@ function LocationEditDialog({
           </div>
 
           <div>
+            <Label>{t('map.assignLayer')}</Label>
+            <select
+              value={layerId ?? ''}
+              onChange={(e) => setLayerId(e.target.value || null)}
+              className="mt-1.5 w-full h-10 rounded-[6px] border border-border bg-bg-surface px-3 text-sm"
+              data-testid="location-layer-select"
+            >
+              <option value="">{t('map.ungrouped')}</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>{group.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <Label>{t('map.form.linkedEvent')}</Label>
             <select
               value={linkedEventId ?? ''}
@@ -954,7 +1225,7 @@ function LocationEditDialog({
 
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => onSave({ name, description, color, icon, linkedEventId, characterIds })} disabled={!name.trim()} data-testid="location-save-btn">
+            <Button onClick={() => onSave({ name, description, color, icon, linkedEventId, characterIds, layerId })} disabled={!name.trim()} data-testid="location-save-btn">
               {t('common.save')}
             </Button>
           </div>

@@ -173,6 +173,7 @@ export const EventCard = memo(function EventCard({
       <ContextMenuTrigger asChild>
         <motion.div
           data-event-id={event.id}
+          aria-label={event.title}
           data-row={layout.row}
           data-layout-y={layout.y}
           data-layout-x={layout.x}

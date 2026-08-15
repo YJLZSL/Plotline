@@ -206,6 +206,16 @@ describe('SettingsView', () => {
     expect(mockApplyToDOM).toHaveBeenCalledWith(expect.objectContaining({ theme: 'dark' }));
   });
 
+  it('should render language options including Japanese', () => {
+    renderSettings();
+    expect(screen.getByTestId('lang-zh-CN')).toBeInTheDocument();
+    expect(screen.getByTestId('lang-en')).toBeInTheDocument();
+    const jaButton = screen.getByTestId('lang-ja');
+    expect(jaButton).toBeInTheDocument();
+    expect(jaButton.textContent).toBe('日本語');
+    fireEvent.click(jaButton);
+  });
+
   it('should render all four font theme options including smiley', () => {
     renderSettings();
     expect(screen.getByTestId('font-theme-sans')).toBeInTheDocument();

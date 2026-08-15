@@ -51,6 +51,7 @@ import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/ipc';
 import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import { toastError, toastSuccess } from '@/stores/toast';
+import { useVnSpriteOffsetsStore } from '@/stores/vnSpriteOffsets';
 import type { Character, CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnLine, VnLineType, VnScene } from '@/types';
 import {
   useVnScenesQuery,
@@ -1332,6 +1333,10 @@ function VnPreview({
   const charById = useMemo(() => new Map(characters.map((c) => [c.id, c])), [characters]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showChoices, setShowChoices] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const spriteOffsets = useVnSpriteOffsetsStore((s) => s.offsets);
+  const setSpriteOffset = useVnSpriteOffsetsStore((s) => s.setOffset);
+  const resetSpriteOffset = useVnSpriteOffsetsStore((s) => s.resetOffset);
 
   const currentLine = lines[currentIdx] ?? null;
   const isLast = currentIdx >= lines.length - 1;
@@ -1426,6 +1431,7 @@ function VnPreview({
 
   return (
     <div
+      ref={previewRef}
       className={cn(
         'flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden',
         (!bg.value || bg.mode === 'emoji' || bg.mode === 'text') &&
@@ -1454,16 +1460,24 @@ function VnPreview({
           className="absolute inset-0 h-full w-full object-cover"
         />
       )}
-      {spriteUrl && (
-        <img
+      {spriteUrl && currentLine && (
+        <DraggableSprite
+          key={`${currentLine.id}-sprite`}
           src={spriteUrl}
-          alt=""
-          className={cn(
-            'absolute bottom-28 z-10 h-56 object-contain drop-shadow-lg',
-            (currentLine?.spritePosition || 'center') === 'center' && 'left-1/2 -translate-x-1/2',
-            (currentLine?.spritePosition || 'center') === 'left' && 'left-8',
-            (currentLine?.spritePosition || 'center') === 'right' && 'right-8',
-          )}
+          initial={
+            spriteOffsets[currentLine.id] ?? {
+              x: (currentLine.spritePosition || 'center') === 'left'
+                ? 14
+                : (currentLine.spritePosition || 'center') === 'right'
+                  ? 86
+                  : 50,
+              y: 80,
+            }
+          }
+          containerRef={previewRef}
+          onCommit={(offset) => setSpriteOffset(currentLine.id, offset)}
+          onReset={() => resetSpriteOffset(currentLine.id)}
+          label={t('vn.dragSpriteHint')}
         />
       )}
 
@@ -1567,6 +1581,76 @@ function VnPreview({
         )}
       </div>
     </div>
+  );
+}
+
+// ===== 可拖拽立绘（v4.0：立绘插槽拖拽定位） =====
+function DraggableSprite({
+  src,
+  initial,
+  containerRef,
+  onCommit,
+  onReset,
+  label,
+}: {
+  src: string;
+  initial: { x: number; y: number };
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  onCommit: (offset: { x: number; y: number }) => void;
+  onReset: () => void;
+  label: string;
+}) {
+  const [pos, setPos] = useState(initial);
+  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const posRef = useRef(pos);
+  posRef.current = pos;
+
+  const clamp = (value: number) => Math.max(0, Math.min(100, value));
+
+  return (
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      data-testid="vn-draggable-sprite"
+      title={label}
+      className="absolute z-10 h-56 object-contain drop-shadow-lg cursor-grab active:cursor-grabbing select-none"
+      style={{
+        left: `${pos.x}%`,
+        top: `${pos.y}%`,
+        transform: 'translate(-50%, -100%)',
+      }}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        (e.currentTarget as HTMLImageElement).setPointerCapture(e.pointerId);
+        dragRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          originX: pos.x,
+          originY: pos.y,
+        };
+      }}
+      onPointerMove={(e) => {
+        const drag = dragRef.current;
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!drag || !rect) return;
+        setPos({
+          x: clamp(drag.originX + ((e.clientX - drag.startX) / rect.width) * 100),
+          y: clamp(drag.originY + ((e.clientY - drag.startY) / rect.height) * 100),
+        });
+      }}
+      onPointerUp={() => {
+        if (!dragRef.current) return;
+        dragRef.current = null;
+        onCommit(posRef.current);
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onReset();
+      }}
+    />
   );
 }
 

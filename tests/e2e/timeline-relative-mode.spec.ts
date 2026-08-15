@@ -12,15 +12,16 @@ test.describe('相对时间轴重做', () => {
     await expect(page.getByTestId('relative-marker')).toHaveCount(2);
     await expect(page.getByTestId('relative-marker').nth(0)).toContainText('#1');
     await expect(page.getByTestId('relative-marker').nth(1)).toContainText('#2');
+    // 相对事件自己的日期（第1天/第2天）作为副标签显示，补充时间跨度感
+    await expect(page.getByTestId('relative-marker').nth(0)).toContainText('第1天');
+    await expect(page.getByTestId('relative-marker').nth(1)).toContainText('第2天');
+
+    // 相对模式彻底移除伪日历刻度，只保留故事顺序标尺
+    await expect(page.getByTestId('timeline-ruler')).toHaveAttribute('data-ruler-level', 'relative');
+    await expect(page.locator('[data-testid="timeline-major-tick"]')).toHaveCount(0);
 
     // 相对模式不再显示真实"今天"参考线
     await expect(page.getByTestId('today-marker-label')).toHaveCount(0);
-
-    // 默认月档下，两个相对事件只应产生约 6 个月的范围，而不是 4-10 年
-    const ticks = page.locator('[data-testid="timeline-major-tick"]');
-    await expect(ticks).not.toHaveCount(0);
-    const tickCount = await ticks.count();
-    expect(tickCount).toBeLessThanOrEqual(12);
 
     // 缩放档位显示"相对"
     await expect(page.getByText('相对', { exact: true }).first()).toBeVisible();

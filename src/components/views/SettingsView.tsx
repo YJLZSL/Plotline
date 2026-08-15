@@ -45,6 +45,12 @@ const TABS: Array<{ id: Tab; labelKey: string; descriptionKey: string }> = [
 
 const ACCENT_PALETTE = ['#C68A3E', '#A86A2C', '#B85537', '#7B5E3C', '#D4A574', '#9C6B3E'];
 
+const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
+  { value: 'zh-CN', label: '简体中文' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
+];
+
 export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) {
   const { t, i18n } = useI18n();
   const { data: settings } = useSettingsQuery();
@@ -475,7 +481,7 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
         testId: 'language-card',
         content: (
           <div className="flex gap-2">
-            {(['zh-CN', 'en'] as Language[]).map((lng) => (
+            {LANGUAGE_OPTIONS.map(({ value: lng, label }) => (
               <button
                 key={lng}
                 onClick={() => {
@@ -490,7 +496,7 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
                     : 'border-border text-text-secondary hover:bg-bg-elevated',
                 )}
               >
-                {lng === 'zh-CN' ? '简体中文' : 'English'}
+                {label}
               </button>
             ))}
           </div>
