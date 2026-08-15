@@ -9,6 +9,7 @@ describe('aiContext store', () => {
       viewLabel: '',
       selection: null,
       suggestions: [],
+      pendingAction: null,
       enabledSources: [
         'workspaceSummary',
         'timeline',
@@ -51,5 +52,13 @@ describe('aiContext store', () => {
   it('should replace enabled sources', () => {
     useAiContextStore.getState().setEnabledSources(['workspaceSummary', 'timeline']);
     expect(useAiContextStore.getState().enabledSources).toEqual(['workspaceSummary', 'timeline']);
+  });
+
+  it('should set and clear a pending AI shortcut action', () => {
+    useAiContextStore.getState().setPendingAction('check_timeline_consistency');
+    expect(useAiContextStore.getState().pendingAction).toBe('check_timeline_consistency');
+
+    useAiContextStore.getState().setPendingAction(null);
+    expect(useAiContextStore.getState().pendingAction).toBeNull();
   });
 });

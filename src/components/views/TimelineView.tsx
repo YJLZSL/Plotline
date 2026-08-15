@@ -47,6 +47,7 @@ import {
   getSnapXAtTime,
   getSnapThresholdForTicks,
   type ViewportState,
+  type ViewportTimeRange,
   type EventLayoutItem,
 } from '@/features/timeline/timelineGrid';
 import { useTimelineViewport } from '@/features/timeline/useTimelineViewport';
@@ -131,7 +132,7 @@ const ADD_EVENT_BUTTON_WIDTH = 64;
 const EVENT_HEIGHT = 64;
 const EVENT_ROW_GAP = 8;
 const EVENT_BASE_TOP = 12;
-const RULER_HEIGHT = 44;
+const RULER_HEIGHT = 52;
 const DAY_MS = 24 * 3600 * 1000;
 
 const EVENT_COLOR_PALETTE = ['#F4B6C2', '#B6D4F4', '#B6F4C8', '#F4E4B6', '#D8B6F4', '#F4CBB6'];
@@ -322,6 +323,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const disconnectEvents = useDisconnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
   const setAiContext = useAiContextStore((s) => s.setContext);
+  const setPendingAiAction = useAiContextStore((s) => s.setPendingAction);
   const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
 
   useEffect(() => {
@@ -418,15 +420,38 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [filteredEvents, visibleTracks, grid, relativeDurationUnits, cardWidthFor],
   );
 
-  // 画布宽度覆盖：1) 标尺时间右边界；2) 所有事件卡片的实际右边缘（相对事件可能超出 maxTime）。
+  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 baseTime 的伪时间戳。
+  // 与 computeTimelineLayout 共用 computeEventTimePositions，避免卡片与连线锚点错位。
+  const eventPositions = useMemo(
+    () => computeEventTimePositions(filteredEvents, grid, relativeDurationUnits),
+    [filteredEvents, grid, relativeDurationUnits],
+  );
+
+  // v3.6: 相对时间轴只显示"内容实际占用的范围"，不再为 2 个事件预留 8-10 年的空白。
+  // 视口坐标源 timeBounds 仍保持足够的内部跨度，但标尺/网格/画布宽度使用 compactBounds。
+  const compactBounds = useMemo<ViewportTimeRange>(() => {
+    if (!timeBounds.relativeOnly) {
+      return { startTime: timeBounds.startTime, endTime: timeBounds.endTime };
+    }
+    const times = [...eventPositions.values()];
+    const lastTime = times.length > 0 ? Math.max(...times) : timeBounds.startTime;
+    const unitMs = grid.getMsPerUnit();
+    const paddingMs = Math.max(unitMs * relativeDurationUnits * 2, 14 * DAY_MS);
+    return {
+      startTime: timeBounds.startTime,
+      endTime: lastTime + paddingMs,
+    };
+  }, [timeBounds, eventPositions, grid, relativeDurationUnits]);
+
+  // 画布宽度覆盖：1) 标尺时间右边界；2) 所有事件卡片的实际右边缘。
   const totalWidth = useMemo(() => {
-    const timeEndX = getXAtTime(viewportState, timeBounds.endTime);
+    const timeEndX = getXAtTime(viewportState, compactBounds.endTime);
     let contentRight = 0;
     for (const item of eventLayout.layouts.values()) {
       contentRight = Math.max(contentRight, item.x + item.width);
     }
     return Math.max(800, timeEndX + LEFT_PADDING + EVENT_CARD_MAX_WIDTH, contentRight + 96);
-  }, [viewportState, timeBounds.endTime, eventLayout]);
+  }, [viewportState, compactBounds.endTime, eventLayout]);
 
   const timelineMinHeight = useMemo(
     () =>
@@ -438,14 +463,14 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [visibleTracks, isCollapsed, eventLayout],
   );
 
-  // 贯穿轨道区的 Today 参考线：与标尺内 Today 线同一坐标源（getXAtTime），
-  // 且同样要求"今天"落在当前时间范围内，保证与标尺标记像素级对齐。
+  // 贯穿轨道区的 Today 参考线：仅绝对时间轴显示；相对时间轴没有真实的"今天"。
   const trackAreaTodayX = useMemo(() => {
+    if (timeBounds.relativeOnly) return null;
     const { min, max } = getViewportTimeScale(viewportState);
     const now = Date.now();
     if (now < min || now > max) return null;
     return getXAtTime(viewportState, now);
-  }, [viewportState]);
+  }, [viewportState, timeBounds.relativeOnly]);
 
   // 标尺与背景网格共享同一批真实日历边界刻度（A9）：先按 zoom 选级，再按范围自适应升级，
   // 最后均匀降采样到渲染预算内，保证刻度、网格、事件卡片三者像素级对齐。
@@ -454,10 +479,10 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
       zoom,
       scrollLeft: 0,
       viewportWidth: 1000,
-      timeRange: timeBounds,
+      timeRange: compactBounds,
       leftPadding: LEFT_PADDING,
     }),
-    [zoom, timeBounds],
+    [zoom, compactBounds],
   );
 
   const rulerData = useMemo(() => {
@@ -468,17 +493,23 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return { min, max, level, majors, minors };
   }, [scaleState]);
 
+  // 相对事件刻度标记：在相对时间轴标尺上直接标出 #1/#2 等故事顺序点。
+  const relativeMarkers = useMemo(() => {
+    if (!timeBounds.relativeOnly) return [];
+    return filteredEvents
+      .filter((ev) => ev.dateType !== 'absolute')
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((ev) => ({
+        id: ev.id,
+        label: `#${ev.sortOrder + 1}`,
+        x: getXAtTime(scaleState, eventPositions.get(ev.id) ?? 0),
+      }));
+  }, [filteredEvents, eventPositions, scaleState, timeBounds.relativeOnly]);
+
   const gridBackground = useMemo(() => {
     const stops = toGridStops(rulerData.majors, (time) => getXAtTime(scaleState, time), totalWidth);
     return buildTimelineGridBackground(stops, { totalWidth, leftPadding: LEFT_PADDING });
   }, [rulerData.majors, scaleState, totalWidth]);
-
-  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 baseTime 的伪时间戳。
-  // 与 computeTimelineLayout 共用 computeEventTimePositions，避免卡片与连线锚点错位。
-  const eventPositions = useMemo(
-    () => computeEventTimePositions(filteredEvents, grid, relativeDurationUnits),
-    [filteredEvents, grid, relativeDurationUnits],
-  );
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -725,6 +756,21 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     [setAiContext, setAiPanelOpen, t, selectEvent],
   );
 
+  // v4.0 Agent 工作流切片：一键让 AI 自动执行"检查时间轴漏洞"。
+  const openAiGapCheck = useCallback(() => {
+    setAiContext({
+      view: 'timeline',
+      viewLabel: t('timeline.title'),
+      selection: null,
+      suggestions: [
+        { label: t('ai.suggestTimelineGaps'), prompt: t('ai.promptTimelineGaps') },
+        { label: t('ai.suggestTimelinePacing'), prompt: t('ai.promptTimelinePacing') },
+      ],
+    });
+    setPendingAiAction('check_timeline_consistency');
+    setAiPanelOpen(true);
+  }, [setAiContext, setPendingAiAction, setAiPanelOpen, t]);
+
   const handleSelectEvent = useCallback(
     (eventId: string) => {
       if (pendingConnection && pendingConnection !== eventId) {
@@ -911,7 +957,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <span className="text-xs text-text-secondary min-w-[40px] text-center">
-              {t(`timeline.${zoomLabel}`)}
+              {timeBounds.relativeOnly ? t('timeline.relativeZoom') : t(`timeline.${zoomLabel}`)}
             </span>
             <Button variant="ghost" size="sm" className="h-8" onClick={handleZoomIn} title={t('timeline.zoomIn')}>
               <ZoomIn className="h-3.5 w-3.5" />
@@ -929,6 +975,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
               checkingConsistency={checkingConsistency}
               onCheckConsistency={handleConsistencyCheck}
               aiSelection={aiSelection}
+              onAiGapCheck={openAiGapCheck}
               onExport={() => handleExportTimeline()}
             />
           </div>
@@ -1141,6 +1188,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                     viewportState={viewportState}
                     rulerData={rulerData}
                     relativeOnly={timeBounds.relativeOnly}
+                    relativeMarkers={relativeMarkers}
                     totalWidth={totalWidth}
                     isPanning={isPanning}
                     onPointerDown={(e) => {
@@ -1399,6 +1447,7 @@ function TimelineMoreMenu({
   checkingConsistency,
   onCheckConsistency,
   aiSelection,
+  onAiGapCheck,
   onExport,
 }: {
   showConnections: boolean;
@@ -1410,6 +1459,7 @@ function TimelineMoreMenu({
   checkingConsistency: boolean;
   onCheckConsistency: () => void;
   aiSelection: { type: 'event'; id: string; label: string; content: string } | null;
+  onAiGapCheck: () => void;
   onExport: () => void;
 }) {
   const { t } = useI18n();
@@ -1502,6 +1552,16 @@ function TimelineMoreMenu({
               {t('timeline.consistencyCheck')}
             </button>
             <button
+              onClick={() => {
+                onAiGapCheck();
+                setOpen(false);
+              }}
+              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left text-text-secondary hover:bg-bg-elevated transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {t('timeline.aiGapCheck')}
+            </button>
+            <button
               onClick={openAi}
               className="flex items-center gap-2 w-full px-2.5 py-2 rounded-[6px] text-xs text-left text-text-secondary hover:bg-bg-elevated transition-colors"
             >
@@ -1531,6 +1591,7 @@ const DateRuler = memo(function DateRuler({
   viewportState,
   rulerData,
   relativeOnly,
+  relativeMarkers,
   totalWidth,
   isPanning,
   onPointerDown,
@@ -1540,6 +1601,7 @@ const DateRuler = memo(function DateRuler({
   viewportState: ViewportState;
   rulerData: { min: number; max: number; level: TickLevel; majors: number[]; minors: number[] };
   relativeOnly: boolean;
+  relativeMarkers: Array<{ id: string; label: string; x: number }>;
   totalWidth: number;
   isPanning: boolean;
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
@@ -1582,9 +1644,11 @@ const DateRuler = memo(function DateRuler({
 
     const now = Date.now();
     const today =
-      now >= rulerData.min && now <= rulerData.max ? getXAtTime(viewportState, now) : null;
+      !relativeOnly && now >= rulerData.min && now <= rulerData.max
+        ? getXAtTime(viewportState, now)
+        : null;
     return { majorTicks: sampled, minorTicks: minors, todayX: today };
-  }, [viewportState, rulerData, tickLevel]);
+  }, [viewportState, rulerData, tickLevel, relativeOnly]);
 
   // 次刻度标签：仅在 day/hour/week 等细粒度级别下显示，避免在 year/quarter 级别下噪点过多
   const showMinorLabels = tickLevel === 'day' || tickLevel === 'hour' || tickLevel === 'week';
@@ -1605,6 +1669,24 @@ const DateRuler = memo(function DateRuler({
       onPointerCancel={onPointerUp}
     >
       <div className="relative h-full">
+        {/* 时间带背景：相邻主刻度交替填充，增强"时间在流动"的直觉 */}
+        {majorTicks.map((tick, i) => {
+          const nextX = i + 1 < majorTicks.length ? majorTicks[i + 1]!.x : totalWidth;
+          const width = Math.max(0, nextX - tick.x);
+          if (width <= 0) return null;
+          return (
+            <div
+              key={`band-${i}`}
+              aria-hidden="true"
+              className={cn(
+                'absolute top-0 bottom-0 pointer-events-none',
+                i % 2 === 1 ? 'bg-text-primary/[0.03]' : 'bg-transparent',
+              )}
+              style={{ left: tick.x, width }}
+            />
+          );
+        })}
+
         {/* 纯相对时间轴提示：所有事件都没有绝对日期，标尺日期只是相对事件的视觉锚点 */}
         {relativeOnly && (
           <span
@@ -1621,7 +1703,7 @@ const DateRuler = memo(function DateRuler({
           return (
             <div
               key={`m-${i}`}
-              className="absolute top-0 bottom-0 border-l border-border/20 pointer-events-none"
+              className="absolute top-0 bottom-0 border-l border-border/25 pointer-events-none"
               style={{ left: tick.x }}
             >
               {showMinorLabels && (
@@ -1641,7 +1723,7 @@ const DateRuler = memo(function DateRuler({
               key={i}
               data-testid="timeline-major-tick"
               data-tick-label={tick.label}
-              className="absolute top-0 bottom-0 border-l border-border/50 cursor-crosshair"
+              className="absolute top-0 bottom-0 border-l border-border/70 cursor-crosshair"
               style={{ left: tick.x }}
               onMouseEnter={() =>
                 setHovered({
@@ -1650,13 +1732,29 @@ const DateRuler = memo(function DateRuler({
                 })
               }
             >
-              <span className="absolute top-2 left-1.5 text-[10px] text-text-secondary font-semibold whitespace-nowrap">
+              <span className="absolute top-2.5 left-2 text-[11px] text-text-secondary font-semibold whitespace-nowrap">
                 {tick.label}
               </span>
-              <span className="absolute bottom-0 left-0 h-2.5 w-px bg-accent/60" />
+              <span className="absolute bottom-0 left-0 h-3 w-px bg-accent/70" />
             </div>
           );
         })}
+
+        {/* 相对事件刻度标记：直接显示 #1/#2 等故事顺序点 */}
+        {relativeOnly &&
+          relativeMarkers.map((marker) => (
+            <div
+              key={marker.id}
+              data-testid="relative-marker"
+              className="absolute top-0 bottom-0 z-20 pointer-events-none"
+              style={{ left: marker.x }}
+            >
+              <span className="absolute bottom-1.5 left-0 -translate-x-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-accent text-white text-[9px] font-semibold shadow-sm">
+                {marker.label}
+              </span>
+              <span className="absolute bottom-0 left-0 h-4 w-px -translate-x-1/2 bg-accent/70" />
+            </div>
+          ))}
 
         {/* 今天参考线 */}
         {todayX !== null && todayX >= 0 && todayX <= totalWidth && (
@@ -2168,9 +2266,10 @@ const TrackLane = memo(function TrackLane({
           }}
           className={cn(
             'group relative border-b border-border/40 overflow-hidden transition-colors',
+            'hover:bg-text-primary/[0.025]',
             isDropTarget
-              ? 'bg-accent/5'
-              : index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/40',
+              ? 'bg-accent/10 ring-1 ring-inset ring-accent/20'
+              : index % 2 === 0 ? 'bg-bg-base' : 'bg-bg-surface/50',
           )}
           style={{ minWidth: totalWidth, height: targetHeight }}
           onDoubleClick={(e) => {
@@ -2182,7 +2281,7 @@ const TrackLane = memo(function TrackLane({
           }}
         >
           {/* 轨道左侧色标 */}
-          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: track.color }} />
+          <div className="absolute left-0 top-0 bottom-0 w-1.5 opacity-80" style={{ backgroundColor: track.color }} />
 
           {/* 折叠状态标题与计数 */}
           {collapsed && (

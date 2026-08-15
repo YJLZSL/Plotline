@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -202,15 +202,18 @@ export function AiAssistantPanel({
   const checkTimelineConsistency = useCheckTimelineConsistency(workspaceId);
   const clearCache = useClearAiCache(workspaceId);
 
-  const mutationForAction = (action: AiActionType): UseMutationResult<AiShortcutResult, Error, AiShortcutInput> => {
-    const mutationMap: Record<AiActionType, UseMutationResult<AiShortcutResult, Error, AiShortcutInput>> = {
-      optimize_event: optimizeEvent,
-      optimize_timeline_segment: optimizeTimelineSegment,
-      summarize_workspace: summarizeWorkspace,
-      check_timeline_consistency: checkTimelineConsistency,
-    };
-    return mutationMap[action];
-  };
+  const mutationForAction = useCallback(
+    (action: AiActionType): UseMutationResult<AiShortcutResult, Error, AiShortcutInput> => {
+      const mutationMap: Record<AiActionType, UseMutationResult<AiShortcutResult, Error, AiShortcutInput>> = {
+        optimize_event: optimizeEvent,
+        optimize_timeline_segment: optimizeTimelineSegment,
+        summarize_workspace: summarizeWorkspace,
+        check_timeline_consistency: checkTimelineConsistency,
+      };
+      return mutationMap[action];
+    },
+    [optimizeEvent, optimizeTimelineSegment, summarizeWorkspace, checkTimelineConsistency],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -234,6 +237,8 @@ export function AiAssistantPanel({
   }, [messages.length, streamingContent, isStreaming]);
 
   const aiContext = useAiContextStore();
+  const pendingAiAction = useAiContextStore((s) => s.pendingAction);
+  const clearPendingAiAction = useAiContextStore((s) => s.setPendingAction);
 
   const slashQuery = useMemo(() => {
     if (!input.startsWith('/')) return '';
@@ -395,40 +400,72 @@ export function AiAssistantPanel({
     setInput(template.template);
   };
 
-  const runShortcut = async (
-    action: AiActionType,
-    scope: AiContextScope,
-    mutation: UseMutationResult<AiShortcutResult, Error, AiShortcutInput>,
-  ) => {
-    if (!enabled || isStreaming || isCollectingContext || mutation.isPending) return;
-    setIsCollectingContext(true);
-    setRetrievedChunksCount(null);
-    try {
-      let context = await collectAiContext(
-        workspaceId,
-        aiContext.enabledSources,
-        aiContext.selection,
-        scope,
-      );
-      if (summary?.value && scope !== 'selected_entity') {
-        context = { ...context, workspaceSummary: summary.value };
+  const runShortcut = useCallback(
+    async (
+      action: AiActionType,
+      scope: AiContextScope,
+      mutation: UseMutationResult<AiShortcutResult, Error, AiShortcutInput>,
+    ) => {
+      if (!enabled || isStreaming || isCollectingContext || mutation.isPending) return;
+      setIsCollectingContext(true);
+      setRetrievedChunksCount(null);
+      try {
+        let context = await collectAiContext(
+          workspaceId,
+          aiContext.enabledSources,
+          aiContext.selection,
+          scope,
+        );
+        if (summary?.value && scope !== 'selected_entity') {
+          context = { ...context, workspaceSummary: summary.value };
+        }
+        setContextBudget(estimateContextBudget(context ?? {}));
+        const result = await mutation.mutateAsync({
+          workspaceId,
+          sessionId: currentSessionId,
+          action,
+          context,
+          query: aiContext.selection?.label,
+        });
+        setCurrentSessionId(result.sessionId);
+        setRetrievedChunksCount(result.retrievedChunks ?? null);
+      } catch {
+        // 错误由 mutation 的 onError 处理
+      } finally {
+        setIsCollectingContext(false);
       }
-      setContextBudget(estimateContextBudget(context ?? {}));
-      const result = await mutation.mutateAsync({
-        workspaceId,
-        sessionId: currentSessionId,
-        action,
-        context,
-        query: aiContext.selection?.label,
-      });
-      setCurrentSessionId(result.sessionId);
-      setRetrievedChunksCount(result.retrievedChunks ?? null);
-    } catch {
-      // 错误由 mutation 的 onError 处理
-    } finally {
-      setIsCollectingContext(false);
-    }
-  };
+    },
+    [
+      enabled,
+      isStreaming,
+      isCollectingContext,
+      workspaceId,
+      aiContext.enabledSources,
+      aiContext.selection,
+      summary?.value,
+      currentSessionId,
+      setCurrentSessionId,
+    ],
+  );
+
+  // v4.0 Agent 工作流切片：视图层（如时间轴"AI 检查漏洞"）请求的快捷动作，
+  // 面板打开且配置就绪后自动执行一次。
+  useEffect(() => {
+    if (!open || !pendingAiAction || !enabled || isStreaming || isCollectingContext) return;
+    const action = pendingAiAction;
+    clearPendingAiAction(null);
+    const mutation = mutationForAction(action);
+    void runShortcut(action, scopeForAction(action), mutation);
+  }, [
+    open,
+    pendingAiAction,
+    enabled,
+    isStreaming,
+    isCollectingContext,
+    clearPendingAiAction,
+    runShortcut,
+    mutationForAction,
+  ]);
 
   const runWholeWorkspace = async (text: string) => {
     if (!enabled || isStreaming || isCollectingContext) return;

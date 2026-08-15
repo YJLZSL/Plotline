@@ -62,6 +62,7 @@ const defaultContext: Partial<AiContextState> = {
   viewLabel: '',
   selection: null,
   suggestions: [],
+  pendingAction: null,
   enabledSources: ['workspaceSummary', 'selectedEntity'],
 };
 
@@ -430,6 +431,38 @@ describe('AiAssistantPanel', () => {
         }),
       );
     });
+  });
+
+  it('auto-runs a pending AI shortcut requested by another view (v4.0 workflow)', async () => {
+    const checkMutate = vi.fn().mockResolvedValue({
+      sessionId: 'session-check',
+      reply: 'ok',
+      messages: [],
+      cached: false,
+      entities: [],
+    });
+    vi.mocked(useCheckTimelineConsistency).mockReturnValue(
+      makeMutationResult<AiShortcutResult, AiShortcutInput>(checkMutate),
+    );
+    vi.mocked(collectAiContext).mockResolvedValue({ scope: 'whole_workspace' });
+    useAiContextStore.setState({
+      view: 'timeline',
+      viewLabel: '时间轴',
+      pendingAction: 'check_timeline_consistency',
+    });
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(checkMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'ws-1',
+          action: 'check_timeline_consistency',
+          context: expect.objectContaining({ scope: 'whole_workspace' }),
+        }),
+      );
+    });
+    expect(useAiContextStore.getState().pendingAction).toBeNull();
   });
 
   it('runs /whole-workspace command by indexing and passing chunks to chat', async () => {

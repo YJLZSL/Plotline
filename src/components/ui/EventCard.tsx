@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion, useMotionValue, animate } from 'framer-motion';
-import { Copy, Link2, MapPin, Pencil, Sparkles, Trash2 } from 'lucide-react';
+import { CalendarDays, Copy, Link2, MapPin, Pencil, Sparkles, Trash2 } from 'lucide-react';
 
 import {
   ContextMenu,
@@ -228,13 +228,15 @@ export const EventCard = memo(function EventCard({
           whileTap={whileTap}
           className={cn(
             'absolute cursor-grab active:cursor-grabbing select-none active:scale-[0.98]',
-            'rounded-[8px] overflow-hidden',
-            'shadow-[var(--shadow-card)] transition-shadow',
-            'border-2 backdrop-blur-sm bg-bg-surface',
+            'rounded-[10px] overflow-hidden',
+            'shadow-[0_1px_2px_rgba(58,46,38,0.06),0_8px_20px_rgba(58,46,38,0.08)]',
+            'border border-border/70 bg-bg-surface',
+            'hover:shadow-[0_2px_4px_rgba(58,46,38,0.08),0_12px_28px_rgba(58,46,38,0.12)]',
+            'transition-shadow',
             enhancedAnimations && 'ambient-scale',
             selected
-              ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
-              : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
+              ? 'border-accent ring-2 ring-accent/25'
+              : cn(status.border, 'hover:border-border'),
             pendingConnection && 'border-accent ring-2 ring-accent/30',
             isConflict && 'ring-2 ring-red-500/50 border-red-400',
             effectiveIsDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
@@ -248,7 +250,7 @@ export const EventCard = memo(function EventCard({
           }}
         >
           {/* 左侧轨道色条 */}
-          <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
+          <div className="absolute left-0 top-0 bottom-0 w-[5px] rounded-r" style={{ backgroundColor: color }} />
 
           {isConflict && (
             <div
@@ -259,12 +261,12 @@ export const EventCard = memo(function EventCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="relative z-10 px-3 py-2 flex flex-col justify-between h-full min-w-0 gap-1">
+              <div className="relative z-10 pl-3 pr-2 py-1.5 flex flex-col justify-between h-full min-w-0 gap-1">
                 {/* Zone 1: Header — 状态点 + 相对标识 + 标题 + 连线手柄 */}
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span
                     role="img"
-                    className={cn('h-2 w-2 rounded-full flex-shrink-0', status.dot)}
+                    className={cn('h-2.5 w-2.5 rounded-full flex-shrink-0 ring-2 ring-bg-surface', status.dot)}
                     aria-label={t(status.labelKey)}
                   />
                   {/* 相对事件标识：与绝对事件一眼区分（仅非绝对日期事件显示） */}
@@ -276,7 +278,7 @@ export const EventCard = memo(function EventCard({
                       {t('timeline.relativeBadge')}
                     </span>
                   )}
-                  <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0 leading-tight">
+                  <span className="text-sm font-semibold text-text-primary truncate flex-1 min-w-0 leading-tight">
                     {event.title}
                   </span>
                   {/* 连线手柄：hover 显示；首次进入时间轴短暂常亮（A8） */}
@@ -299,9 +301,10 @@ export const EventCard = memo(function EventCard({
                 </div>
 
                 {/* Zone 2: Body — 时间范围 + 持续时间 */}
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0 min-w-0">
-                  <span className="text-xs text-text-secondary tabular-nums leading-tight whitespace-normal break-words">
-                    {timeRange}
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+                  <span className="inline-flex items-center gap-1 max-w-full rounded-[5px] bg-bg-elevated/70 border border-border/50 px-1.5 py-0.5 text-[11px] text-text-secondary tabular-nums leading-tight">
+                    <CalendarDays className="h-3 w-3 flex-shrink-0 text-accent/80" />
+                    <span className="truncate">{timeRange}</span>
                   </span>
                   {hasDuration && (
                     <span className="text-[10px] text-text-secondary/70 tabular-nums leading-tight">
