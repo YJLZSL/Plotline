@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chooseTickLevel,
+  chooseAdaptiveTickLevel,
   createTimeScale,
   formatMajorTick,
+  formatMajorTickDegraded,
   formatMinorTick,
   getMajorTickTimestamps,
   getMinorTickTimestamps,
   getTickInterval,
+  sampleTickTimestamps,
   type TickLevel,
 } from './timeScale';
 
@@ -333,4 +336,65 @@ describe('chooseTickLevel integration with TickLevel thresholds', () => {
       expect(chooseTickLevel(c.zoom)).toBe(c.expected);
     });
   }
+});
+
+describe('chooseAdaptiveTickLevel', () => {
+  it('should keep the zoom level when tick count fits the budget', () => {
+    const min = new Date('2024-01-01T00:00:00Z').getTime();
+    const max = new Date('2024-02-01T00:00:00Z').getTime();
+    expect(chooseAdaptiveTickLevel(90, min, max)).toBe('day');
+  });
+
+  it('should upgrade to a coarser level when the range would produce too many ticks', () => {
+    const min = new Date('2024-01-01T00:00:00Z').getTime();
+    const max = new Date('2025-01-01T00:00:00Z').getTime();
+    // hour 级别一年有 8760 个刻度、day 级别 365 个刻度，均超出 240 预算，应升级到 week
+    expect(chooseAdaptiveTickLevel(60, min, max)).toBe('week');
+  });
+
+  it('should cap at year for very long ranges', () => {
+    const min = new Date('1900-01-01T00:00:00Z').getTime();
+    const max = new Date('2100-01-01T00:00:00Z').getTime();
+    expect(chooseAdaptiveTickLevel(60, min, max, 120)).toBe('year');
+  });
+});
+
+describe('sampleTickTimestamps', () => {
+  it('should keep the original array when within budget', () => {
+    expect(sampleTickTimestamps([1, 2, 3], 5)).toEqual([1, 2, 3]);
+  });
+
+  it('should always keep the first and last ticks', () => {
+    const input = Array.from({ length: 100 }, (_, i) => i);
+    const sampled = sampleTickTimestamps(input, 10);
+    expect(sampled[0]).toBe(0);
+    expect(sampled[sampled.length - 1]).toBe(99);
+    expect(sampled.length).toBeLessThanOrEqual(10);
+  });
+
+  it('should spread samples evenly', () => {
+    const input = Array.from({ length: 21 }, (_, i) => i * 10);
+    const sampled = sampleTickTimestamps(input, 3);
+    expect(sampled).toEqual([0, 100, 200]);
+  });
+});
+
+describe('formatMajorTickDegraded', () => {
+  it('should degrade month/week/quarter labels to the year', () => {
+    const date = new Date(Date.UTC(2027, 2, 15));
+    expect(formatMajorTickDegraded(date, 'month')).toBe('2027');
+    expect(formatMajorTickDegraded(date, 'week')).toBe('2027');
+    expect(formatMajorTickDegraded(date, 'quarter')).toBe('2027');
+  });
+
+  it('should degrade day labels to a short month and hour labels to a short day', () => {
+    const date = new Date(Date.UTC(2027, 11, 3, 14));
+    expect(formatMajorTickDegraded(date, 'day')).toBe('27-12');
+    expect(formatMajorTickDegraded(date, 'hour')).toBe('12-03');
+  });
+
+  it('should keep year labels unchanged', () => {
+    const date = new Date(Date.UTC(2027, 0, 1));
+    expect(formatMajorTickDegraded(date, 'year')).toBe('2027');
+  });
 });

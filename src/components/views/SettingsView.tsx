@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { RotateCcw, Upload, ChevronDown } from 'lucide-react';
 
@@ -18,7 +18,8 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { MOTION_TAB } from '@/lib/motion';
 import { toastError, toastInfo, toastSuccess } from '@/stores/toast';
-import { useThemeStore } from '@/stores/ui';
+import { useThemeStore, useUIStore } from '@/stores/ui';
+import { createDefaultGoal, useWritingGoalsStore } from '@/stores/writingGoals';
 import { useSettingsQuery, useUpdateSettings } from '@/features/settings/hooks';
 import { checkForUpdates } from '@/features/settings/updater';
 import { importFont, listImportedFonts, loadImportedFontFaces } from '@/features/font/api';
@@ -49,6 +50,14 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
   const { data: settings } = useSettingsQuery();
   const update = useUpdateSettings();
   const applyToDOM = useThemeStore((s) => s.applyToDOM);
+  const editorFollowsFontTheme = useUIStore((s) => s.editorFollowsFontTheme);
+  const setEditorFollowsFontTheme = useUIStore((s) => s.setEditorFollowsFontTheme);
+  const mcUseCustomAccent = useUIStore((s) => s.mcUseCustomAccent);
+  const setMcUseCustomAccent = useUIStore((s) => s.setMcUseCustomAccent);
+  const workspaceWritingGoal = useWritingGoalsStore((s) => s.goalsByWorkspace[workspaceId]);
+  const writingGoal = useMemo(() => workspaceWritingGoal ?? createDefaultGoal(), [workspaceWritingGoal]);
+  const setDailyWritingTarget = useWritingGoalsStore((s) => s.setDailyTarget);
+  const setWeeklyWritingTarget = useWritingGoalsStore((s) => s.setWeeklyTarget);
   const [tab, setTab] = useState<Tab>('appearance');
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -157,6 +166,14 @@ export function SettingsView({ workspaceId, workspaceName }: SettingsViewProps) 
     updateVersion,
     handleCheckUpdate,
     handleInstallUpdate,
+    editorFollowsFontTheme,
+    setEditorFollowsFontTheme,
+    mcUseCustomAccent,
+    setMcUseCustomAccent,
+    writingGoal,
+    setDailyWritingTarget,
+    setWeeklyWritingTarget,
+    workspaceId,
   });
 
   const activeTabDef = TABS.find((tb) => tb.id === tab)!;
@@ -321,6 +338,14 @@ interface BuildSettingCardsContext {
   updateVersion: string | null;
   handleCheckUpdate: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
+  editorFollowsFontTheme: boolean;
+  setEditorFollowsFontTheme: (follows: boolean) => void;
+  mcUseCustomAccent: boolean;
+  setMcUseCustomAccent: (enabled: boolean) => void;
+  writingGoal: ReturnType<typeof createDefaultGoal>;
+  setDailyWritingTarget: (workspaceId: string, words: number) => void;
+  setWeeklyWritingTarget: (workspaceId: string, words: number) => void;
+  workspaceId: string;
 }
 
 interface SettingCard {
@@ -346,6 +371,14 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
     updateVersion,
     handleCheckUpdate,
     handleInstallUpdate,
+    editorFollowsFontTheme,
+    setEditorFollowsFontTheme,
+    mcUseCustomAccent,
+    setMcUseCustomAccent,
+    writingGoal,
+    setDailyWritingTarget,
+    setWeeklyWritingTarget,
+    workspaceId,
   } = ctx;
 
   return {
@@ -367,39 +400,72 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
         description: t('settings.accentColorDescription'),
         testId: 'accent-color-card',
         content: (
-          <div className="flex gap-2 flex-wrap">
-            {ACCENT_PALETTE.map((c) => (
-              <button
-                key={c}
-                data-testid={`accent-color-${c}`}
-                onClick={() => set({ accentColor: c })}
-                className={cn(
-                  'h-9 w-9 rounded-full transition-transform flex items-center justify-center',
-                  draft.accentColor === c
-                    ? 'ring-2 ring-offset-2 ring-text-primary/40 scale-110'
-                    : 'hover:scale-110',
-                )}
-                style={{ backgroundColor: c }}
-                aria-label={c}
-              >
-                {draft.accentColor === c && (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-white"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                )}
-              </button>
-            ))}
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2 flex-wrap">
+              {ACCENT_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  data-testid={`accent-color-${c}`}
+                  onClick={() => set({ accentColor: c })}
+                  className={cn(
+                    'h-9 w-9 rounded-full transition-transform flex items-center justify-center',
+                    draft.accentColor === c
+                      ? 'ring-2 ring-offset-2 ring-text-primary/40 scale-110'
+                      : 'hover:scale-110',
+                  )}
+                  style={{ backgroundColor: c }}
+                  aria-label={c}
+                >
+                  {draft.accentColor === c && (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-white"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* B4: 自由取色器 */}
+            <label className="flex items-center gap-2 text-xs text-text-secondary">
+              <input
+                type="color"
+                value={draft.accentColor}
+                onChange={(e) => set({ accentColor: e.target.value })}
+                className="h-8 w-10 cursor-pointer rounded-[6px] border border-border bg-bg-surface p-0.5"
+                data-testid="accent-color-custom-input"
+                aria-label={t('settings.accentCustomColor')}
+              />
+              {t('settings.accentCustomColor')}
+            </label>
+
+            {/* B4: MC 主题强调色解耦提示 */}
+            {draft.theme === 'mc' && (
+              <div className="flex items-start justify-between gap-4 rounded-[8px] border border-border bg-bg-elevated/40 px-4 py-3">
+                <div>
+                  <Label className="text-sm font-semibold">{t('settings.mcUseCustomAccent')}</Label>
+                  <p className="text-xs text-text-secondary mt-0.5">{t('settings.accentColorMcHint')}</p>
+                </div>
+                <Switch
+                  checked={mcUseCustomAccent}
+                  onCheckedChange={(checked) => {
+                    setMcUseCustomAccent(checked);
+                    useThemeStore.getState().applyToDOM({ accentColor: draft.accentColor });
+                  }}
+                  data-testid="mc-use-custom-accent"
+                />
+              </div>
+            )}
           </div>
         ),
       },
@@ -440,6 +506,7 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
             editorFont={draft.editorFont}
             fontTheme={draft.fontTheme}
             onChange={(patch) => set(patch)}
+            variant="ui"
           />
         ),
       },
@@ -469,7 +536,23 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
               editorFont={draft.editorFont}
               fontTheme={draft.fontTheme}
               onChange={(patch) => set(patch)}
+              variant="editor"
             />
+            <div className="flex items-start justify-between gap-4 rounded-[8px] border border-border bg-bg-elevated/40 px-4 py-3">
+              <div>
+                <Label className="text-sm font-semibold">
+                  {t('settings.editorFollowsFontTheme')}
+                </Label>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {t('settings.editorFollowsFontThemeDescription')}
+                </p>
+              </div>
+              <Switch
+                checked={editorFollowsFontTheme}
+                onCheckedChange={setEditorFollowsFontTheme}
+                data-testid="editor-follows-font-theme"
+              />
+            </div>
             <div>
               <Label className="text-sm font-semibold">{t('settings.fontSize')}</Label>
               <p className="text-xs text-text-secondary mt-0.5 mb-2">{t('settings.fontSizeDescription')}</p>
@@ -593,6 +676,45 @@ function buildSettingCards(ctx: BuildSettingCardsContext): Record<Tab, SettingCa
       },
     ],
     data: [
+      {
+        title: t('settings.writingGoals'),
+        description: t('settings.writingGoalsDescription'),
+        testId: 'writing-goals-card',
+        content: (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>{t('settings.dailyWritingTarget')}</Label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={writingGoal.dailyTarget}
+                  onChange={(e) => setDailyWritingTarget(workspaceId, Number(e.target.value))}
+                  className="w-32"
+                  data-testid="daily-writing-target-input"
+                />
+                <span className="text-xs text-text-secondary">{t('novel.words')}</span>
+              </div>
+            </div>
+            <div>
+              <Label>{t('settings.weeklyWritingTarget')}</Label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={writingGoal.weeklyTarget}
+                  onChange={(e) => setWeeklyWritingTarget(workspaceId, Number(e.target.value))}
+                  className="w-32"
+                  data-testid="weekly-writing-target-input"
+                />
+                <span className="text-xs text-text-secondary">{t('novel.words')}</span>
+              </div>
+            </div>
+          </div>
+        ),
+      },
       {
         title: t('settings.backupPath'),
         description: t('settings.backupPathDescription'),

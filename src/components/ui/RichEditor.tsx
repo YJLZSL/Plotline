@@ -16,6 +16,14 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { useThemeStore, useUIStore } from '@/stores/ui';
+
+const EDITOR_FONT_CLASS_BY_THEME = {
+  sans: '[font-family:var(--font-sans)]',
+  mono: '[font-family:var(--font-mono)]',
+  pixel: '[font-family:var(--font-pixel)]',
+  smiley: '[font-family:var(--font-mono)]',
+} as const;
 
 interface RichEditorProps {
   value: string;
@@ -62,6 +70,14 @@ export function RichEditor({
     },
   });
 
+  // B2: "编辑器跟随字体主题"开关开启后，不再硬编码等宽字体，
+  // 而是跟随界面字体主题（sans→sans、mono→mono、pixel→pixel、smiley→mono）。
+  const editorFollowsFontTheme = useUIStore((s) => s.editorFollowsFontTheme);
+  const fontTheme = useThemeStore((s) => s.fontTheme);
+  const editorFontClass = editorFollowsFontTheme
+    ? EDITOR_FONT_CLASS_BY_THEME[fontTheme]
+    : '[font-family:var(--font-mono)]';
+
   useEffect(() => {
     if (editor && onEditorReady) {
       onEditorReady(editor);
@@ -79,7 +95,11 @@ export function RichEditor({
       <div className="flex-1 overflow-auto p-4 bg-bg-base">
         <EditorContent
           editor={editor}
-          className="prose prose-sm max-w-none font-mono prose-headings:text-text-primary prose-p:text-text-primary prose-strong:text-text-primary prose-blockquote:text-text-secondary prose-blockquote:border-l-accent"
+          data-editor-font-follows={editorFollowsFontTheme || undefined}
+          className={cn(
+            'prose prose-sm max-w-none prose-headings:text-text-primary prose-p:text-text-primary prose-strong:text-text-primary prose-blockquote:text-text-secondary prose-blockquote:border-l-accent',
+            editorFontClass,
+          )}
           style={{ minHeight }}
         />
       </div>

@@ -6,6 +6,7 @@ pub mod location;
 pub mod note;
 pub mod novel;
 pub mod outline;
+pub mod pomodoro;
 pub mod settings;
 pub mod statistics;
 pub mod track;

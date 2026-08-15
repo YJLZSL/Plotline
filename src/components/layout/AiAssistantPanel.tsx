@@ -12,7 +12,6 @@ import {
   Database,
   HelpCircle,
   ListTree,
-  Loader2,
   MapPin,
   MessageSquarePlus,
   PanelLeft,
@@ -38,6 +37,7 @@ import { getWorkspace } from '@/features/workspace/api';
 import { toastError, toastSuccess } from '@/stores/toast';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useEditorSelectionStore } from '@/stores/editorSelection';
+import { useAiAssistantStore } from '@/features/ai-assistant/store';
 import { getProviderPreset } from '@/features/ai/providers';
 import { aiChatStream, searchAiChunks } from '@/features/ai/api';
 import {
@@ -170,7 +170,9 @@ export function AiAssistantPanel({
   });
   const qc = useQueryClient();
   const { data: sessions = [] } = useAiSessionsQuery(workspaceId);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // 与"AI 创作"独立视图共享当前会话，切换入口不丢上下文（功能协作收口）。
+  const currentSessionId = useAiAssistantStore((s) => s.currentSessionId);
+  const setCurrentSessionId = useAiAssistantStore((s) => s.setCurrentSessionId);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -211,10 +213,16 @@ export function AiAssistantPanel({
   };
 
   useEffect(() => {
-    if (open && sessions.length > 0 && !currentSessionId) {
+    if (!open) return;
+    // 切换工作区时，若共享会话不属于当前工作区，回退到第一个会话。
+    if (currentSessionId && !sessions.some((s) => s.id === currentSessionId)) {
+      setCurrentSessionId(sessions[0]?.id ?? null);
+      return;
+    }
+    if (sessions.length > 0 && !currentSessionId) {
       setCurrentSessionId(sessions[0]?.id ?? null);
     }
-  }, [open, sessions, currentSessionId]);
+  }, [open, sessions, currentSessionId, setCurrentSessionId]);
 
   useEffect(() => {
     const area = messageAreaRef.current;
@@ -334,7 +342,8 @@ export function AiAssistantPanel({
       qc.setQueryData<AiMessage[]>(aiMessagesKey(result.sessionId), result.messages);
       qc.invalidateQueries({ queryKey: aiSessionsKey(workspaceId) });
     } catch {
-      // 错误由 onError / channel error 处理
+      // 错误优先由流事件 onError 提示；若整个流在产生事件前失败，补一个可见兜底错误。
+      toastError(t('aiAssistant.sendFailed'));
     } finally {
       setIsStreaming(false);
       setStreamingContent('');
@@ -1073,7 +1082,7 @@ function ConnectionIndicator({
       title={test.data?.message ?? meta.label}
     >
       {test.isFetching ? (
-        <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />
+        <span className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
       ) : (
         <span className={cn('h-2 w-2 rounded-full', meta.dot)} />
       )}
@@ -1093,6 +1102,7 @@ function SessionRow({
   onSelect: () => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <button
       data-testid={`ai-session-item-${session.id}`}
@@ -1120,7 +1130,7 @@ function SessionRow({
           }
         }}
         className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:text-red-500 focus:opacity-100"
-        title="删除"
+        title={t('common.delete')}
       >
         <X className="h-3 w-3" />
       </span>

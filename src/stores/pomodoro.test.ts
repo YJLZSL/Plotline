@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import { usePomodoroStore, formatPomodoroTime } from './pomodoro';
+import { getDayRecord, getWorkspaceGoal, useWritingGoalsStore } from './writingGoals';
 
 describe('pomodoro store', () => {
   beforeEach(() => {
@@ -14,6 +15,7 @@ describe('pomodoro store', () => {
       achievements: { date: new Date().toISOString().slice(0, 10), count: 0, streak: 0 },
       mcEasterEggsEnabled: true,
       mcEasterEggTriggeredThisSession: false,
+      focusWorkspaceId: null,
     });
   });
 
@@ -246,6 +248,25 @@ describe('pomodoro store', () => {
     usePomodoroStore.getState().finishPhase();
     expect(usePomodoroStore.getState().phase).toBe('focus');
     expect(usePomodoroStore.getState().mcEasterEggTriggeredThisSession).toBe(false);
+  });
+
+  it('should write a completed focus session into the bound workspace writing goal (C1)', () => {
+    useWritingGoalsStore.setState({ goalsByWorkspace: {} });
+    usePomodoroStore.getState().setFocusWorkspaceId('ws-1');
+    usePomodoroStore.setState({ secondsLeft: 1, isRunning: true, phase: 'focus' });
+    usePomodoroStore.getState().tick();
+
+    const goal = getWorkspaceGoal(useWritingGoalsStore.getState(), 'ws-1');
+    expect(getDayRecord(goal, new Date()).focusSessions).toBe(1);
+  });
+
+  it('should not write focus sessions when no workspace is bound', () => {
+    useWritingGoalsStore.setState({ goalsByWorkspace: {} });
+    usePomodoroStore.getState().setFocusWorkspaceId(null);
+    usePomodoroStore.setState({ secondsLeft: 1, isRunning: true, phase: 'focus' });
+    usePomodoroStore.getState().tick();
+
+    expect(useWritingGoalsStore.getState().goalsByWorkspace['ws-1']).toBeUndefined();
   });
 
   it('should format time as mm:ss', () => {

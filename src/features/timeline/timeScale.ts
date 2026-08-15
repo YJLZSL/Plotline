@@ -72,6 +72,57 @@ export function chooseTickLevel(zoom: number): TickLevel {
   return level;
 }
 
+const TICK_LEVEL_UPGRADE_ORDER: TickLevel[] = ['hour', 'day', 'week', 'month', 'quarter', 'year'];
+
+/** 标尺单屏最多渲染的刻度数。超出后升级刻度级别或降采样。 */
+export const MAX_RULER_TICKS = 240;
+
+/**
+ * 根据连续 zoom 与可视时间范围选择刻度级别。
+ *
+ * 先调用 {@link chooseTickLevel} 得到与 zoom 匹配的级别；若该级别在 `[min, max]`
+ * 内产生的刻度超过 {@link MAX_RULER_TICKS}，则逐级升级（hour → … → year），
+ * 避免长时间跨度下渲染数千个刻度导致卡顿。
+ */
+export function chooseAdaptiveTickLevel(
+  zoom: number,
+  min: number,
+  max: number,
+  maxTicks = MAX_RULER_TICKS,
+): TickLevel {
+  const startIndex = Math.max(0, TICK_LEVEL_UPGRADE_ORDER.indexOf(chooseTickLevel(zoom)));
+  for (let i = startIndex; i < TICK_LEVEL_UPGRADE_ORDER.length; i++) {
+    const level = TICK_LEVEL_UPGRADE_ORDER[i]!;
+    const count = getMajorTickTimestamps(min, max, level).length;
+    if (count <= maxTicks || i === TICK_LEVEL_UPGRADE_ORDER.length - 1) {
+      return level;
+    }
+  }
+  return 'year';
+}
+
+/**
+ * 均匀降采样刻度时间戳，始终保留首尾两个刻度。
+ * 用于在刻度数超过渲染预算时保持标尺与背景网格同步、均匀、无大段空白。
+ */
+export function sampleTickTimestamps(ticks: number[], maxCount: number): number[] {
+  if (ticks.length <= maxCount || maxCount < 2) return ticks;
+  const sampled: number[] = [];
+  const lastIndex = ticks.length - 1;
+  const step = lastIndex / (maxCount - 1);
+  const seen = new Set<number>();
+  for (let i = 0; i < maxCount; i++) {
+    const index = Math.round(i * step);
+    if (seen.has(index)) continue;
+    seen.add(index);
+    sampled.push(ticks[index]!);
+  }
+  if (sampled[sampled.length - 1] !== ticks[lastIndex]) {
+    sampled.push(ticks[lastIndex]!);
+  }
+  return sampled;
+}
+
 /**
  * 主刻度的格式化函数。主刻度是标尺上完整显示的刻度（如年份、季度、月份等）。
  */
@@ -126,6 +177,32 @@ export function formatMinorTick(date: Date, level: TickLevel): string {
       return `${String(h).padStart(2, '0')}:00`;
     default:
       return '';
+  }
+}
+
+/**
+ * 主刻度标签的空间降级格式。
+ *
+ * 当相邻主刻度太近、完整标签（如 `2027-12`）放不下时，降级为更短但仍有信息量的标签
+ * （通常只显示年份），而不是直接跳过整个刻度，避免标尺出现大段无标签区域（A6）。
+ */
+export function formatMajorTickDegraded(date: Date, level: TickLevel): string {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const d = date.getUTCDate();
+  switch (level) {
+    case 'year':
+      return String(y);
+    case 'quarter':
+    case 'month':
+    case 'week':
+      return String(y);
+    case 'day':
+      return `${String(y).slice(2)}-${String(m).padStart(2, '0')}`;
+    case 'hour':
+      return `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    default:
+      return String(y);
   }
 }
 

@@ -8,13 +8,19 @@ import { useI18n } from '@/hooks/useI18n';
 import { useAmbientAnimation } from '@/hooks/useAmbientAnimation';
 import { playSoundIfEnabled } from '@/lib/sound';
 import { toastInfo, toastSuccess } from '@/stores/toast';
-import {
-  usePomodoroStore,
+import { usePomodoroStore,
   formatPomodoroTime,
   getDefaultPomodoroPosition,
   type PomodoroPhase,
   type PomodoroTheme,
 } from '@/stores/pomodoro';
+import {
+  createDefaultGoal,
+  getTodayWritingProgress,
+  getDayRecord,
+  useWritingGoalsStore,
+} from '@/stores/writingGoals';
+import { sendPomodoroNotification } from '@/features/pomodoro/api';
 import { Button } from './Button';
 import { ConfirmDialog } from './Dialog';
 import McHeart from './icons/McHeart';
@@ -40,9 +46,11 @@ interface PomodoroTimerProps {
   open: boolean;
   onClose: () => void;
   workspaceName?: string;
+  /** C1: 绑定写作目标与专注统计的工作区。 */
+  workspaceId?: string;
 }
 
-export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerProps) {
+export function PomodoroTimer({ open, onClose, workspaceName, workspaceId }: PomodoroTimerProps) {
   const { t } = useI18n();
   const ambient = useAmbientAnimation();
   const {
@@ -69,7 +77,15 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
     resetAchievements,
     resetTimer,
     setMcEasterEggTriggeredThisSession,
+    setFocusWorkspaceId,
   } = usePomodoroStore();
+  const workspaceWritingGoal = useWritingGoalsStore((s) =>
+    workspaceId ? s.goalsByWorkspace[workspaceId] : undefined,
+  );
+  const writingGoal = useMemo(() => workspaceWritingGoal ?? createDefaultGoal(), [workspaceWritingGoal]);
+  const todayWriting = useMemo(() => getDayRecord(writingGoal, new Date()), [writingGoal]);
+  const dailyProgress = useMemo(() => getTodayWritingProgress(writingGoal), [writingGoal]);
+  const dailyTargetReached = writingGoal.dailyTarget > 0 && todayWriting.words >= writingGoal.dailyTarget;
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevPhaseRef = useRef(phase);
@@ -95,6 +111,12 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
       setPosition(getDefaultPomodoroPosition());
     }
   }, [position, setPosition]);
+
+  // C1: 把当前工作区绑定到番茄钟；专注完成时由 pomodoro store 写入写作目标。
+  useEffect(() => {
+    setFocusWorkspaceId(workspaceId ?? null);
+    return () => setFocusWorkspaceId(null);
+  }, [workspaceId, setFocusWorkspaceId]);
 
   // When a phase completes, wait for the celebration then move to the next phase.
   useEffect(() => {
@@ -126,25 +148,30 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
     if (!phaseCompleted || phase !== 'focus') return;
     playSoundIfEnabled(theme === 'mc' ? 'levelup' : 'complete');
     toastSuccess(t('pomodoro.focusComplete'));
+    if (completedFocusSessions > 0 && completedFocusSessions % 4 === 0) {
+      toastSuccess(t('pomodoro.milestone', { count: completedFocusSessions }));
+    }
+    void sendPomodoroNotification(t('pomodoro.focusComplete'), workspaceName ? `${workspaceName} · ${t('pomodoro.title')}` : t('pomodoro.title'));
     if (!ambient.fancy) return;
     setRareDrop(theme === 'mc' && Math.random() < 0.15 ? getRandomRareBlockType() : null);
     setCelebration(true);
     const timer = setTimeout(() => setCelebration(false), 1800);
     return () => clearTimeout(timer);
-  }, [phaseCompleted, phase, theme, ambient.fancy, t]);
+  }, [phaseCompleted, phase, theme, ambient.fancy, t, completedFocusSessions, workspaceName]);
 
   useEffect(() => {
     if (prevPhaseRef.current === phase) return;
     playSoundIfEnabled(theme === 'mc' ? 'place' : 'switch');
     if (phase === 'focus' && prevPhaseRef.current !== 'focus') {
       toastInfo(t('pomodoro.breakComplete'));
+      void sendPomodoroNotification(t('pomodoro.breakComplete'), workspaceName ?? t('pomodoro.title'));
     }
     prevPhaseRef.current = phase;
     if (!ambient.fancy) return;
     setShowConfetti(true);
     const timer = setTimeout(() => setShowConfetti(false), 1200);
     return () => clearTimeout(timer);
-  }, [phase, theme, ambient.fancy, t]);
+  }, [phase, theme, ambient.fancy, t, workspaceName]);
 
   const totalSeconds = phase === 'focus' ? 25 * 60 : phase === 'shortBreak' ? 5 * 60 : 15 * 60;
   const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
@@ -554,6 +581,33 @@ export function PomodoroTimer({ open, onClose, workspaceName }: PomodoroTimerPro
                         ))}
                         {completedFocusSessions > 10 && (
                           <span className="text-[10px] font-pixel opacity-80">+{completedFocusSessions - 10}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {workspaceId && (
+                    <div data-testid="pomodoro-writing-goal" className="mt-4 w-full rounded-[8px] bg-black/5 p-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span>{t('pomodoro.dailyWritingGoal', { target: writingGoal.dailyTarget })}</span>
+                        <span className="tabular-nums">
+                          {todayWriting.words} / {writingGoal.dailyTarget}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-black/10 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-current opacity-70 transition-[width] duration-300"
+                          style={{ width: `${Math.round(dailyProgress * 100)}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-[10px] opacity-70">
+                        <span>
+                          {t('pomodoro.todayFocusSessions', { count: todayWriting.focusSessions })}
+                        </span>
+                        {dailyTargetReached && (
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            {t('pomodoro.dailyGoalReached')}
+                          </span>
                         )}
                       </div>
                     </div>

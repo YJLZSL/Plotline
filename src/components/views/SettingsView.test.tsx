@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { SettingsView } from './SettingsView';
 import type { AppSettings } from '@/types';
+import { useWritingGoalsStore } from '@/stores/writingGoals';
 
 const mockApplyToDOM = vi.fn();
 const mockMutateAsync = vi.fn();
@@ -22,6 +23,8 @@ vi.mock('@/features/settings/hooks', () => ({
 
 const mockSetEnhancedAnimations = vi.fn();
 const mockSetFirstWorkspaceVisit = vi.fn();
+const mockSetEditorFollowsFontTheme = vi.fn();
+const mockSetMcUseCustomAccent = vi.fn();
 
 vi.mock('@/stores/ui', () => ({
   useThemeStore: vi.fn((selector?: (state: { applyToDOM: typeof mockApplyToDOM }) => unknown) =>
@@ -36,6 +39,10 @@ vi.mock('@/stores/ui', () => ({
         setEnhancedAnimations: typeof mockSetEnhancedAnimations;
         firstWorkspaceVisit: boolean;
         setFirstWorkspaceVisit: typeof mockSetFirstWorkspaceVisit;
+        editorFollowsFontTheme: boolean;
+        setEditorFollowsFontTheme: typeof mockSetEditorFollowsFontTheme;
+        mcUseCustomAccent: boolean;
+        setMcUseCustomAccent: typeof mockSetMcUseCustomAccent;
       }) => unknown,
     ) =>
       selector
@@ -46,6 +53,10 @@ vi.mock('@/stores/ui', () => ({
             setEnhancedAnimations: mockSetEnhancedAnimations,
             firstWorkspaceVisit: false,
             setFirstWorkspaceVisit: mockSetFirstWorkspaceVisit,
+            editorFollowsFontTheme: false,
+            setEditorFollowsFontTheme: mockSetEditorFollowsFontTheme,
+            mcUseCustomAccent: false,
+            setMcUseCustomAccent: mockSetMcUseCustomAccent,
           })
         : {
             aiPanelOpen: false,
@@ -54,6 +65,10 @@ vi.mock('@/stores/ui', () => ({
             setEnhancedAnimations: mockSetEnhancedAnimations,
             firstWorkspaceVisit: false,
             setFirstWorkspaceVisit: mockSetFirstWorkspaceVisit,
+            editorFollowsFontTheme: false,
+            setEditorFollowsFontTheme: mockSetEditorFollowsFontTheme,
+            mcUseCustomAccent: false,
+            setMcUseCustomAccent: mockSetMcUseCustomAccent,
           },
   ),
 }));
@@ -157,6 +172,7 @@ function renderSettings() {
 describe('SettingsView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useWritingGoalsStore.setState({ goalsByWorkspace: {} });
     vi.mocked(useSettingsQuery).mockReturnValue({
       data: baseSettings,
       isLoading: false,
@@ -285,6 +301,20 @@ describe('SettingsView', () => {
     expect(screen.getByTestId('import-font-card')).toBeInTheDocument();
   });
 
+  it('should keep UI/editor font selectors separate and expose the follow-theme toggle (B3)', async () => {
+    renderSettings();
+    // 外观 tab 只挂一个界面字体选择器
+    expect(screen.getAllByTestId('font-preview')).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('settings-tab-editor'));
+    await waitFor(() => {
+      expect(screen.getByTestId('editor-follows-font-theme')).toBeInTheDocument();
+    });
+    // 编辑器 tab 不再重复挂载字体主题卡片，只保留一个编辑器字体选择器
+    expect(screen.queryByTestId('font-theme-sans')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('font-preview')).toHaveLength(1);
+  });
+
   it('should render data tab cards', async () => {
     renderSettings();
     fireEvent.click(screen.getByTestId('settings-tab-data'));
@@ -293,6 +323,32 @@ describe('SettingsView', () => {
     });
     expect(screen.getByTestId('auto-backup-card')).toBeInTheDocument();
     expect(screen.getByTestId('backup-interval-card')).toBeInTheDocument();
+  });
+
+  it('should edit daily and weekly writing targets in the data tab (C1)', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByTestId('settings-tab-data'));
+    await waitFor(() => {
+      expect(screen.getByTestId('writing-goals-card')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId('daily-writing-target-input'), { target: { value: '1500' } });
+    fireEvent.change(screen.getByTestId('weekly-writing-target-input'), { target: { value: '9000' } });
+
+    const goal = useWritingGoalsStore.getState().goalsByWorkspace['ws-1'];
+    expect(goal?.dailyTarget).toBe(1500);
+    expect(goal?.weeklyTarget).toBe(9000);
+  });
+
+  it('should expose a custom color picker and MC accent toggle (B4)', async () => {
+    renderSettings();
+    expect(screen.getByTestId('accent-color-custom-input')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('theme-mc'));
+    await waitFor(() => {
+      expect(screen.getByTestId('mc-use-custom-accent')).toBeInTheDocument();
+    });
+    expect(screen.getByText('settings.accentColorMcHint')).toBeInTheDocument();
   });
 
   it('should render about tab cards', async () => {

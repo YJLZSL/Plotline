@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { useWritingGoalsStore } from './writingGoals';
+
 export type PomodoroTheme = 'warm' | 'mc' | 'minimal';
 export type PomodoroPhase = 'focus' | 'shortBreak' | 'longBreak';
 
@@ -32,6 +34,8 @@ interface PomodoroState {
   minimized: boolean;
   mcEasterEggsEnabled: boolean;
   mcEasterEggTriggeredThisSession: boolean;
+  /** C1: 当前番茄钟绑定的工作区；专注完成时把本次番茄写入写作目标。 */
+  focusWorkspaceId: string | null;
   setTheme: (theme: PomodoroTheme) => void;
   setPhase: (phase: PomodoroPhase) => void;
   start: () => void;
@@ -47,6 +51,7 @@ interface PomodoroState {
   resetTimer: () => void;
   setMcEasterEggsEnabled: (enabled: boolean) => void;
   setMcEasterEggTriggeredThisSession: (triggered: boolean) => void;
+  setFocusWorkspaceId: (workspaceId: string | null) => void;
 }
 
 function phaseSeconds(phase: PomodoroPhase): number {
@@ -95,6 +100,7 @@ export const usePomodoroStore = create<PomodoroState>()(
       minimized: false,
       mcEasterEggsEnabled: true,
       mcEasterEggTriggeredThisSession: false,
+      focusWorkspaceId: null,
       setTheme: (theme) => set({ theme }),
       setPhase: (phase) =>
         set({
@@ -117,6 +123,11 @@ export const usePomodoroStore = create<PomodoroState>()(
           if (phase === 'focus') {
             nextCompleted += 1;
             nextAchievements = computeNextAchievements(achievements);
+            // C1: 专注完成即写入当前工作区的写作目标（1 个番茄/天）。
+            const focusWorkspaceId = get().focusWorkspaceId;
+            if (focusWorkspaceId) {
+              useWritingGoalsStore.getState().addFocusSession(focusWorkspaceId);
+            }
           }
           set({
             secondsLeft: 0,
@@ -184,6 +195,7 @@ export const usePomodoroStore = create<PomodoroState>()(
       setMcEasterEggsEnabled: (mcEasterEggsEnabled) => set({ mcEasterEggsEnabled }),
       setMcEasterEggTriggeredThisSession: (mcEasterEggTriggeredThisSession) =>
         set({ mcEasterEggTriggeredThisSession }),
+      setFocusWorkspaceId: (focusWorkspaceId) => set({ focusWorkspaceId }),
     }),
     {
       name: 'plotline:pomodoro',

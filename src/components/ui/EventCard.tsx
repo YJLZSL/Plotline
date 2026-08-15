@@ -42,6 +42,8 @@ export interface EventCardProps {
   totalWidth: number;
   selected: boolean;
   pendingConnection: boolean;
+  /** A8: 首次进入时间轴时短暂常亮连线手柄，提升连线功能发现性。 */
+  connectionHintVisible?: boolean;
   isConflict: boolean;
   isNew: boolean;
   isDragging: boolean;
@@ -71,6 +73,7 @@ export const EventCard = memo(function EventCard({
   totalWidth,
   selected,
   pendingConnection,
+  connectionHintVisible = false,
   isConflict,
   isNew,
   isDragging,
@@ -175,6 +178,7 @@ export const EventCard = memo(function EventCard({
           data-layout-x={layout.x}
           data-dragging={effectiveIsDragging}
           data-selected={selected}
+          data-snap-x={snapX ?? ''}
           data-testid="event-card"
           initial={initial}
           animate={animateTo}
@@ -231,7 +235,7 @@ export const EventCard = memo(function EventCard({
             selected
               ? 'border-accent ring-2 ring-accent/30 shadow-[var(--shadow-elevated)]'
               : cn('border-border/60 hover:shadow-[var(--shadow-elevated)]', status.border),
-            pendingConnection && 'border-accent animate-pulse',
+            pendingConnection && 'border-accent ring-2 ring-accent/30',
             isConflict && 'ring-2 ring-red-500/50 border-red-400',
             effectiveIsDragging && 'z-50 cursor-grabbing shadow-[var(--shadow-elevated)]',
           )}
@@ -261,7 +265,7 @@ export const EventCard = memo(function EventCard({
                   <span
                     role="img"
                     className={cn('h-2 w-2 rounded-full flex-shrink-0', status.dot)}
-                    aria-label={isRelative ? t('timeline.relativeBadge') : t(status.labelKey)}
+                    aria-label={t(status.labelKey)}
                   />
                   {/* 相对事件标识：与绝对事件一眼区分（仅非绝对日期事件显示） */}
                   {isRelative && (
@@ -275,13 +279,19 @@ export const EventCard = memo(function EventCard({
                   <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0 leading-tight">
                     {event.title}
                   </span>
-                  {/* 连线手柄 */}
+                  {/* 连线手柄：hover 显示；首次进入时间轴短暂常亮（A8） */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onStartConnection(event.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent p-0.5 rounded transition-colors flex-shrink-0"
+                    data-testid="event-connection-handle"
+                    className={cn(
+                      'text-text-secondary hover:text-accent p-0.5 rounded transition-opacity flex-shrink-0',
+                      connectionHintVisible
+                        ? 'opacity-100 text-accent bg-accent/10'
+                        : 'opacity-0 group-hover:opacity-100',
+                    )}
                     title={t('timeline.startConnection')}
                   >
                     <Link2 className="h-3 w-3" />

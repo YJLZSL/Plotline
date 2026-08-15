@@ -12,6 +12,7 @@ import {
 import '@/i18n';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { useAiContextStore, type AiContextState } from '@/stores/aiContext';
+import { useAiAssistantStore } from '@/features/ai-assistant/store';
 import { aiChatStream, searchAiChunks } from '@/features/ai/api';
 import { collectAiContext } from '@/features/ai/contextCollector';
 import {
@@ -226,6 +227,7 @@ describe('AiAssistantPanel', () => {
     lastStreamCallback = null;
     streamResolve = null;
     useAiContextStore.setState(defaultContext);
+    useAiAssistantStore.setState({ currentSessionId: null });
     mockHooks();
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { useThemeStore } from './ui';
+import { useThemeStore, useUIStore } from './ui';
 
 describe('theme store', () => {
   beforeEach(() => {
@@ -47,5 +47,15 @@ describe('theme store', () => {
     expect(document.documentElement.style.getPropertyValue('--motion-enabled')).toBe('0');
     useThemeStore.getState().applyToDOM({ animationsEnabled: true });
     expect(document.documentElement.style.getPropertyValue('--motion-enabled')).toBe('1');
+  });
+
+  it('should keep the MC grass-green accent unless custom accent is explicitly enabled (B4)', () => {
+    useUIStore.setState({ mcUseCustomAccent: false });
+    useThemeStore.getState().applyToDOM({ theme: 'mc', accentColor: '#C68A3E' });
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('');
+
+    useUIStore.setState({ mcUseCustomAccent: true });
+    useThemeStore.getState().applyToDOM({ theme: 'mc', accentColor: '#C68A3E' });
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#C68A3E');
   });
 });

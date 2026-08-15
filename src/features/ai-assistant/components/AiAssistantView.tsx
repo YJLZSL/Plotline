@@ -17,6 +17,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { toastError, toastSuccess } from '@/stores/toast';
+import { useAiContextStore } from '@/stores/aiContext';
 import { useAiAssistantStore } from '@/features/ai-assistant/store';
 import type { AiMessage } from '@/types';
 
@@ -75,10 +76,17 @@ export function AiAssistantView({ workspaceId }: AiAssistantViewProps) {
 
   const sidebarOpen = useAiAssistantStore((s) => s.showAgentPanel);
   const setSidebarOpen = useAiAssistantStore((s) => s.setShowAgentPanel);
+  // 与时间轴等视图共享全局选择上下文，展示"AI 正在针对哪个对象思考"。
+  const selection = useAiContextStore((s) => s.selection);
+  const viewLabel = useAiContextStore((s) => s.viewLabel);
 
   const enabled = settings?.aiEnabled ?? false;
 
   useEffect(() => {
+    if (currentSessionId && !sessions.some((s) => s.id === currentSessionId)) {
+      setCurrentSessionId(sessions[0]?.id ?? null);
+      return;
+    }
     if (sessions.length > 0 && !currentSessionId) {
       setCurrentSessionId(sessions[0]!.id);
     }
@@ -145,7 +153,8 @@ export function AiAssistantView({ workspaceId }: AiAssistantViewProps) {
       );
       qc.invalidateQueries({ queryKey: aiAssistantSessionsKey(workspaceId) });
     } catch {
-      // 错误由 onEvent / channel error 处理
+      // 错误优先由流事件 onError 提示；整个流在产生事件前失败时补可见兜底。
+      toastError(t('aiAssistant.sendFailed'));
     } finally {
       resetStreaming();
     }
@@ -342,6 +351,22 @@ export function AiAssistantView({ workspaceId }: AiAssistantViewProps) {
               })}
             </span>
           </div>
+
+          {(selection || viewLabel) && (
+            <div data-testid="ai-assistant-context-tag" className="flex flex-wrap items-center gap-1.5">
+              {viewLabel && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-accent/10 border border-accent/20 text-accent">
+                  {viewLabel}
+                </span>
+              )}
+              {selection && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-bg-elevated border border-border text-text-secondary max-w-[240px]">
+                  <Sparkles className="h-3 w-3 flex-shrink-0 text-accent" />
+                  <span className="truncate">{selection.label}</span>
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="flex items-end gap-2">
             <Textarea

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReducedMotion } from 'framer-motion';
@@ -36,6 +36,8 @@ import { useOutlineQuery } from '@/features/outline/hooks';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useEditorSelectionStore } from '@/stores/editorSelection';
+import { usePomodoroStore } from '@/stores/pomodoro';
+import { getWritableDelta, useWritingGoalsStore } from '@/stores/writingGoals';
 
 interface NovelViewProps {
   workspaceId: string;
@@ -194,6 +196,24 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
   };
 
   const liveWordCount = countWords(editorContent);
+
+  // C1: 番茄钟专注进行中，把小说编辑器里新写的字数增量写入当日写作目标。
+  const focusRunning = usePomodoroStore((s) => s.isRunning && s.phase === 'focus');
+  const addWords = useWritingGoalsStore((s) => s.addWords);
+  const trackedWordsRef = useRef(liveWordCount);
+  const trackedChapterIdRef = useRef(selectedId);
+  useEffect(() => {
+    const chapterChanged = trackedChapterIdRef.current !== selectedId;
+    const delta = getWritableDelta({
+      currentWords: liveWordCount,
+      previousWords: trackedWordsRef.current,
+      chapterChanged,
+      focusRunning,
+    });
+    if (delta > 0) addWords(workspaceId, delta);
+    trackedWordsRef.current = liveWordCount;
+    trackedChapterIdRef.current = selectedId;
+  }, [liveWordCount, focusRunning, addWords, workspaceId, selectedId]);
   const sortedChapters = useMemo(() => {
     return [...chapters].sort((a, b) => a.sortOrder - b.sortOrder);
   }, [chapters]);

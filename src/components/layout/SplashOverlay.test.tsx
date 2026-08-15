@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import '@/i18n';
 import { SplashOverlay } from './SplashOverlay';
 import { useSettingsQuery } from '@/features/settings/hooks';
 
@@ -29,6 +30,7 @@ describe('SplashOverlay', () => {
     expect(
       screen.getByRole('button', { name: /点击跳过启动动画/ }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('splash-skip')).toBeInTheDocument();
   });
 
   it('does not render when splash is disabled', () => {
@@ -43,12 +45,40 @@ describe('SplashOverlay', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('can be skipped by clicking', async () => {
+  it('can be skipped by clicking the overlay', async () => {
     const user = userEvent.setup();
     render(<SplashOverlay />);
 
     const splash = screen.getByRole('button', { name: /点击跳过启动动画/ });
     await user.click(splash);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: /点击跳过启动动画/ }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('can be skipped by clicking the central content area (web-mode regression)', async () => {
+    const user = userEvent.setup();
+    render(<SplashOverlay />);
+
+    await user.click(screen.getByText('叙事创作工作台'));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: /点击跳过启动动画/ }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('can be skipped with the Escape key', async () => {
+    const user = userEvent.setup();
+    render(<SplashOverlay />);
+
+    const splash = screen.getByRole('button', { name: /点击跳过启动动画/ });
+    splash.focus();
+    await user.keyboard('{Escape}');
 
     await waitFor(() => {
       expect(

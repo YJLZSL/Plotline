@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { collectAiContext } from '@/features/ai/contextCollector';
+import { aiMessagesKey, aiSessionsKey } from '@/features/ai/hooks';
+import { useAiContextStore } from '@/stores/aiContext';
 import { toastError } from '@/stores/toast';
 import type { AiAssistantContextMode, AiChatContext, AiMessage, AiSession } from '@/types';
 
@@ -12,10 +14,9 @@ import {
 } from './api';
 import { useAiAssistantStore } from './store';
 
-export const aiAssistantSessionsKey = (workspaceId: string) =>
-  ['aiAssistantSessions', workspaceId] as const;
-export const aiAssistantMessagesKey = (sessionId: string) =>
-  ['aiAssistantMessages', sessionId] as const;
+// 与浮动 AI 面板共用同一份 Query Key，避免同一会话数据出现两份缓存（功能协作收口）。
+export const aiAssistantSessionsKey = aiSessionsKey;
+export const aiAssistantMessagesKey = aiMessagesKey;
 
 export function useAiAssistantSessionsQuery(workspaceId: string) {
   return useQuery({
@@ -110,6 +111,9 @@ export async function buildAssistantContext(
   if (mode === 'none' || sources.length === 0) {
     return {};
   }
+  // 与 TimelineView 等视图写入的全局选择上下文打通：当前选中的事件/角色会作为
+  // selectedEntity 进入请求，而不是永远为空。
+  const selection = useAiContextStore.getState().selection;
   return collectAiContext(
     workspaceId,
     sources as (
@@ -121,7 +125,7 @@ export async function buildAssistantContext(
       | 'notes'
       | 'selectedEntity'
     )[],
-    null,
+    selection,
   );
 }
 

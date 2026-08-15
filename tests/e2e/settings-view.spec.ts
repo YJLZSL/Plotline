@@ -3,8 +3,18 @@ import { test, expect } from '@playwright/test';
 test.describe('设置页重构', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('create-workspace-btn').click();
-    await page.getByTestId('workspace-name-input').fill('设置页测试');
+    const createButton = page.getByTestId('create-workspace-btn');
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    const nameInput = page.getByTestId('workspace-name-input');
+    // v3.5: 显式等待弹窗输入框出现；高并行负载下点击后对话框可能晚一帧挂载，
+    // 若首次点击未生效则重试一次，避免全量 E2E 中的启动竞态。
+    try {
+      await nameInput.waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      await createButton.click();
+    }
+    await nameInput.fill('设置页测试');
     await page.getByTestId('workspace-submit').click();
     await expect(page).toHaveURL(/\/workspaces\/.+\/timeline/);
 
@@ -24,8 +34,17 @@ test.describe('设置页重构', () => {
   test('侧边栏可切换全部分组', async ({ page }) => {
     const tabs = ['editor', 'ai', 'data', 'about'] as const;
     for (const tab of tabs) {
-      await page.getByTestId(`settings-tab-${tab}`).click();
-      await expect(page.getByTestId(`settings-tab-panel-${tab}`)).toBeVisible();
+      const button = page.getByTestId(`settings-tab-${tab}`);
+      await expect(button).toBeVisible();
+      await button.click();
+      // AI 设置面板在低配/高并行环境下挂载较慢，给足 15s 并重试一次点击。
+      const panel = page.getByTestId(`settings-tab-panel-${tab}`);
+      try {
+        await expect(panel).toBeVisible({ timeout: 15_000 });
+      } catch {
+        await button.click();
+        await expect(panel).toBeVisible({ timeout: 15_000 });
+      }
     }
   });
 

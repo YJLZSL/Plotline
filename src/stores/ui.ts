@@ -10,6 +10,10 @@ interface UIState {
   aiPanelOpen: boolean;
   enhancedAnimations: boolean;
   firstWorkspaceVisit: boolean;
+  /** B2: 编辑器是否跟随界面字体主题（前端偏好，persist 到 localStorage）。 */
+  editorFollowsFontTheme: boolean;
+  /** B4: MC 主题下是否应用自定义强调色（前端偏好，persist 到 localStorage）。 */
+  mcUseCustomAccent: boolean;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleDetailPanel: () => void;
@@ -18,6 +22,8 @@ interface UIState {
   setAiPanelOpen: (open: boolean) => void;
   setEnhancedAnimations: (enabled: boolean) => void;
   setFirstWorkspaceVisit: (visited: boolean) => void;
+  setEditorFollowsFontTheme: (follows: boolean) => void;
+  setMcUseCustomAccent: (enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -28,6 +34,8 @@ export const useUIStore = create<UIState>()(
       aiPanelOpen: false,
       enhancedAnimations: false,
       firstWorkspaceVisit: true,
+      editorFollowsFontTheme: false,
+      mcUseCustomAccent: false,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleDetailPanel: () => set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
@@ -36,6 +44,8 @@ export const useUIStore = create<UIState>()(
       setAiPanelOpen: (open) => set({ aiPanelOpen: open }),
       setEnhancedAnimations: (enabled) => set({ enhancedAnimations: enabled }),
       setFirstWorkspaceVisit: (visited) => set({ firstWorkspaceVisit: visited }),
+      setEditorFollowsFontTheme: (follows) => set({ editorFollowsFontTheme: follows }),
+      setMcUseCustomAccent: (mcUseCustomAccent) => set({ mcUseCustomAccent }),
     }),
     { name: 'plotline:ui' },
   ),
@@ -84,11 +94,24 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   applyToDOM: (settings) => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
+    const theme = settings.theme ?? root.getAttribute('data-theme') ?? 'light';
     if (settings.theme) {
       root.setAttribute('data-theme', settings.theme);
     }
     if (settings.accentColor) {
       root.style.setProperty('--accent-custom', settings.accentColor);
+      // B4: MC 主题默认使用草绿强调色；只有用户显式开启"MC 也应用自定义色"
+      // 时才以内联 --accent 覆盖 themes.css 中的固定值。
+      const mcUseCustomAccent = useUIStore.getState().mcUseCustomAccent;
+      if (theme === 'mc') {
+        if (mcUseCustomAccent) {
+          root.style.setProperty('--accent', settings.accentColor);
+        } else {
+          root.style.removeProperty('--accent');
+        }
+      } else {
+        root.style.removeProperty('--accent');
+      }
     }
     if (settings.fontSize) {
       root.style.fontSize = `${settings.fontSize}px`;

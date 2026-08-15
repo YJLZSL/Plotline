@@ -177,11 +177,35 @@ export function getSnapTimeAtTime(state: ViewportState, time: number | string | 
 /**
  * 将内容坐标 x 对应的时间取整到当前网格。
  *
+ * @param state 视口状态
+ * @param x     内容坐标
+ * @param tickTimes 可选：渲染预算内实际可见的主刻度时间戳。
+ *                  传入后吸附到**最近可见刻度**，保证吸附线与标尺/背景网格一致；
+ *                  不传时吸附到 chooseTickLevel(zoom) 的完整日历网格（保持旧行为）。
  * @returns 吸附后的 Date；退化状态或非法 x 时返回 null
  */
-export function getSnapTimeAtX(state: ViewportState, x: number): Date | null {
+export function getSnapTimeAtX(
+  state: ViewportState,
+  x: number,
+  tickTimes?: number[],
+): Date | null {
   const time = getTimeAtX(state, x);
   if (!time) return null;
+
+  if (tickTimes && tickTimes.length > 0) {
+    let nearestTime: number | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const tickTime of tickTimes) {
+      const tickX = getXAtTime(state, tickTime);
+      const distance = Math.abs(tickX - x);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestTime = tickTime;
+      }
+    }
+    return nearestTime === null ? time : new Date(nearestTime);
+  }
+
   return getSnapTimeAtTime(state, time);
 }
 
@@ -210,6 +234,31 @@ export function getSnapThreshold(state: ViewportState): number {
   const gridCellWidth = (intervalMs / msPerUnit) * state.zoom;
 
   return Math.min(24, gridCellWidth * 0.3);
+}
+
+/**
+ * 基于**实际可见的主刻度**计算吸附阈值。
+ *
+ * 当标尺因渲染预算而降采样时（长范围 + 细 zoom），完整日历网格的间隔可能与
+ * 可见刻度间隔不一致；此函数取相邻可见刻度的最小间距 * 0.3（上限 24px），
+ * 保证只有靠近肉眼可见的网格线时才触发吸附。
+ */
+export function getSnapThresholdForTicks(state: ViewportState, tickTimes: number[]): number {
+  if (isDegenerate(state) || tickTimes.length < 2) {
+    return tickTimes.length === 1 ? 24 : 0;
+  }
+  const xs = tickTimes
+    .map((time) => getXAtTime(state, time))
+    .filter((x) => Number.isFinite(x))
+    .sort((a, b) => a - b);
+
+  let minGap = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < xs.length; i++) {
+    const gap = xs[i]! - xs[i - 1]!;
+    if (gap > 0) minGap = Math.min(minGap, gap);
+  }
+  if (!Number.isFinite(minGap)) return 0;
+  return Math.min(24, minGap * 0.3);
 }
 
 export interface TimelineGrid {
@@ -282,6 +331,8 @@ export interface ComputeTimelineLayoutOptions {
   maxCardWidth?: number;
   /** 相对事件每个 sortOrder 占用的时间单位数；未提供时按当前 zoom 自动计算。 */
   relativeDurationUnits?: number;
+  /** 按事件内容估算卡片宽度的解析器；未提供时退回仅按标题估算的旧公式。 */
+  cardWidthFor?: (event: Event) => number;
 }
 
 export interface EventLayoutItem {
@@ -299,13 +350,37 @@ export interface EventLayoutResult {
   trackHeights: Map<string, number>;
 }
 
-function getEventTimePosition(ev: Event, grid: TimelineGrid, relativeDurationUnits: number): number {
-  if (ev.dateType === 'absolute' && ev.dateValue) {
-    const t = new Date(ev.dateValue).getTime();
-    if (!Number.isNaN(t)) return t;
+/**
+ * 计算每个事件在时间轴上的时间位置（ms 时间戳）。
+ *
+ * 绝对事件使用 `dateValue` 的真实时间戳；相对事件以 `baseTime` 为基准，
+ * 按"相对事件内部的排序下标"（i * unitMs * relativeDurationUnits）估算时间戳。
+ * 相对事件与绝对事件混合时，sortOrder 会包含绝对事件的序号，不能直接作为
+ * 相对时间偏移；否则第 N 个相对事件会凭空跳到几个月之后。
+ *
+ * 这是事件卡片布局与连接线锚点的**共享**坐标源：两边必须使用同一份位置，
+ * 否则卡片与连线会在事件增删后错位。
+ */
+export function computeEventTimePositions(
+  events: Event[],
+  grid: TimelineGrid,
+  relativeDurationUnits: number,
+): Map<string, number> {
+  const positions = new Map<string, number>();
+  for (const ev of events) {
+    if (ev.dateType === 'absolute' && ev.dateValue) {
+      const t = new Date(ev.dateValue).getTime();
+      if (!Number.isNaN(t)) positions.set(ev.id, t);
+    }
   }
+  const relativeEvents = events
+    .filter((e) => !positions.has(e.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   const unitMs = grid.getMsPerUnit();
-  return grid.baseTime + ev.sortOrder * unitMs * relativeDurationUnits;
+  relativeEvents.forEach((ev, relativeIndex) => {
+    positions.set(ev.id, grid.baseTime + relativeIndex * unitMs * relativeDurationUnits);
+  });
+  return positions;
 }
 
 function eventsOverlap(
@@ -339,10 +414,13 @@ export function computeTimelineLayout(
     minCardWidth = EVENT_CARD_MIN_WIDTH,
     maxCardWidth = 360,
     relativeDurationUnits = computeRelativeDurationUnits(grid, minCardWidth, RELATIVE_EVENT_CARD_GAP),
+    cardWidthFor,
   } = options;
 
   const layouts = new Map<string, EventLayoutItem>();
   const trackHeights = new Map<string, number>();
+  // 卡片布局与 TimelineView 的连接线锚点共用同一份时间位置，杜绝两套公式错位。
+  const eventTimePositions = computeEventTimePositions(events, grid, relativeDurationUnits);
 
   for (const tr of tracks) {
     trackHeights.set(tr.id, trackHeight);
@@ -357,9 +435,9 @@ export function computeTimelineLayout(
 
   for (const [trackId, trackEvents] of byTrack.entries()) {
     const items = trackEvents.map((ev) => {
-      const time = getEventTimePosition(ev, grid, relativeDurationUnits);
+      const time = eventTimePositions.get(ev.id) ?? grid.baseTime;
       const x = grid.timeToX(time);
-      const width = getEventCardWidth(ev.title, minCardWidth, maxCardWidth);
+      const width = cardWidthFor?.(ev) ?? getEventCardWidth(ev.title, minCardWidth, maxCardWidth);
       return { ev, x, width };
     });
 

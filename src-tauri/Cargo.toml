@@ -1,6 +1,6 @@
 [package]
 name = "plotline"
-version = "3.3.0"
+version = "3.5.0"
 description = "本地优先的叙事创作工作台"
 authors = ["Plotline Contributors"]
 license = "MIT"
@@ -21,6 +21,7 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-notification = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rusqlite = { version = "0.32", features = ["bundled", "chrono", "uuid"] }

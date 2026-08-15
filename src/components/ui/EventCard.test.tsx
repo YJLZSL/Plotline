@@ -281,9 +281,9 @@ describe('EventCard', () => {
 
   it('shows a "relative" badge only for relative events', () => {
     renderCard({ event: makeEvent({ title: '序幕', dateValue: '', dateType: 'relative', sortOrder: 0 }) });
-    // v3.3.0: 相对事件角标（timeline.relativeBadge）
+    // v3.3.0: 相对事件角标（timeline.relativeBadge）；状态点始终标注状态（v3.4 语义修正）
     expect(screen.getByTitle('timeline.relativeBadge')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'timeline.relativeBadge' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'timeline.event.statusDraft' })).toBeInTheDocument();
   });
 
   it('does not show a "relative" badge for absolute events', () => {

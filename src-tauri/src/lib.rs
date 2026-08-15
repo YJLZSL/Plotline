@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // 启动后异步检查更新（应用内自动更新）
             let app_handle = app.handle().clone();
@@ -149,6 +150,8 @@ pub fn run() {
             commands::novel::reorder_novel_chapters,
             // statistics
             commands::statistics::get_statistics,
+            // pomodoro
+            commands::pomodoro::send_pomodoro_notification,
             // settings
             commands::settings::get_settings,
             commands::settings::update_settings,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
@@ -39,6 +39,19 @@ import { RelationshipGraph } from '@/features/characters/RelationshipGraph';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useOutlineQuery } from '@/features/outline/hooks';
+import {
+  buildDailyWritingTrend,
+  buildWeeklyWritingTrend,
+  createDefaultGoal,
+  getDayRecord,
+  getTodayWritingProgress,
+  getTotalFocusSessions,
+  getTotalWords,
+  getWeeklyWritingProgress,
+  getWeekDates,
+  sumRange,
+  useWritingGoalsStore,
+} from '@/stores/writingGoals';
 
 const TRANSITION = MOTION_BASE;
 
@@ -61,6 +74,9 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
   const { data: events = [] } = useEventsQuery(workspaceId);
   const { data: characters = [] } = useCharactersQuery(workspaceId);
   const { data: outlineNodes = [] } = useOutlineQuery(workspaceId);
+  const workspaceWritingGoal = useWritingGoalsStore((s) => s.goalsByWorkspace[workspaceId]);
+  const writingGoal = useMemo(() => workspaceWritingGoal ?? createDefaultGoal(), [workspaceWritingGoal]);
+  const hasFocusData = getTotalFocusSessions(writingGoal) > 0 || getTotalWords(writingGoal) > 0;
   const foreshadows = connections.filter((c) => c.connectionType === 'foreshadow');
   const setAiContext = useAiContextStore((s) => s.setContext);
   const [chartTab, setChartTab] = useState<'overview' | 'mindmap' | 'brain' | 'tree'>('overview');
@@ -106,7 +122,7 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
               <div key={i} className="skeleton h-32 rounded-[8px]" />
             ))}
           </div>
-        ) : !data || data.totalEvents === 0 ? (
+        ) : !data || (data.totalEvents === 0 && !hasFocusData) ? (
           <EmptyState
             icon={<BarChart3 className="h-10 w-10" />}
             title={t('statistics.title')}
@@ -183,6 +199,8 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
                   value={data.totalOutlineNodes}
                   color="#F4E4B6"
                 />
+
+                <FocusTrendChart workspaceId={workspaceId} goal={writingGoal} />
 
                 <Card className="sm:col-span-2">
                   <CardContent>
@@ -367,6 +385,116 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
       </div>
     </>
   );
+}
+
+function FocusTrendChart({
+  workspaceId,
+  goal,
+}: {
+  workspaceId: string;
+  goal: ReturnType<typeof createDefaultGoal>;
+}) {
+  const { t } = useI18n();
+  const now = new Date();
+  const today = getDayRecord(goal, now);
+  const week = sumRange(goal, getWeekDates(now));
+  const daily = buildDailyWritingTrend(goal, 7, now);
+  const weekly = buildWeeklyWritingTrend(goal, 8, now);
+  const dailyProgress = Math.round(getTodayWritingProgress(goal, now) * 100);
+  const weeklyProgress = Math.round(getWeeklyWritingProgress(goal, now) * 100);
+
+  if (getTotalFocusSessions(goal) === 0 && getTotalWords(goal) === 0) return null;
+
+  return (
+    <div className="contents" data-testid="statistics-focus-trend" data-workspace-id={workspaceId}>
+      <StatCard
+        icon={<TimerIcon />}
+        label={t('statistics.todayWords')}
+        value={today.words}
+        color="#D8B6F4"
+      />
+      <StatCard
+        icon={<TimerIcon />}
+        label={t('statistics.todayFocus')}
+        value={today.focusSessions}
+        color="#F4CBB6"
+      />
+      <StatCard
+        icon={<TimerIcon />}
+        label={t('statistics.weeklyWords')}
+        value={week.words}
+        color="#B6D4F4"
+      />
+      <StatCard
+        icon={<TimerIcon />}
+        label={t('statistics.weeklyFocus')}
+        value={week.focusSessions}
+        color="#B6F4C8"
+      />
+
+      <Card className="sm:col-span-2">
+        <CardContent>
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-primary">{t('statistics.dailyFocusTrend')}</h3>
+            <span className="text-xs text-text-secondary">
+              {t('statistics.todayWords')} {dailyProgress}%
+            </span>
+          </div>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={daily} margin={{ left: 0, right: 8 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                  }}
+                />
+                <Bar dataKey="focusSessions" name={t('statistics.focusSessionsLabel')} radius={[4, 4, 0, 0]} fill="#C68A3E" />
+                <Bar dataKey="words" name={t('statistics.wordsLabel')} radius={[4, 4, 0, 0]} fill="#D8B6F4" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="sm:col-span-2">
+        <CardContent>
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-sm font-semibold text-text-primary">{t('statistics.weeklyFocusTrend')}</h3>
+            <span className="text-xs text-text-secondary">
+              {t('statistics.weeklyWords')} {weeklyProgress}%
+            </span>
+          </div>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weekly} margin={{ left: 0, right: 8 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                  }}
+                />
+                <Bar dataKey="focusSessions" name={t('statistics.focusSessionsLabel')} radius={[4, 4, 0, 0]} fill="#C68A3E" />
+                <Bar dataKey="words" name={t('statistics.wordsLabel')} radius={[4, 4, 0, 0]} fill="#D8B6F4" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function TimerIcon() {
+  return <Clock4 className="h-5 w-5" />;
 }
 
 function StatCard({

@@ -1435,6 +1435,8 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
     }
 
     // ===== settings =====
+    case 'send_pomodoro_notification':
+      return null;
     case 'get_settings':
       return db.settings;
     case 'update_settings': {

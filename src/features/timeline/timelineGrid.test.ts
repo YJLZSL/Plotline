@@ -4,6 +4,7 @@ import {
   createTimelineGrid,
   computeTimelineLayout,
   computeRelativeDurationUnits,
+  computeEventTimePositions,
   getZoomLabel,
   adjustZoom,
   DEFAULT_ZOOM,
@@ -17,6 +18,7 @@ import {
   getSnapTimeAtX,
   getSnapXAtTime,
   getSnapThreshold,
+  getSnapThresholdForTicks,
   type ViewportState,
 } from './timelineGrid';
 import { getSnapInterval } from './timeScale';
@@ -653,5 +655,113 @@ describe('getSnapThreshold', () => {
 
     const yearState = makeViewportState(start, end, 220);
     expect(getSnapThreshold(yearState)).toBe(24);
+  });
+});
+
+describe('getSnapTimeAtX with visible ticks', () => {
+  it('should snap to the nearest visible tick when tickTimes are provided', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const visible = [
+      new Date('2024-01-01T00:00:00Z').getTime(),
+      new Date('2024-03-01T00:00:00Z').getTime(),
+      new Date('2024-06-01T00:00:00Z').getTime(),
+    ];
+    const x = getXAtTime(state, new Date('2024-02-20T00:00:00Z'));
+    const snapped = getSnapTimeAtX(state, x, visible);
+    expect(snapped).not.toBeNull();
+    expect(snapped!.getTime()).toBe(visible[1]);
+  });
+
+  it('should keep the original grid behavior when tickTimes are omitted', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const x = getXAtTime(state, new Date('2024-01-20T00:00:00Z'));
+    expect(getSnapTimeAtX(state, x)!.getTime()).toBe(
+      getSnapTimeAtTime(state, getTimeAtX(state, x)!).getTime(),
+    );
+  });
+});
+
+describe('getSnapThresholdForTicks', () => {
+  it('should use 30% of the smallest visible tick gap capped at 24px', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const ticks = [
+      new Date('2024-01-01T00:00:00Z').getTime(),
+      new Date('2024-03-01T00:00:00Z').getTime(),
+      new Date('2024-06-01T00:00:00Z').getTime(),
+    ];
+    // 最近间距约为 59 天 * (140px/月均值)，30% 远大于 24，应封顶 24
+    expect(getSnapThresholdForTicks(state, ticks)).toBe(24);
+  });
+
+  it('should return 24px for a single visible tick and 0 for none', () => {
+    const start = new Date('2024-01-01T00:00:00Z').getTime();
+    const end = new Date('2024-12-31T00:00:00Z').getTime();
+    const state = makeViewportState(start, end, 140);
+    const tick = [new Date('2024-01-01T00:00:00Z').getTime()];
+    expect(getSnapThresholdForTicks(state, tick)).toBe(24);
+    expect(getSnapThresholdForTicks(state, [])).toBe(0);
+  });
+});
+
+describe('computeEventTimePositions（卡片与连线共享坐标源）', () => {
+  const baseTime = new Date('2024-01-01T00:00:00Z').getTime();
+  const grid = createTimelineGrid(baseTime, baseTime + 365 * 24 * 3600 * 1000, 90, 24);
+  const track = makeTrack('t1');
+
+  it('uses the relative-event index（而非全轨 sortOrder）作为相对事件时间偏移', () => {
+    const a = makeEvent({ id: 'a', title: 'A', trackId: 't1', dateType: 'relative', sortOrder: 0 });
+    const b = makeEvent({ id: 'b', title: 'B', trackId: 't1', dateType: 'relative', sortOrder: 4 });
+    const positions = computeEventTimePositions([a, b], grid, 3);
+    const expectedGap = 1 * grid.getMsPerUnit() * 3;
+    expect(positions.get('b')! - positions.get('a')!).toBe(expectedGap);
+  });
+
+  it('ignores absolute-event sortOrder when spacing relative events', () => {
+    const abs = makeEvent({ id: 'abs', title: 'Abs', trackId: 't1', dateValue: '2024-01-01', sortOrder: 0 });
+    const abs2 = makeEvent({ id: 'abs2', title: 'Abs2', trackId: 't1', dateValue: '2024-02-01', sortOrder: 1 });
+    const rel = makeEvent({ id: 'rel', title: 'Rel', trackId: 't1', dateType: 'relative', sortOrder: 2 });
+    const positions = computeEventTimePositions([abs, abs2, rel], grid, 3);
+    // 相对事件是相对事件序列的第 0 个，锚在 baseTime，而不是 2*3 个单位之后。
+    expect(positions.get('rel')).toBe(grid.baseTime);
+  });
+
+  it('matches computeTimelineLayout card x for every event', () => {
+    const events = [
+      makeEvent({ id: 'abs', title: 'Abs', trackId: 't1', dateValue: '2024-01-01' }),
+      makeEvent({ id: 'rel', title: 'Rel', trackId: 't1', dateType: 'relative', sortOrder: 3 }),
+    ];
+    const positions = computeEventTimePositions(events, grid, 3);
+    const layout = computeTimelineLayout(events, [track], grid, {
+      eventHeight: 64,
+      rowGap: 8,
+      baseTop: 12,
+      trackHeight: 92,
+      relativeDurationUnits: 3,
+    });
+    for (const ev of events) {
+      expect(layout.layouts.get(ev.id)!.x).toBe(grid.timeToX(positions.get(ev.id)!));
+    }
+  });
+
+  it('applies the custom card width resolver when provided', () => {
+    const events = [
+      makeEvent({ id: 'wide', title: 'Wide event', trackId: 't1', dateValue: '2024-01-01' }),
+      makeEvent({ id: 'thin', title: 'Thin event', trackId: 't1', dateValue: '2024-01-10' }),
+    ];
+    const layout = computeTimelineLayout(events, [track], grid, {
+      eventHeight: 64,
+      rowGap: 8,
+      baseTop: 12,
+      trackHeight: 92,
+      cardWidthFor: (ev) => (ev.id === 'wide' ? 340 : 120),
+    });
+    expect(layout.layouts.get('wide')!.width).toBe(340);
+    expect(layout.layouts.get('thin')!.width).toBe(120);
   });
 });

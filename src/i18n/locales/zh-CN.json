@@ -3,6 +3,13 @@
     "name": "Plotline",
     "tagline": "叙事创作工作台"
   },
+  "splash": {
+    "tagline": "叙事创作工作台",
+    "preparing": "正在准备你的故事…",
+    "skip": "跳过",
+    "skipAria": "点击跳过启动动画",
+    "mcLine": "Creeper? Aww man~"
+  },
   "onboarding": {
     "title": "欢迎来到 Plotline",
     "description": "新手引导 {{current}} / {{total}}",
@@ -159,6 +166,7 @@
     "treeMode": "树状",
     "textMode": "文本",
     "relativeBadge": "相对",
+    "relativeOnlyHint": "相对时间轴 · 标尺日期仅为视觉锚点",
     "startConnection": "建立连接",
     "today": "今天",
     "foreshadowTracker": "伏笔追踪",
@@ -322,7 +330,18 @@
     "tabOverview": "概览",
     "tabMindmap": "思维导图",
     "tabBrain": "脑状图",
-    "tabTree": "树状图"
+    "tabTree": "树状图",
+    "focusTrendTitle": "专注趋势",
+    "focusTrendDescription": "番茄钟专注会话与写作字数，按天 / 周汇总。",
+    "todayWords": "今日字数",
+    "todayFocus": "今日专注",
+    "weeklyWords": "本周字数",
+    "weeklyFocus": "本周专注",
+    "dailyFocusTrend": "近 7 天专注",
+    "weeklyFocusTrend": "近 8 周写作",
+    "focusSessionsLabel": "专注番茄",
+    "wordsLabel": "字数",
+    "noFocusData": "暂无专注记录，打开右下角番茄钟开始第一个专注。"
   },
   "map": {
     "title": "故事地图",
@@ -495,7 +514,10 @@
     "mcEasterEggs": "MC 彩蛋",
     "todayCount": "今日 {{count}} 个",
     "streakCount": "连续 {{count}} 天",
-    "milestone": "{{count}} 个番茄里程碑！"
+    "milestone": "{{count}} 个番茄里程碑！",
+    "dailyWritingGoal": "今日写作目标 {{target}} 字",
+    "todayFocusSessions": "今日专注 {{count}} 个番茄",
+    "dailyGoalReached": "今日目标已达成！"
   },
   "ai": {
     "title": "AI 助手",
@@ -653,6 +675,7 @@
     "agents": "创作 Agent",
     "sessions": "会话",
     "newSessionTitle": "新会话",
+    "sendFailed": "发送失败，请检查 AI 配置或稍后重试",
     "clearSession": "清空当前会话",
     "openSidebar": "展开侧边栏",
     "copy": "复制",
@@ -741,7 +764,9 @@
     "themeMc": "方块",
     "accentColor": "主题色",
     "accentColorDescription": "自定义强调色，用于按钮、选中状态与关键高亮。",
-    "accentColorMcHint": "方块主题使用固定强调色，自定义主题色不会生效",
+    "accentColorMcHint": "方块主题默认使用草绿强调色以保持方块质感；开启后将以你选择的自定义色替代。",
+    "accentCustomColor": "自定义颜色",
+    "mcUseCustomAccent": "MC 主题也应用自定义强调色",
     "animationsEnabled": "启用动画",
     "animationsEnabledDescription": "关闭后将只保留配色，停止所有装饰动画",
     "fancyAnimations": "炫技微动画",
@@ -752,6 +777,8 @@
     "uiFontDescription": "设置侧边栏、工具栏与卡片等界面元素的字体。",
     "editorFont": "编辑器字体",
     "editorFontDescription": "设置编辑器、输入框与代码区域的字体。",
+    "editorFollowsFontTheme": "编辑器跟随界面字体主题",
+    "editorFollowsFontThemeDescription": "开启后，无衬线主题下编辑器也使用无衬线字体；关闭时编辑器始终使用上方选择的编辑器字体。",
     "fontSize": "字号",
     "fontSizeDescription": "调整全局基准字号，编辑器与界面文字会同步缩放。",
     "fontTheme": "界面字体主题",
@@ -783,6 +810,10 @@
     "defaultViewDescription": "打开工作区后默认进入的视图。",
     "timelineZoom": "时间轴默认缩放",
     "timelineZoomDescription": "新打开时间轴时的默认时间粒度。",
+    "writingGoals": "写作目标",
+    "writingGoalsDescription": "与右下角番茄钟联动的每日 / 每周写作字数目标。专注期间在小说编辑器新增的字数会自动计入当天进度。",
+    "dailyWritingTarget": "每日写作目标",
+    "weeklyWritingTarget": "每周写作目标",
     "backupPath": "备份路径",
     "backupPathDescription": "自动备份文件的存放目录，留空则使用应用默认目录。",
     "autoBackup": "自动备份",

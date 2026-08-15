@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import type { Event } from '@/types';
 import {
   clampTodayLabelX,
   computeAddButtonLeft,
   computeEventDragConstraints,
   clampTimelineScroll,
   getEventCardWidth,
+  getEventCardWidthForEvent,
   estimateLabelWidth,
 } from './timelineLayout';
 
@@ -111,6 +113,90 @@ describe('getEventCardWidth', () => {
 
   it('scales width with title length', () => {
     expect(getEventCardWidth('Short')).toBeLessThan(getEventCardWidth('A much longer event title'));
+  });
+});
+
+function makeEvent(overrides: Partial<Event>): Event {
+  return {
+    id: 'e1',
+    workspaceId: 'ws-1',
+    title: '事件',
+    description: '',
+    dateType: 'absolute',
+    dateValue: '2024-01-01',
+    trackId: 't1',
+    status: 'draft',
+    color: null,
+    locationId: null,
+    imageUrls: [],
+    characterIds: [],
+    connectedEventIds: [],
+    sortOrder: 0,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('getEventCardWidthForEvent', () => {
+  it('uses a readable 232px minimum even for short content', () => {
+    expect(getEventCardWidthForEvent(makeEvent({ title: 'A', dateValue: '2024-01-01' }))).toBe(232);
+  });
+
+  it('grows with a long time range beyond the title estimate', () => {
+    const shortRange = getEventCardWidthForEvent(
+      makeEvent({ title: 'A', dateValue: '2024-01-01' }),
+    );
+    const longRange = getEventCardWidthForEvent(
+      makeEvent({
+        title: 'A',
+        dateValue: '2027-12-03 14:00',
+        endDateTime: '2028-01-15 16:00',
+      }),
+    );
+    expect(longRange).toBeGreaterThan(shortRange);
+  });
+
+  it('accounts for location name and associated characters', () => {
+    const plain = getEventCardWidthForEvent(makeEvent({ title: 'A', dateValue: '2024-01-01' }));
+    const rich = getEventCardWidthForEvent(
+      makeEvent({
+        title: 'A',
+        dateValue: '2024-01-01',
+        locationId: 'loc-1',
+        characterIds: ['c1', 'c2'],
+      }),
+      {
+        locations: [{ id: 'loc-1', name: '霜落城北门之外的老旧驿站' }],
+        characters: [
+          { id: 'c1', name: '艾莉丝' },
+          { id: 'c2', name: '凯' },
+        ],
+      },
+    );
+    expect(rich).toBeGreaterThan(plain);
+  });
+
+  it('caps at the readable max width', () => {
+    const wide = getEventCardWidthForEvent(
+      makeEvent({
+        title: '这是一个特别特别特别特别特别特别长的标题',
+        dateValue: '2027-12-03 14:00',
+        endDateTime: '2028-01-15 16:00',
+        locationId: 'loc-1',
+        characterIds: ['c1', 'c2', 'c3', 'c4'],
+      }),
+      {
+        locations: [{ id: 'loc-1', name: '一个位于大陆尽头的非常遥远且名字长到无法一眼读完的传说之地' }],
+        characters: [
+          { id: 'c1', name: '艾莉丝' },
+          { id: 'c2', name: '凯' },
+          { id: 'c3', name: '露娜' },
+          { id: 'c4', name: '奥伯伦' },
+        ],
+      },
+    );
+    expect(wide).toBe(400);
   });
 });
 

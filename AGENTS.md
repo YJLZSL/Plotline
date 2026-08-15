@@ -46,13 +46,15 @@
 - `产品需求与设计文档.md` — PRD（永远以它为最终事实源）
 
 ### 当前版本状态
-- **最新版本**：v3.3.0（已发布：时间轴清晰度与一致性）<https://github.com/YJLZSL/Plotline/releases/tag/v3.3.0>
+- **最新版本**：v3.5.0（番茄钟 × 写作闭环 + MC 强调色解耦，已提交发布）<https://github.com/YJLZSL/Plotline/releases/tag/v3.5.0>
+- **历史版本**：v3.3.0 已发布；v3.4.0 整体重构已并入 v3.5.0 一起发布
 - **当前版本详情与遗留问题**：见 `交接文档.md`（含本地构建状态、历史版本发布记录）；逐版本变更内容见 `更新日志.md`。
-- **本地构建注意**：本地 Rust 编译环境存在 Windows build script 子进程等待 bug（`Os { code: 0, ... }`），无法重新编译，依赖 CI 验证 `cargo test` 与 `cargo clippy -- -D warnings`。
+- **本地构建状态**：Windows 本地 Rust 环境已恢复可编译，`cargo check/test/clippy` 均通过；若再次遇到 build script 子进程等待 bug（`Os { code: 0, ... }`），依赖 CI 验证。
 
 ### 下一迭代方向
-- **长期目标**：见 `docs/长期迭代计划.md`（Phase 1「v3.3 清晰度与一致性」→ Phase 2「v3.4 写作闭环」→ Phase 3「v4.0 深度创作」→ Phase 4「v4.1+ 打磨发布」）。
-- **当前重点（v3.4）**：番茄钟 × 写作闭环（写作目标绑定、每日统计、系统通知）；剩余时间轴优化项（A2 卡片宽度复合估算、A3 子行分隔、A4 折叠轨道连线锚点、A6 标尺标签降级、A8 连线手柄发现性、A9 网格对齐）；主题一致性（B2-B4）；`check:version` 版本一致性脚本（E2）。
+- **长期目标**：见 `docs/长期迭代计划.md`（Phase 1「v3.3」→ Phase 1.5「v3.4 重构」→ Phase 2「v3.5 写作闭环」→ Phase 3「v4.0 深度创作」→ Phase 4「v4.1+ 打磨发布」）。
+- **当前重点（v4.0）**：地图分组/图层与足迹导出、VN 立绘与预览播放器、世界观实体与冲突检测、AI Agent 工作流；随后日文翻译、无障碍与性能打磨。
+- **版本一致性**：发布前执行 `pnpm check:version`（比对 package.json / Cargo.toml / tauri.conf.json，已挂入 CI）。
 
 ---
 
@@ -220,6 +222,7 @@ docs(agents): 补充 IPC 调用规范
 ```
 
 ### 4.3 提交检查清单
+- [ ] 本地 `pnpm check:version` 无版本不一致
 - [ ] 本地 `pnpm lint` 无报错
 - [ ] 本地 `pnpm typecheck` 无报错
 - [ ] 本地 `pnpm test:run` 全绿
@@ -325,5 +328,5 @@ docs(agents): 补充 IPC 调用规范
 
 ---
 
-> 文档版本：v0.6.0  
-> 最后更新：2026-06-29（v3.2.1 已发布：时间轴拖动吸附补丁）
+> 文档版本：v0.8.0  
+> 最后更新：2026-08-11（v3.5.0 番茄钟 × 写作闭环，已提交发布）

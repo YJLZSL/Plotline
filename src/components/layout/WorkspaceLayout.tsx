@@ -86,7 +86,12 @@ export function WorkspaceLayout() {
             </div>
           }
         />
-        <PomodoroTimer open={pomoOpen} onClose={() => setPomoOpen(false)} workspaceName={currentWorkspace?.name} />
+        <PomodoroTimer
+          open={pomoOpen}
+          onClose={() => setPomoOpen(false)}
+          workspaceName={currentWorkspace?.name}
+          workspaceId={workspaceId}
+        />
         <AiAssistantPanel
           open={aiPanelOpen}
           onClose={() => setAiPanelOpen(false)}

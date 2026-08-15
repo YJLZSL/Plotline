@@ -63,11 +63,15 @@ function AiButton() {
   return (
     <button
       onClick={() => toggleAiPanel()}
+      aria-pressed={aiPanelOpen}
       className={
-        'flex items-center gap-1.5 text-xs text-text-secondary hover:text-accent transition-colors px-1.5 py-1 rounded-[5px] ' +
-        (aiPanelOpen ? 'text-accent bg-accent/10' : '')
+        'flex items-center gap-1.5 text-xs transition-colors px-1.5 py-1 rounded-[5px] ' +
+        (aiPanelOpen
+          ? 'text-accent bg-accent/10 ring-1 ring-accent/30'
+          : 'text-text-secondary hover:text-accent hover:bg-bg-elevated')
       }
       title={t('ai.title')}
+      data-testid="toolbar-ai-button"
     >
       <Bot className="h-4 w-4" />
       <span className="hidden sm:inline">{t('ai.title')}</span>

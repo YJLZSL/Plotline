@@ -1,6 +1,6 @@
 import { memo, useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Plus,
@@ -36,6 +36,7 @@ import {
   createTimelineGrid,
   computeTimelineLayout,
   computeRelativeDurationUnits,
+  computeEventTimePositions,
   getZoomLabel,
   adjustZoom,
   DEFAULT_ZOOM,
@@ -44,7 +45,7 @@ import {
   getViewportTimeScale,
   getSnapTimeAtX,
   getSnapXAtTime,
-  getSnapThreshold,
+  getSnapThresholdForTicks,
   type ViewportState,
   type EventLayoutItem,
 } from '@/features/timeline/timelineGrid';
@@ -95,16 +96,23 @@ import {
   clampTodayLabelX,
   computeAddButtonLeft,
   getEventCardWidth,
+  getEventCardWidthForEvent,
   estimateLabelWidth,
 } from '@/features/timeline/timelineLayout';
 import {
-  chooseTickLevel,
+  chooseAdaptiveTickLevel,
   formatMajorTick,
+  formatMajorTickDegraded,
   formatMinorTick,
   getMajorTickTimestamps,
   getMinorTickTimestamps,
+  sampleTickTimestamps,
   type TickLevel,
 } from '@/features/timeline/timeScale';
+import {
+  buildTimelineGridBackground,
+  toGridStops,
+} from '@/features/timeline/timelineGridBackground';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useUIStore } from '@/stores/ui';
@@ -234,28 +242,51 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [copiedEvent, setCopiedEvent] = useState<Event | null>(null);
   const [filterBarVisible, setFilterBarVisible] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  // A8: 首次进入时间轴时短暂常亮连线手柄，降低"卡片可连线"的发现成本。
+  const [connectionHintVisible, setConnectionHintVisible] = useState(false);
   const filteredEvents = useMemo(
     () => filterEvents(events, filters),
     [events, filters],
   );
 
   // 从绝对事件中计算时间范围，作为视口坐标源的唯一时间边界。
+  // - 有绝对事件：min=最早绝对时间，max=最晚绝对时间 + 15% 跨度。
+  // - 无绝对事件：以今天（UTC 日界）为相对时间轴的伪锚点，避免标尺显示 1970；
+  //   并按最大 sortOrder 预留空间，保证 year 档缩放时相对事件仍在可视时间范围内。
   // 不依赖 zoom，可在 hook 之前计算，保证 viewportState.timeRange 与 grid 在同一帧一致。
   const timeBounds = useMemo(() => {
     const absoluteEvents = filteredEvents.filter((e) => e.dateType === 'absolute' && e.dateValue);
-    let baseTime = 0;
-    let maxTime = 365 * DAY_MS;
-    if (absoluteEvents.length > 0) {
-      const times = absoluteEvents.map((e) => new Date(e.dateValue).getTime()).filter((n) => !Number.isNaN(n));
-      if (times.length > 0) {
-        const firstTime = Math.min(...times);
-        const lastTime = Math.max(...times);
-        const span = lastTime - firstTime || 365 * DAY_MS;
-        baseTime = firstTime;
-        maxTime = lastTime + span * 0.15;
-      }
+    const absoluteTimes = absoluteEvents
+      .map((e) => new Date(e.dateValue).getTime())
+      .filter((n) => !Number.isNaN(n));
+
+    const relativeMaxOrder = filteredEvents.reduce(
+      (max, e) => (e.dateType !== 'absolute' ? Math.max(max, e.sortOrder) : max),
+      0,
+    );
+    // year 档下相对事件每个 sortOrder 最多占 2 年，预留 4 个事件余量；
+    // 仅当存在相对事件时才扩展，避免纯绝对时间轴被无谓拉长到 8 年。
+    const hasRelativeEvents = filteredEvents.some((e) => e.dateType !== 'absolute');
+    const relativeSpanDays = hasRelativeEvents ? (relativeMaxOrder + 4) * 2 * 365 : 0;
+
+    // 无绝对事件时锚定到当前 UTC 年首日：月份/季度刻度都落在整数网格上，
+    // 相对事件的吸附体验与标尺对齐更稳定（避免锚在月中导致阈值外吸附失败）。
+    const nowDate = new Date();
+    const yearStart = Date.UTC(nowDate.getUTCFullYear(), 0, 1);
+    let baseTime = yearStart;
+    let maxTime = baseTime + Math.max(365, relativeSpanDays) * DAY_MS;
+    if (absoluteTimes.length > 0) {
+      const firstTime = Math.min(...absoluteTimes);
+      const lastTime = Math.max(...absoluteTimes);
+      const span = lastTime - firstTime || 365 * DAY_MS;
+      baseTime = firstTime;
+      maxTime = Math.max(
+        lastTime + span * 0.15,
+        baseTime + relativeSpanDays * DAY_MS,
+      );
     }
-    return { startTime: baseTime, endTime: maxTime };
+    return { startTime: baseTime, endTime: maxTime, relativeOnly: absoluteTimes.length === 0 };
   }, [filteredEvents]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -306,6 +337,16 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return () => window.removeEventListener('resize', onResize);
   }, [setScrollLeft, setViewportWidth]);
 
+  // A8: 卡片入场后短暂展示连线手柄（共约 4.5s），之后恢复 hover 才显示。
+  useEffect(() => {
+    const showTimer = window.setTimeout(() => setConnectionHintVisible(true), 600);
+    const hideTimer = window.setTimeout(() => setConnectionHintVisible(false), 5000);
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, []);
+
   useEffect(() => {
     const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
     setAiContext({
@@ -353,14 +394,15 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
   const timeScale = useMemo(() => grid.getTimeScale(), [grid]);
 
-  const totalWidth = useMemo(
-    () => Math.max(800, getXAtTime(viewportState, timeBounds.endTime) + LEFT_PADDING + EVENT_CARD_MAX_WIDTH),
-    [viewportState, timeBounds.endTime],
-  );
-
   const relativeDurationUnits = useMemo(
     () => computeRelativeDurationUnits(grid, 200, 16),
     [grid],
+  );
+
+  // A2: 卡片宽度由标题/时间/地点/角色内容复合估算，与事件卡片三 zone 信息量匹配。
+  const cardWidthFor = useCallback(
+    (ev: Event) => getEventCardWidthForEvent(ev, { characters, locations }),
+    [characters, locations],
   );
 
   const eventLayout = useMemo(
@@ -371,9 +413,20 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         baseTop: EVENT_BASE_TOP,
         trackHeight: TRACK_HEIGHT,
         relativeDurationUnits,
+        cardWidthFor,
       }),
-    [filteredEvents, visibleTracks, grid, relativeDurationUnits],
+    [filteredEvents, visibleTracks, grid, relativeDurationUnits, cardWidthFor],
   );
+
+  // 画布宽度覆盖：1) 标尺时间右边界；2) 所有事件卡片的实际右边缘（相对事件可能超出 maxTime）。
+  const totalWidth = useMemo(() => {
+    const timeEndX = getXAtTime(viewportState, timeBounds.endTime);
+    let contentRight = 0;
+    for (const item of eventLayout.layouts.values()) {
+      contentRight = Math.max(contentRight, item.x + item.width);
+    }
+    return Math.max(800, timeEndX + LEFT_PADDING + EVENT_CARD_MAX_WIDTH, contentRight + 96);
+  }, [viewportState, timeBounds.endTime, eventLayout]);
 
   const timelineMinHeight = useMemo(
     () =>
@@ -394,27 +447,38 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return getXAtTime(viewportState, now);
   }, [viewportState]);
 
-  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 baseTime 的伪时间戳
-  const eventPositions = useMemo(() => {
-    const positions = new Map<string, number>();
-    filteredEvents.forEach((ev) => {
-      if (ev.dateType === 'absolute' && ev.dateValue) {
-        const t = new Date(ev.dateValue).getTime();
-        if (!Number.isNaN(t)) {
-          positions.set(ev.id, t);
-        }
-      }
-    });
-    const relativeEvents = filteredEvents
-      .filter((e) => e.dateType !== 'absolute' || !positions.has(e.id))
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-    const unitMs = grid.getMsPerUnit();
-    const fallbackStart = grid.baseTime;
-    relativeEvents.forEach((ev, i) => {
-      positions.set(ev.id, fallbackStart + i * unitMs * relativeDurationUnits);
-    });
-    return positions;
-  }, [filteredEvents, grid, relativeDurationUnits]);
+  // 标尺与背景网格共享同一批真实日历边界刻度（A9）：先按 zoom 选级，再按范围自适应升级，
+  // 最后均匀降采样到渲染预算内，保证刻度、网格、事件卡片三者像素级对齐。
+  const scaleState = useMemo<ViewportState>(
+    () => ({
+      zoom,
+      scrollLeft: 0,
+      viewportWidth: 1000,
+      timeRange: timeBounds,
+      leftPadding: LEFT_PADDING,
+    }),
+    [zoom, timeBounds],
+  );
+
+  const rulerData = useMemo(() => {
+    const { min, max } = getViewportTimeScale(scaleState);
+    const level = chooseAdaptiveTickLevel(scaleState.zoom, min, max);
+    const majors = sampleTickTimestamps(getMajorTickTimestamps(min, max, level), 240);
+    const minors = sampleTickTimestamps(getMinorTickTimestamps(min, max, level), 240);
+    return { min, max, level, majors, minors };
+  }, [scaleState]);
+
+  const gridBackground = useMemo(() => {
+    const stops = toGridStops(rulerData.majors, (time) => getXAtTime(scaleState, time), totalWidth);
+    return buildTimelineGridBackground(stops, { totalWidth, leftPadding: LEFT_PADDING });
+  }, [rulerData.majors, scaleState, totalWidth]);
+
+  // 事件内部时间位置：绝对事件用真实时间戳，相对事件用基于 baseTime 的伪时间戳。
+  // 与 computeTimelineLayout 共用 computeEventTimePositions，避免卡片与连线锚点错位。
+  const eventPositions = useMemo(
+    () => computeEventTimePositions(filteredEvents, grid, relativeDurationUnits),
+    [filteredEvents, grid, relativeDurationUnits],
+  );
 
   const eventsByTrack = useMemo(() => {
     const map = new Map<string, Event[]>();
@@ -433,18 +497,19 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
     return ev ? { type: 'event' as const, id: ev.id, label: ev.title, content: ev.description ?? '' } : null;
   }, [events, selectedEventId]);
 
-  // 拖拽吸附：根据当前拖动 content-x 计算最近的网格线及阈值内是否触发吸附
+  // 拖拽吸附：吸附到当前实际渲染的主刻度（rulerData.majors），
+  // 保证吸附线、标尺刻度与背景网格三者永远一致。
   const snapInfo = useMemo(() => {
     if (!dragState) return null;
-    const snapTime = getSnapTimeAtX(viewportState, dragState.contentX);
+    const snapTime = getSnapTimeAtX(viewportState, dragState.contentX, rulerData.majors);
     if (!snapTime) return null;
     const snapX = getSnapXAtTime(viewportState, snapTime);
-    const threshold = getSnapThreshold(viewportState);
+    const threshold = getSnapThresholdForTicks(viewportState, rulerData.majors);
     const distance = Math.abs(dragState.contentX - snapX);
     const snapped = distance <= threshold;
-    const label = snapped ? formatMajorTick(snapTime, chooseTickLevel(viewportState.zoom)) : '';
+    const label = snapped ? formatMajorTick(snapTime, rulerData.level) : '';
     return { snapX, snapTime, distance, snapped, label };
-  }, [dragState, viewportState]);
+  }, [dragState, viewportState, rulerData]);
 
   const handleConsistencyCheck = useCallback(async () => {
     setCheckingConsistency(true);
@@ -543,7 +608,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 
   const handleEventDragEnd = useCallback(
     async (ev: Event, targetTrack: Track, finalX: number) => {
-      const cardWidth = getEventCardWidth(ev.title);
+      const cardWidth = eventLayout.layouts.get(ev.id)?.width ?? cardWidthFor(ev);
       const lanePadding = 4;
       const clampedX = Math.max(lanePadding, Math.min(totalWidth - cardWidth, finalX));
 
@@ -552,10 +617,10 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         updates.trackId = targetTrack.id;
       }
 
-      // 吸附：若释放位置与网格线距离在阈值内，则把最终 x 对齐到网格
-      const snapTime = getSnapTimeAtX(viewportState, clampedX);
+      // 吸附：与拖拽过程中的吸附源一致 —— 只吸附到实际渲染的主刻度。
+      const snapTime = getSnapTimeAtX(viewportState, clampedX, rulerData.majors);
       const snapX = snapTime ? getSnapXAtTime(viewportState, snapTime) : null;
-      const threshold = getSnapThreshold(viewportState);
+      const threshold = getSnapThresholdForTicks(viewportState, rulerData.majors);
       const isSnapped = snapX !== null && Math.abs(clampedX - snapX) <= threshold;
       const snappedFinalX = isSnapped
         ? Math.max(lanePadding, Math.min(totalWidth - cardWidth, snapX))
@@ -579,7 +644,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         await updateEvent.mutateAsync(updates);
       }
     },
-    [eventPositions, eventsByTrack, viewportGetTimeAtX, viewportState, totalWidth, updateEvent],
+    [eventPositions, eventsByTrack, viewportGetTimeAtX, viewportState, totalWidth, updateEvent, eventLayout, cardWidthFor, rulerData],
   );
 
   const handleSaveEvent = useCallback(
@@ -839,6 +904,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
             <ViewModeSegment
               value={viewMode}
               onChange={setViewMode}
+              scriptActive={location.pathname.startsWith(`/workspaces/${workspaceId}/script`)}
               onScriptClick={() => navigate(`/workspaces/${workspaceId}/script`)}
             />
             <Button variant="ghost" size="sm" className="h-8" onClick={handleZoomOut} title={t('timeline.zoomOut')}>
@@ -1073,6 +1139,8 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   {/* 日期标尺 */}
                   <DateRuler
                     viewportState={viewportState}
+                    rulerData={rulerData}
+                    relativeOnly={timeBounds.relativeOnly}
                     totalWidth={totalWidth}
                     isPanning={isPanning}
                     onPointerDown={(e) => {
@@ -1144,11 +1212,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
                   eventLayout={eventLayout}
                   viewportState={viewportState}
                   totalWidth={totalWidth}
-                  zoom={zoom}
+                  gridBackground={gridBackground}
                   scrollLeft={scrollLeft}
                   viewportWidth={viewportWidth}
                   selectedEventId={selectedEventId}
                   pendingConnection={pendingConnection}
+                  connectionHintVisible={connectionHintVisible}
                   conflictEventIds={conflictEventIds}
                   copiedEvent={copiedEvent}
                   draggingEvent={draggingEvent}
@@ -1261,10 +1330,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
 function ViewModeSegment({
   value,
   onChange,
+  scriptActive,
   onScriptClick,
 }: {
   value: 'timeline' | 'gantt' | 'tree' | 'text';
   onChange: (v: 'timeline' | 'gantt' | 'tree' | 'text') => void;
+  scriptActive: boolean;
   onScriptClick: () => void;
 }) {
   const { t } = useI18n();
@@ -1299,12 +1370,14 @@ function ViewModeSegment({
           </button>
         );
       })}
-      {/* 剧本视图：独立路由，点击跳转 */}
+      {/* 剧本视图：独立路由，点击跳转；路由匹配时保持激活态（A10） */}
       <button
         onClick={onScriptClick}
         className={cn(
           'flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-xs transition-colors',
-          'text-text-secondary hover:text-text-primary',
+          scriptActive
+            ? 'bg-accent/10 text-accent'
+            : 'text-text-secondary hover:text-text-primary',
         )}
         title={t('script.title')}
         data-testid="timeline-viewmode-script"
@@ -1456,6 +1529,8 @@ function TimelineMoreMenu({
 // ===== 日期标尺 =====
 const DateRuler = memo(function DateRuler({
   viewportState,
+  rulerData,
+  relativeOnly,
   totalWidth,
   isPanning,
   onPointerDown,
@@ -1463,50 +1538,61 @@ const DateRuler = memo(function DateRuler({
   onPointerUp,
 }: {
   viewportState: ViewportState;
+  rulerData: { min: number; max: number; level: TickLevel; majors: number[]; minors: number[] };
+  relativeOnly: boolean;
   totalWidth: number;
   isPanning: boolean;
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void;
   onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
-  const { min, max } = useMemo(() => getViewportTimeScale(viewportState), [viewportState]);
   const { t } = useI18n();
   const [hovered, setHovered] = useState<{ x: number; label: string } | null>(null);
+  const tickLevel = rulerData.level;
 
-  // 刻度级别由连续 zoom 值决定（四档：year/quarter/month/week/day/hour），
-  // 不再依赖离散 ZoomLevel 枚举，保证缩放过程中刻度密度平滑过渡。
-  const { majorTicks, minorTicks, todayX, tickLevel } = useMemo(() => {
-    const level: TickLevel = chooseTickLevel(viewportState.zoom);
-    const majors = getMajorTickTimestamps(min, max, level).map((time) => ({
-      time,
-      label: formatMajorTick(new Date(time), level),
-    }));
-    const minors = getMinorTickTimestamps(min, max, level).map((time) => ({ time }));
-
-    // 动态采样主刻度，避免标签重叠：间隔小于预估宽度 + 8px 时跳过
-    // 水平坐标必须通过 getXAtTime 计算，保证与事件卡片/连接线/Today 线像素级对齐
-    const sampled: typeof majors = [];
+  // A6: 标签先尝试完整格式；放不下时降级为短格式（通常只剩年份），而不是直接跳过；
+  // 短格式仍放不下才跳过，保证标尺不会出现大段无标签区。
+  const { majorTicks, minorTicks, todayX } = useMemo(() => {
+    const sampled: Array<{ time: number; x: number; label: string }> = [];
     let lastX: number | null = null;
-    for (const tick of majors) {
-      const x = getXAtTime(viewportState, tick.time);
-      const width = estimateLabelWidth(tick.label);
-      if (lastX === null || x - lastX >= width + 8) {
-        sampled.push(tick);
-        lastX = x;
+    for (const time of rulerData.majors) {
+      const x = getXAtTime(viewportState, time);
+      const date = new Date(time);
+      const fullLabel = formatMajorTick(date, tickLevel);
+      const degradedLabel = formatMajorTickDegraded(date, tickLevel);
+      const fullWidth = estimateLabelWidth(fullLabel);
+      const degradedWidth = estimateLabelWidth(degradedLabel);
+
+      let label: string | null = null;
+      if (lastX === null || x - lastX >= fullWidth + 8) {
+        label = fullLabel;
+      } else if (x - lastX >= degradedWidth + 8) {
+        label = degradedLabel;
+      } else {
+        continue;
       }
+      sampled.push({ time, x, label });
+      lastX = x;
     }
 
-    const now = Date.now();
-    const today = now >= min && now <= max ? getXAtTime(viewportState, now) : null;
-    return { majorTicks: sampled, minorTicks: minors, todayX: today, tickLevel: level };
-  }, [viewportState, min, max]);
+    const minors = rulerData.minors.map((time) => ({
+      time,
+      x: getXAtTime(viewportState, time),
+    }));
 
-  // 次刻度标签：仅在 day/hour 等细粒度级别下显示，避免在 year/quarter 级别下噪点过多
+    const now = Date.now();
+    const today =
+      now >= rulerData.min && now <= rulerData.max ? getXAtTime(viewportState, now) : null;
+    return { majorTicks: sampled, minorTicks: minors, todayX: today };
+  }, [viewportState, rulerData, tickLevel]);
+
+  // 次刻度标签：仅在 day/hour/week 等细粒度级别下显示，避免在 year/quarter 级别下噪点过多
   const showMinorLabels = tickLevel === 'day' || tickLevel === 'hour' || tickLevel === 'week';
 
   return (
     <div
       data-testid="timeline-ruler"
+      data-ruler-level={tickLevel}
       className={cn(
         'sticky top-0 z-10 bg-bg-surface border-b border-border',
         isPanning ? 'cursor-grabbing' : 'cursor-grab',
@@ -1519,15 +1605,24 @@ const DateRuler = memo(function DateRuler({
       onPointerCancel={onPointerUp}
     >
       <div className="relative h-full">
+        {/* 纯相对时间轴提示：所有事件都没有绝对日期，标尺日期只是相对事件的视觉锚点 */}
+        {relativeOnly && (
+          <span
+            data-testid="timeline-relative-hint"
+            className="absolute top-1.5 right-3 z-30 px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-[10px] text-accent pointer-events-none"
+          >
+            {t('timeline.relativeOnlyHint')}
+          </span>
+        )}
+
         {/* 次刻度 */}
         {minorTicks.map((tick, i) => {
-          const x = getXAtTime(viewportState, tick.time);
-          if (x < 0 || x > totalWidth) return null;
+          if (tick.x < 0 || tick.x > totalWidth) return null;
           return (
             <div
               key={`m-${i}`}
               className="absolute top-0 bottom-0 border-l border-border/20 pointer-events-none"
-              style={{ left: x }}
+              style={{ left: tick.x }}
             >
               {showMinorLabels && (
                 <span className="absolute top-2 left-1 text-[9px] text-text-tertiary whitespace-nowrap pointer-events-none">
@@ -1540,19 +1635,18 @@ const DateRuler = memo(function DateRuler({
 
         {/* 主刻度 */}
         {majorTicks.map((tick, i) => {
-          const x = getXAtTime(viewportState, tick.time);
-          if (x < 0 || x > totalWidth) return null;
+          if (tick.x < 0 || tick.x > totalWidth) return null;
           return (
             <div
               key={i}
               data-testid="timeline-major-tick"
               data-tick-label={tick.label}
               className="absolute top-0 bottom-0 border-l border-border/50 cursor-crosshair"
-              style={{ left: x }}
+              style={{ left: tick.x }}
               onMouseEnter={() =>
                 setHovered({
-                  x,
-                  label: formatMajorTick(new Date(tick.time), tickLevel),
+                  x: tick.x,
+                  label: tick.label,
                 })
               }
             >
@@ -1747,7 +1841,14 @@ const ConnectionLayer = memo(function ConnectionLayer({
       const trackIndex = tracks.findIndex((t) => t.id === effectiveTrackId);
       const trackTop = trackTopByIndex.get(trackIndex) ?? RULER_HEIGHT;
       const offsetX = draggingEvent?.id === ev.id ? draggingEvent.offsetX : 0;
-      const cardTopY = trackTop + (layout?.y ?? EVENT_BASE_TOP);
+      // A4: 折叠轨道不再渲染事件卡片，连线锚点收拢到折叠条的垂直中心；
+      // 同时折叠轨道的入/出边会在可见性过滤中跳过，避免连线"飘在空中"。
+      const trackCollapsed = collapsedTrackIds.includes(effectiveTrackId);
+      const cardTopY = trackTop + (
+        trackCollapsed
+          ? (TRACK_COLLAPSED_HEIGHT - EVENT_HEIGHT) / 2
+          : (layout?.y ?? EVENT_BASE_TOP)
+      );
       const cardBottomY = cardTopY + EVENT_HEIGHT;
       const cardCenterY = cardTopY + EVENT_HEIGHT / 2;
       map.set(ev.id, {
@@ -1761,13 +1862,17 @@ const ConnectionLayer = memo(function ConnectionLayer({
       });
     }
     return map;
-  }, [events, eventPositions, eventLayout, viewportState, tracks, trackTopByIndex, draggingEvent, dragTargetTrackId]);
+  }, [events, eventPositions, eventLayout, viewportState, tracks, trackTopByIndex, draggingEvent, dragTargetTrackId, collapsedTrackIds]);
 
   const visibleConnections = useMemo(() => {
     return eventConnections.filter((conn) => {
       const sg = eventGeometry.get(conn.sourceId);
       const tg = eventGeometry.get(conn.targetId);
       if (!sg || !tg) return false;
+      // A4: 折叠轨道跳过其入/出边。
+      if (collapsedTrackIds.includes(sg.trackId) || collapsedTrackIds.includes(tg.trackId)) {
+        return false;
+      }
       if (onlySelectedConnections && selectedEventId) {
         if (conn.sourceId !== selectedEventId && conn.targetId !== selectedEventId) return false;
       }
@@ -1777,7 +1882,7 @@ const ConnectionLayer = memo(function ConnectionLayer({
         (tg.centerX >= visibleMin && tg.centerX <= visibleMax)
       );
     });
-  }, [eventConnections, eventGeometry, visibleMin, visibleMax, onlySelectedConnections, selectedEventId]);
+  }, [eventConnections, eventGeometry, visibleMin, visibleMax, onlySelectedConnections, selectedEventId, collapsedTrackIds]);
 
   return (
     <motion.svg
@@ -1848,11 +1953,12 @@ interface TrackLaneProps {
   eventLayout: { layouts: Map<string, EventLayoutItem>; trackHeights: Map<string, number> };
   viewportState: ViewportState;
   totalWidth: number;
-  zoom: number;
+  gridBackground: string;
   scrollLeft: number;
   viewportWidth: number;
   selectedEventId: string | null;
   pendingConnection: string | null;
+  connectionHintVisible: boolean;
   conflictEventIds: Set<string>;
   copiedEvent: Event | null;
   draggingEvent: { id: string; offsetX: number; clientX: number; clientY: number } | null;
@@ -1891,11 +1997,12 @@ const TrackLane = memo(function TrackLane({
   eventLayout,
   viewportState,
   totalWidth,
-  zoom,
+  gridBackground,
   scrollLeft,
   viewportWidth,
   selectedEventId,
   pendingConnection,
+  connectionHintVisible,
   conflictEventIds,
   copiedEvent,
   draggingEvent,
@@ -1968,6 +2075,20 @@ const TrackLane = memo(function TrackLane({
   );
 
   const targetHeight = collapsed ? TRACK_COLLAPSED_HEIGHT : (eventLayout.trackHeights.get(track.id) ?? TRACK_HEIGHT);
+
+  // A3: 瀑布子行的最大行数与分隔线位置，让同一轨道多子行的事件归属一眼可辨。
+  const { maxRow, subRowDividers } = useMemo(() => {
+    let row = -1;
+    for (const ev of events) {
+      const layout = eventLayout.layouts.get(ev.id);
+      if (layout) row = Math.max(row, layout.row);
+    }
+    const dividers: number[] = [];
+    for (let i = 1; i <= row; i++) {
+      dividers.push(EVENT_BASE_TOP + i * (EVENT_HEIGHT + EVENT_ROW_GAP) - EVENT_ROW_GAP / 2);
+    }
+    return { maxRow: row, subRowDividers: dividers };
+  }, [events, eventLayout]);
 
   // 仅当本轨道是当前拖动事件的源轨道或目标轨道，且存在有效吸附坐标时，才将 snapX 透传给 EventCard，
   // 避免非相关轨道的事件卡片误触发归位动画。
@@ -2073,18 +2194,38 @@ const TrackLane = memo(function TrackLane({
             </div>
           )}
 
-          {/* 时间网格背景 */}
+          {/* 时间网格背景：由真实日历刻度边界生成（A9），与 DateRuler 像素级对齐 */}
           {!collapsed && (
             <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
-              style={{
-                backgroundImage: `repeating-linear-gradient(90deg, transparent ${LEFT_PADDING}px, transparent ${
-                  LEFT_PADDING + zoom
-                }px, var(--border) ${LEFT_PADDING + zoom}px, var(--border) ${
-                  LEFT_PADDING + zoom + 1
-                }px)`,
-              }}
+              data-testid="timeline-grid-layer"
+              className="absolute inset-0 pointer-events-none"
+              style={{ backgroundImage: gridBackground }}
             />
+          )}
+
+          {/* A3: 瀑布子行交替底色与分隔线 */}
+          {!collapsed && maxRow > 0 && (
+            <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+              {Array.from({ length: maxRow + 1 }, (_, row) =>
+                row % 2 === 1 ? (
+                  <div
+                    key={`row-bg-${row}`}
+                    className="absolute left-0 right-0 bg-text-primary/[0.03]"
+                    style={{
+                      top: EVENT_BASE_TOP + row * (EVENT_HEIGHT + EVENT_ROW_GAP) - EVENT_ROW_GAP / 2,
+                      height: EVENT_HEIGHT + EVENT_ROW_GAP,
+                    }}
+                  />
+                ) : null,
+              )}
+              {subRowDividers.map((y) => (
+                <div
+                  key={`row-divider-${y}`}
+                  className="absolute left-2 right-2 border-t border-dashed border-border/60"
+                  style={{ top: y }}
+                />
+              ))}
+            </div>
           )}
 
           {/* 事件卡片 */}
@@ -2105,6 +2246,7 @@ const TrackLane = memo(function TrackLane({
                       totalWidth={totalWidth}
                       selected={ev.id === selectedEventId}
                       pendingConnection={pendingConnection === ev.id}
+                      connectionHintVisible={connectionHintVisible}
                       isConflict={conflictEventIds.has(ev.id)}
                       isNew={newEventIds.has(ev.id)}
                       isDragging={isDragging}

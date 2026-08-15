@@ -1,6 +1,6 @@
 {
   "name": "plotline",
-  "version": "3.3.0",
+  "version": "3.5.0",
   "private": true,
   "description": "本地优先的叙事创作工作台",
   "type": "module",
@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check:version": "node scripts/check-version.mjs",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
