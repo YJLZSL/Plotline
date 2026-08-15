@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Clock, Film, MapPin, Users } from 'lucide-react';
+import { Clock, MapPin, Users } from 'lucide-react';
 
 import {
   Badge,
   Button,
   EmptyState,
+  EmptyStateIllustration,
   StatusDot,
   Tooltip,
   TooltipContent,
@@ -94,7 +95,7 @@ export function ScriptView({ workspaceId, workspaceName }: ScriptViewProps) {
       <div className="flex-1 min-h-0 overflow-auto p-6">
         {scriptEvents.length === 0 ? (
           <EmptyState
-            icon={<Film className="h-10 w-10" />}
+            icon={<EmptyStateIllustration className="h-20 w-auto" />}
             title={t('script.emptyTitle')}
             description={t('script.emptyDescription')}
             action={

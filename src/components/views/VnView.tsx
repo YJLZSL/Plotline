@@ -13,6 +13,7 @@ import {
   GitBranch,
   Pencil,
   Download,
+  Settings2,
   ArrowUp,
   ArrowDown,
   Upload,
@@ -40,6 +41,7 @@ import {
   Button,
   EmptyState,
   Input,
+  Label,
   Textarea,
   ConfirmDialog,
   Dialog,
@@ -52,6 +54,7 @@ import { isTauri } from '@/lib/ipc';
 import { MOTION_BASE, MOTION_FAST } from '@/lib/motion';
 import { toastError, toastSuccess } from '@/stores/toast';
 import { useVnSpriteOffsetsStore } from '@/stores/vnSpriteOffsets';
+import { useRenpyPreferencesStore } from '@/stores/renpyPreferences';
 import type { Character, CreateVnLineInput, CreateVnSceneInput, UpdateVnLineInput, UpdateVnSceneInput, VnLine, VnLineType, VnScene } from '@/types';
 import {
   useVnScenesQuery,
@@ -73,6 +76,8 @@ import {
   updateVnLine as apiUpdateVnLine,
   updateVnScene as apiUpdateVnScene,
 } from '@/features/vn/api';
+import { enhanceRenpyExport, parseRenpyVariables } from '@/features/vn/renpyEnhance';
+import type { RenpyTransition } from '@/features/vn/renpyEnhance';
 import { useCharactersQuery } from '@/features/characters/hooks';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
@@ -337,6 +342,10 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
   const [viewMode, setViewMode] = useState<VnViewMode>('edit');
   const [confirmDeleteScene, setConfirmDeleteScene] = useState<string | null>(null);
   const [fullPreviewOpen, setFullPreviewOpen] = useState(false);
+  const [exportSettingsOpen, setExportSettingsOpen] = useState(false);
+
+  const transition = useRenpyPreferencesStore((s) => s.transition);
+  const variablesText = useRenpyPreferencesStore((s) => s.variablesText);
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
@@ -371,7 +380,11 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
   };
 
   const handleExportRenpy = async () => {
-    const content = await exportRenpy.mutateAsync();
+    const raw = await exportRenpy.mutateAsync();
+    const content = enhanceRenpyExport(raw, {
+      transition,
+      variables: parseRenpyVariables(variablesText),
+    });
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -437,9 +450,20 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
               onClick={handleExportRenpy}
               loading={exportRenpy.isPending}
               className="gap-2"
+              data-testid="vn-export-renpy"
             >
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">{t('vn.exportRenpy')}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setExportSettingsOpen(true)}
+              data-testid="vn-export-settings"
+              aria-label={t('vn.exportOptionsTitle')}
+              title={t('vn.exportOptionsTitle')}
+            >
+              <Settings2 className="h-4 w-4" />
             </Button>
             <Button size="sm" onClick={handleAddScene} className="gap-2" data-testid="add-scene-btn">
               <Plus className="h-4 w-4" />
@@ -595,6 +619,12 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
         t={t}
       />
 
+      <RenpyExportSettingsDialog
+        open={exportSettingsOpen}
+        onOpenChange={setExportSettingsOpen}
+        t={t}
+      />
+
       <ConfirmDialog
         open={confirmDeleteScene !== null}
         onOpenChange={(v) => !v && setConfirmDeleteScene(null)}
@@ -610,6 +640,96 @@ export function VnView({ workspaceId, workspaceName }: VnViewProps) {
         }}
       />
     </>
+  );
+}
+
+// ===== Ren'Py 导出选项 =====
+const RENPY_TRANSITIONS: Array<{ value: RenpyTransition; labelKey: string }> = [
+  { value: 'none', labelKey: 'vn.transitionNone' },
+  { value: 'dissolve', labelKey: 'vn.transitionDissolve' },
+  { value: 'fade', labelKey: 'vn.transitionFade' },
+];
+
+function RenpyExportSettingsDialog({
+  open,
+  onOpenChange,
+  t,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const transition = useRenpyPreferencesStore((s) => s.transition);
+  const variablesText = useRenpyPreferencesStore((s) => s.variablesText);
+  const setTransition = useRenpyPreferencesStore((s) => s.setTransition);
+  const setVariablesText = useRenpyPreferencesStore((s) => s.setVariablesText);
+
+  const [draftTransition, setDraftTransition] = useState<RenpyTransition>(transition);
+  const [draftVariables, setDraftVariables] = useState(variablesText);
+
+  useEffect(() => {
+    if (open) {
+      setDraftTransition(transition);
+      setDraftVariables(variablesText);
+    }
+  }, [open, transition, variablesText]);
+
+  const handleSave = () => {
+    setTransition(draftTransition);
+    setVariablesText(draftVariables);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        title={t('vn.exportOptionsTitle')}
+        description={t('vn.exportOptionsDescription')}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>{t('vn.exportTransitionLabel')}</Label>
+            <div className="flex items-center gap-2">
+              {RENPY_TRANSITIONS.map((item) => (
+                <Button
+                  key={item.value}
+                  type="button"
+                  variant={draftTransition === item.value ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => setDraftTransition(item.value)}
+                  data-testid={`vn-transition-${item.value}`}
+                >
+                  {t(item.labelKey)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="vn-export-variables">{t('vn.exportVariablesLabel')}</Label>
+            <Textarea
+              id="vn-export-variables"
+              value={draftVariables}
+              onChange={(e) => setDraftVariables(e.target.value)}
+              placeholder={t('vn.exportVariablesPlaceholder')}
+              data-testid="vn-variables-input"
+              className="min-h-[120px] font-mono text-sm"
+              spellCheck={false}
+            />
+            <p className="text-xs text-text-secondary/80">{t('vn.exportVariablesHint')}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button size="sm" onClick={handleSave}>
+            {t('common.save')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

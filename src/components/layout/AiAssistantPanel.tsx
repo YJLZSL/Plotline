@@ -11,6 +11,7 @@ import {
   Command,
   Database,
   HelpCircle,
+  History,
   ListTree,
   MapPin,
   MessageSquarePlus,
@@ -32,12 +33,14 @@ import { cn } from '@/lib/utils';
 import { MOTION_BASE } from '@/lib/motion';
 import { getScenePreset } from '@/lib/motionOrchestrator';
 import { useUIStore } from '@/stores/ui';
+import { useAiOutputHistory } from '@/stores/aiOutputHistory';
 import { useSettingsQuery } from '@/features/settings/hooks';
 import { getWorkspace } from '@/features/workspace/api';
 import { toastError, toastSuccess } from '@/stores/toast';
 import { useAiContextStore } from '@/stores/aiContext';
 import { useEditorSelectionStore } from '@/stores/editorSelection';
 import { useAiAssistantStore } from '@/features/ai-assistant/store';
+import { AiOutputHistoryPanel } from '@/features/ai-assistant/components/AiOutputHistoryPanel';
 import { getProviderPreset } from '@/features/ai/providers';
 import { aiChatStream, searchAiChunks } from '@/features/ai/api';
 import {
@@ -60,6 +63,7 @@ import {
   useDeleteAiSession,
   useOptimizeEvent,
   useOptimizeTimelineSegment,
+  useOrganizeOutline,
   useSummarizeWorkspace,
 } from '@/features/ai/hooks';
 import {
@@ -90,6 +94,17 @@ interface SlashCommand {
   labelKey: string;
   descriptionKey: string;
   action: AiActionType | 'ask' | 'whole_workspace';
+}
+
+function recordAiOutputVersion(sessionId: string, content: string) {
+  const trimmed = content.trim();
+  if (!sessionId || !trimmed) return;
+  useAiOutputHistory.getState().recordVersion({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    sessionId,
+    content: trimmed,
+    createdAt: new Date().toISOString(),
+  });
 }
 
 function scrollToBottom(element: HTMLElement, smooth: boolean) {
@@ -129,6 +144,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
     labelKey: 'ai.commandCheckConsistency',
     descriptionKey: 'ai.commandDescriptionCheckConsistency',
     action: 'check_timeline_consistency',
+  },
+  {
+    id: 'organize_outline',
+    labelKey: 'ai.organizeOutline',
+    descriptionKey: 'ai.commandDescriptionOrganizeOutline',
+    action: 'organize_outline',
   },
   {
     id: 'whole_workspace',
@@ -181,6 +202,7 @@ export function AiAssistantPanel({
   const [sessionSearch, setSessionSearch] = useState('');
   const [showSessionsMobile, setShowSessionsMobile] = useState(false);
   const [showCapabilitiesPanel, setShowCapabilitiesPanel] = useState(false);
+  const [showOutputHistory, setShowOutputHistory] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const [retrievedChunksCount, setRetrievedChunksCount] = useState<number | null>(null);
@@ -200,6 +222,7 @@ export function AiAssistantPanel({
   const optimizeTimelineSegment = useOptimizeTimelineSegment(workspaceId);
   const summarizeWorkspace = useSummarizeWorkspace(workspaceId);
   const checkTimelineConsistency = useCheckTimelineConsistency(workspaceId);
+  const organizeOutline = useOrganizeOutline(workspaceId);
   const clearCache = useClearAiCache(workspaceId);
 
   const mutationForAction = useCallback(
@@ -209,10 +232,11 @@ export function AiAssistantPanel({
         optimize_timeline_segment: optimizeTimelineSegment,
         summarize_workspace: summarizeWorkspace,
         check_timeline_consistency: checkTimelineConsistency,
+        organize_outline: organizeOutline,
       };
       return mutationMap[action];
     },
-    [optimizeEvent, optimizeTimelineSegment, summarizeWorkspace, checkTimelineConsistency],
+    [optimizeEvent, optimizeTimelineSegment, summarizeWorkspace, checkTimelineConsistency, organizeOutline],
   );
 
   useEffect(() => {
@@ -269,6 +293,7 @@ export function AiAssistantPanel({
     if (!open) {
       setShowSlashMenu(false);
       setShowCapabilitiesPanel(false);
+      setShowOutputHistory(false);
     }
   }, [open]);
 
@@ -344,6 +369,7 @@ export function AiAssistantPanel({
       setRetrievedChunksCount(
         (result.retrievedChunks ?? 0) + (ragChunks?.length ?? 0),
       );
+      recordAiOutputVersion(result.sessionId, result.reply);
       qc.setQueryData<AiMessage[]>(aiMessagesKey(result.sessionId), result.messages);
       qc.invalidateQueries({ queryKey: aiSessionsKey(workspaceId) });
     } catch {
@@ -429,6 +455,7 @@ export function AiAssistantPanel({
         });
         setCurrentSessionId(result.sessionId);
         setRetrievedChunksCount(result.retrievedChunks ?? null);
+        recordAiOutputVersion(result.sessionId, result.reply);
       } catch {
         // 错误由 mutation 的 onError 处理
       } finally {
@@ -520,6 +547,14 @@ export function AiAssistantPanel({
       labelKey: 'ai.summarizeWorkspace',
       hintKey: 'ai.capabilityHintSummary',
       available: true,
+    },
+    {
+      action: 'organize_outline',
+      scope: 'whole_workspace',
+      icon: <ListTree className="h-3.5 w-3.5" />,
+      labelKey: 'ai.organizeOutline',
+      hintKey: 'ai.capabilityHintOrganizeOutline',
+      available: aiContext.view === 'outline',
     },
     {
       action: 'check_timeline_consistency',
@@ -852,6 +887,29 @@ export function AiAssistantPanel({
                 <section className="flex-1 min-w-0 flex flex-col">
                   <CapabilityChips />
                   <CapabilityPanel />
+                  <div className="flex-shrink-0 px-3 py-1.5 border-b border-border bg-bg-base flex items-center">
+                    <button
+                      type="button"
+                      data-testid="ai-output-history-toggle"
+                      onClick={() => setShowOutputHistory((v) => !v)}
+                      className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      {t('ai.outputHistory')}
+                      {showOutputHistory ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
+                  {showOutputHistory && (
+                    <AiOutputHistoryPanel
+                      sessionId={currentSessionId}
+                      workspaceId={workspaceId}
+                      onRestore={setInput}
+                    />
+                  )}
                   <div
                     ref={messageAreaRef}
                     className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 scroll-smooth"
@@ -1302,6 +1360,7 @@ function scopeForAction(action: AiActionType): AiContextScope {
       return 'current_view';
     case 'summarize_workspace':
     case 'check_timeline_consistency':
+    case 'organize_outline':
     default:
       return 'whole_workspace';
   }

@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Search,
-  Users,
   Trash2,
   X,
   Network,
@@ -12,12 +11,12 @@ import {
 } from 'lucide-react';
 
 import {
-  AppIcon,
   Badge,
   Button,
   Card,
   CardContent,
   EmptyState,
+  EmptyStateIllustration,
   Input,
   Label,
   Textarea,
@@ -297,11 +296,7 @@ export function CharactersView({ workspaceId, workspaceName }: CharactersViewPro
               </div>
             ) : filtered.length === 0 ? (
               <EmptyState
-                icon={
-                  <AppIcon size="lg" tone="accent">
-                    <Users />
-                  </AppIcon>
-                }
+                icon={<EmptyStateIllustration className="h-20 w-auto" />}
                 title={t('characters.empty.title')}
                 description={t('characters.empty.description')}
                 action={
@@ -692,7 +687,7 @@ function CharacterEditDialog({
                 className="flex-1"
               />
               <Button variant="outline" onClick={addTag}>
-                {t('common.add' as never) || '+'}
+                {t('common.add') || '+'}
               </Button>
             </div>
             {(form.tags ?? []).length > 0 && (

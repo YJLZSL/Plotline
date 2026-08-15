@@ -1228,6 +1228,7 @@ fn cache_ttl_for_action(action: AiActionType) -> u64 {
     match action {
         AiActionType::SummarizeWorkspace => 300,
         AiActionType::CheckTimelineConsistency => 300,
+        AiActionType::OrganizeOutline => 300,
         _ => 600,
     }
 }
@@ -1259,6 +1260,10 @@ fn build_shortcut_context_block(
 
     if let AiActionType::OptimizeEvent = action {
         parts.push("请直接给出优化后的内容，并简要说明修改理由。".into());
+    }
+
+    if let AiActionType::OrganizeOutline = action {
+        parts.push("请优先基于【大纲】与【工作区摘要】上下文进行整理；若大纲为空，请根据【时间轴】与【角色】【地点】等资料生成建议结构。".into());
     }
 
     parts.join("\n\n")
@@ -2172,6 +2177,11 @@ mod tests {
 
         let cached = get_cached_response(&conn, &key).unwrap();
         assert_eq!(cached.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn should_use_300s_cache_ttl_for_organize_outline() {
+        assert_eq!(cache_ttl_for_action(AiActionType::OrganizeOutline), 300);
     }
 
     #[test]

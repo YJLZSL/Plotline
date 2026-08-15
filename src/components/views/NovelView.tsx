@@ -6,15 +6,14 @@ import {
   Plus,
   Trash2,
   X,
-  BookOpen,
   GripVertical,
   ListTree,
 } from 'lucide-react';
 
 import {
-  AppIcon,
   Button,
   EmptyState,
+  EmptyStateIllustration,
   Input,
   RichEditor,
   ConfirmDialog,
@@ -277,7 +276,7 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
             ) : chapters.length === 0 ? (
               <div className="p-6">
                 <EmptyState
-                  icon={<BookOpen className="h-8 w-8" />}
+                  icon={<EmptyStateIllustration className="h-16 w-auto" />}
                   title={t('novel.emptyChapters')}
                   description={t('novel.empty.description')}
                   action={
@@ -448,11 +447,7 @@ export function NovelView({ workspaceId, workspaceName }: NovelViewProps) {
           ) : (
             <div className="flex-1 grid place-items-center">
               <EmptyState
-                icon={
-                  <AppIcon size="lg" tone="accent">
-                    <BookOpen />
-                  </AppIcon>
-                }
+                icon={<EmptyStateIllustration className="h-20 w-auto" />}
                 title={t('novel.empty.title')}
                 description={t('novel.empty.description')}
                 actions={[

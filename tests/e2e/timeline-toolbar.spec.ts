@@ -51,13 +51,14 @@ test.describe('时间轴工具栏四组重构', () => {
     expect(separatorCount).toBeGreaterThanOrEqual(3);
   });
 
-  test('视图模式分段控件包含 5 个按钮：timeline/gantt/tree/text/script', async ({ page }) => {
+  test('视图模式分段控件包含 6 个按钮：timeline/gantt/tree/graph/text/script', async ({ page }) => {
     const segment = page.getByTestId('timeline-viewmode-segment');
     await expect(segment).toBeVisible();
 
     await expect(page.getByTestId('timeline-viewmode-timeline')).toBeVisible();
     await expect(page.getByTestId('timeline-viewmode-gantt')).toBeVisible();
     await expect(page.getByTestId('timeline-viewmode-tree')).toBeVisible();
+    await expect(page.getByTestId('timeline-viewmode-graph')).toBeVisible();
     await expect(page.getByTestId('timeline-viewmode-text')).toBeVisible();
     await expect(page.getByTestId('timeline-viewmode-script')).toBeVisible();
   });
@@ -80,6 +81,14 @@ test.describe('时间轴工具栏四组重构', () => {
     // 验证 TreeTimeline 已渲染。AnimatePresence 切换期间 timeline 卡片与 tree 卡片可能短暂共存，
     // 用 .last() 选取 TreeTimeline 渲染的卡片（font-semibold text-xs），避免 strict mode violation。
     await expect(page.getByText('树状事件').last()).toBeVisible({ timeout: 5000 });
+  });
+
+  test('点击 graph 视图模式切换到关系图', async ({ page }) => {
+    await createAbsoluteEvent(page, '关系事件', '2024-06-01');
+
+    await page.getByTestId('timeline-viewmode-graph').click();
+    await expect(page.getByTestId('timeline-graph-canvas')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid^="graph-node-"]')).toHaveCount(1);
   });
 
   test('点击 text 视图模式切换到文本视图', async ({ page }) => {

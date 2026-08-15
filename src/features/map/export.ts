@@ -3,6 +3,10 @@ export interface ExportMapOptions {
   scale?: number;
 }
 
+export interface PrintMapOptions {
+  rootElement: HTMLElement;
+}
+
 /**
  * 将 SVG 元素序列化后绘制到 canvas，生成 PNG 并触发下载。
  * 返回生成的 PNG data URL，便于测试断言。
@@ -55,4 +59,38 @@ export async function exportMapAsPng(
   link.click();
   URL.revokeObjectURL(url);
   return pngUrl;
+}
+
+/**
+ * 进入地图打印模式：给 html 添加 `map-printing`，并给打印根节点添加
+ * `map-print-root`，配合 themes.css 中的打印样式仅显示地图主容器。
+ */
+export function startMapPrintClass(rootElement: HTMLElement): void {
+  document.documentElement.classList.add('map-printing');
+  rootElement.classList.add('map-print-root');
+}
+
+/**
+ * 退出地图打印模式，移除打印相关 class（幂等）。
+ */
+export function finishMapPrintClass(rootElement: HTMLElement): void {
+  document.documentElement.classList.remove('map-printing');
+  rootElement.classList.remove('map-print-root');
+}
+
+/**
+ * 纯前端打印 / PDF 导出：隐藏地图以外的界面后调用浏览器打印。
+ * 浏览器打印会阻塞 JS；afterprint 是主清理时机，next tick 与 2s
+ * timeout 作为 jsdom / 打印对话框异常时的兜底。
+ */
+export async function printMapAsPdf(options: PrintMapOptions): Promise<void> {
+  const { rootElement } = options;
+  startMapPrintClass(rootElement);
+
+  const cleanup = () => finishMapPrintClass(rootElement);
+  window.addEventListener('afterprint', cleanup, { once: true });
+  window.setTimeout(cleanup, 0);
+  window.setTimeout(cleanup, 2000);
+
+  window.print();
 }

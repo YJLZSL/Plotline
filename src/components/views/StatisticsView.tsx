@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  BarChart3,
   Clock4,
   Users,
   Layers,
@@ -22,7 +21,7 @@ import {
   Legend,
 } from 'recharts';
 
-import { Button, Card, CardContent, EmptyState } from '@/components/ui';
+import { Button, Card, CardContent, EmptyState, EmptyStateIllustration } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
@@ -124,7 +123,7 @@ export function StatisticsView({ workspaceId, workspaceName }: StatisticsViewPro
           </div>
         ) : !data || (data.totalEvents === 0 && !hasFocusData) ? (
           <EmptyState
-            icon={<BarChart3 className="h-10 w-10" />}
+            icon={<EmptyStateIllustration variant="network" className="h-20 w-auto" />}
             title={t('statistics.title')}
             description={t('statistics.empty')}
             transition={emptyTransition}

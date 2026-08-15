@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Image as ImageIcon,
   LayoutGrid,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -53,6 +54,7 @@ import { useMoveOutlineNode } from '@/features/outline/moveHooks';
 import { OutlineTreeChart } from './OutlineTreeChart';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useUIStore } from '@/stores/ui';
 import { useEditorSelectionStore } from '@/stores/editorSelection';
 
 interface OutlineViewProps {
@@ -91,6 +93,8 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
   const tree = useMemo(() => buildTree(nodes), [nodes]);
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
   const setAiContext = useAiContextStore((s) => s.setContext);
+  const setPendingAiAction = useAiContextStore((s) => s.setPendingAction);
+  const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
   const registerTextEditor = useEditorSelectionStore(
     (s) => s.registerTextEditor,
   );
@@ -127,6 +131,26 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
       ],
     });
   }, [t, selected, setAiContext]);
+
+  const openAiOrganize = () => {
+    setAiContext({
+      view: 'outline',
+      viewLabel: t('outline.title'),
+      selection: selected
+        ? {
+            type: selected.type,
+            id: selected.id,
+            label: selected.title,
+            content: selected.content ?? '',
+          }
+        : null,
+      suggestions: [
+        { label: t('ai.suggestOrganizeOutline'), prompt: t('ai.promptOrganizeOutline') },
+      ],
+    });
+    setPendingAiAction('organize_outline');
+    setAiPanelOpen(true);
+  };
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -226,6 +250,16 @@ export function OutlineView({ workspaceId, workspaceName }: OutlineViewProps) {
                 <Share2 className="h-3.5 w-3.5" />
               </button>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="outline-ai-organize"
+              onClick={openAiOrganize}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('ai.organizeOutline')}</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"

@@ -121,3 +121,7 @@ export function checkTimelineConsistency(
 ): Promise<AiShortcutResult> {
   return invoke<AiShortcutResult>('check_timeline_consistency', { input });
 }
+
+export function organizeOutline(input: AiShortcutInput): Promise<AiShortcutResult> {
+  return invoke<AiShortcutResult>('organize_outline', { input });
+}

@@ -176,6 +176,7 @@ pub fn run() {
             commands::ai::optimize_timeline_segment,
             commands::ai::summarize_workspace,
             commands::ai::check_timeline_consistency,
+            commands::ai::organize_outline,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

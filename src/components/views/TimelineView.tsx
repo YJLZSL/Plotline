@@ -28,10 +28,12 @@ import {
   MoreHorizontal,
   FileText,
   Download,
+  Workflow as WorkflowIcon,
 } from 'lucide-react';
 import { GanttChart } from './GanttChart';
 import { TreeTimeline } from './TreeTimeline';
 import { TextTimeline } from './TextTimeline';
+import { EventGraphView } from '@/features/timeline/EventGraphView';
 import {
   createTimelineGrid,
   computeTimelineLayout,
@@ -116,6 +118,7 @@ import {
 } from '@/features/timeline/timelineGridBackground';
 import { TimelineEmptyIllustration } from '@/features/timeline/TimelineEmptyIllustration';
 import { useAiContextStore } from '@/stores/aiContext';
+import { useTimelineMigrationStore } from '@/stores/timelineMigration';
 import { useUIStore } from '@/stores/ui';
 import { toastError, toastInfo, toastWarning } from '@/stores/toast';
 import { isTauri } from '@/lib/ipc';
@@ -238,7 +241,7 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const [onlySelectedConnections, setOnlySelectedConnections] = useState(false);
   const [checkingConsistency, setCheckingConsistency] = useState(false);
   const [conflictEventIds, setConflictEventIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<'timeline' | 'gantt' | 'tree' | 'text'>('timeline');
+  const [viewMode, setViewMode] = useState<'timeline' | 'gantt' | 'tree' | 'graph' | 'text'>('timeline');
   const [connectionType, setConnectionType] = useState<'causal' | 'foreshadow'>('causal');
   const [copiedEvent, setCopiedEvent] = useState<Event | null>(null);
   const [filterBarVisible, setFilterBarVisible] = useState(true);
@@ -322,6 +325,12 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
   const connectEvents = useConnectEvents(workspaceId);
   const disconnectEvents = useDisconnectEvents(workspaceId);
   const { data: eventConnections = [] } = useEventConnectionsQuery(workspaceId);
+  const dismissedMigrationWorkspaces = useTimelineMigrationStore((s) => s.dismissedWorkspaces);
+  const dismissMigration = useTimelineMigrationStore((s) => s.dismiss);
+  const showMigrationBanner =
+    viewMode === 'timeline' &&
+    eventConnections.length > 0 &&
+    !dismissedMigrationWorkspaces.includes(workspaceId);
   const setAiContext = useAiContextStore((s) => s.setContext);
   const setPendingAiAction = useAiContextStore((s) => s.setPendingAction);
   const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
@@ -985,6 +994,39 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
         }
       />
 
+      {showMigrationBanner && (
+        <div
+          className="flex items-center gap-2 border-b border-accent/20 bg-accent/10 px-3 py-2"
+          data-testid="timeline-migration-banner"
+        >
+          <WorkflowIcon className="h-4 w-4 text-accent flex-shrink-0" />
+          <div className="min-w-0 flex-1 text-xs leading-snug">
+            <span className="font-semibold text-text-primary">{t('timeline.migrationBannerTitle')}</span>
+            <span className="text-text-secondary">
+              {' '}
+              {t('timeline.migrationBannerDescription', { count: eventConnections.length })}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 flex-shrink-0"
+            onClick={() => setViewMode('graph')}
+          >
+            <WorkflowIcon className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('timeline.migrationBannerAction')}</span>
+          </Button>
+          <button
+            onClick={() => dismissMigration(workspaceId)}
+            className="p-1 rounded text-text-secondary hover:text-text-primary transition-colors flex-shrink-0"
+            aria-label={t('timeline.migrationBannerDismiss')}
+            title={t('timeline.migrationBannerDismiss')}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {viewMode === 'timeline' && filterBarVisible && (
         <FilterBar
           characters={characters}
@@ -1032,6 +1074,16 @@ export function TimelineView({ workspaceId, workspaceName }: TimelineViewProps) 
           selectedEventId={selectedEventId}
           onSelectEvent={handleSelectEvent}
           onEditEvent={handleEditEvent}
+        />
+      ) : viewMode === 'graph' ? (
+        <EventGraphView
+          tracks={tracks}
+          events={events}
+          eventConnections={eventConnections}
+          selectedEventId={selectedEventId}
+          onSelectEvent={handleSelectEvent}
+          onEditEvent={handleEditEvent}
+          onAddEvent={handleAddEvent}
         />
       ) : viewMode === 'text' ? (
         <TextTimeline
@@ -1413,8 +1465,8 @@ function ViewModeSegment({
   scriptActive,
   onScriptClick,
 }: {
-  value: 'timeline' | 'gantt' | 'tree' | 'text';
-  onChange: (v: 'timeline' | 'gantt' | 'tree' | 'text') => void;
+  value: 'timeline' | 'gantt' | 'tree' | 'graph' | 'text';
+  onChange: (v: 'timeline' | 'gantt' | 'tree' | 'graph' | 'text') => void;
   scriptActive: boolean;
   onScriptClick: () => void;
 }) {
@@ -1423,6 +1475,7 @@ function ViewModeSegment({
     { id: 'timeline', icon: CalendarRange, labelKey: 'timeline.title' },
     { id: 'gantt', icon: GanttIcon, labelKey: 'gantt.title' },
     { id: 'tree', icon: Network, labelKey: 'timeline.treeMode' },
+    { id: 'graph', icon: WorkflowIcon, labelKey: 'timeline.graphMode' },
     { id: 'text', icon: List, labelKey: 'timeline.textMode' },
   ];
   return (

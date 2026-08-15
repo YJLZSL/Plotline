@@ -1425,7 +1425,8 @@ function handle(db: MockDB, command: string, args: Record<string, unknown>): unk
     case 'optimize_event':
     case 'optimize_timeline_segment':
     case 'summarize_workspace':
-    case 'check_timeline_consistency': {
+    case 'check_timeline_consistency':
+    case 'organize_outline': {
       const input = args.input as {
         workspaceId: string;
         sessionId?: string | null;

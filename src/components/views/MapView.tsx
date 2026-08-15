@@ -8,6 +8,7 @@ import {
   X,
   Link2,
   Download,
+  Printer,
   Layers,
   Pencil,
   Castle,
@@ -57,7 +58,7 @@ import {
   buildCharacterFootprints,
   bezierPath,
 } from '@/features/map/footprints';
-import { exportMapAsPng } from '@/features/map/export';
+import { exportMapAsPng, printMapAsPdf } from '@/features/map/export';
 import { AiToolbarButton } from '@/features/ai/components/AiToolbarButton';
 import { useAiContextStore } from '@/stores/aiContext';
 import {
@@ -284,6 +285,11 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
     }
   };
 
+  const handlePrint = async () => {
+    if (!containerRef.current) return;
+    await printMapAsPdf({ rootElement: containerRef.current });
+  };
+
   const resetView = () => setView({ x: 0, y: 0, scale: 1 });
 
   const handleSaveLinkLabel = async () => {
@@ -372,6 +378,17 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">{t('map.exportPng')}</span>
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handlePrint}
+              disabled={locations.length === 0}
+              className="gap-2"
+              data-testid="map-export-pdf"
+            >
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('map.exportPdf')}</span>
+            </Button>
             <Button size="sm" variant="outline" onClick={resetView} className="gap-2" title={t('map.panHint')}>
               <Maximize className="h-4 w-4" />
             </Button>
@@ -405,6 +422,7 @@ export function MapView({ workspaceId, workspaceName }: MapViewProps) {
       <div className="flex flex-1 min-h-0">
         <div
           ref={containerRef}
+          data-map-print-root
           className="flex-1 relative overflow-hidden bg-bg-base select-none"
           onContextMenu={(e) => e.preventDefault()}
         >

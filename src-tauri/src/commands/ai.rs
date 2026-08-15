@@ -358,6 +358,14 @@ pub async fn check_timeline_consistency(
     run_ai_shortcut(state, input).await
 }
 
+#[tauri::command]
+pub async fn organize_outline(
+    state: State<'_, AppState>,
+    input: AiShortcutInput,
+) -> AppResult<AiShortcutResult> {
+    run_ai_shortcut(state, input).await
+}
+
 async fn run_ai_shortcut(
     state: State<'_, AppState>,
     input: AiShortcutInput,

@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Plus,
-  Globe,
   Trash2,
   History,
   Sparkles,
@@ -13,7 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-import { AppIcon, Button, Card, CardContent, EmptyState, Input, Textarea } from '@/components/ui';
+import { Button, Card, CardContent, EmptyState, EmptyStateIllustration, Input, Textarea } from '@/components/ui';
 import { Toolbar } from '@/components/layout/Toolbar';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -160,11 +159,7 @@ export function WorldbuildingView({ workspaceId, workspaceName }: WorldbuildingV
         ) : worldNotes.length === 0 ? (
           <div className="h-full grid place-items-center">
             <EmptyState
-              icon={
-                <AppIcon size="lg" tone="accent">
-                  <Globe />
-                </AppIcon>
-              }
+              icon={<EmptyStateIllustration className="h-20 w-auto" />}
               title={t('worldbuilding.empty.title')}
               description={t('worldbuilding.empty.description')}
               action={

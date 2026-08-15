@@ -3,7 +3,6 @@ import { useReducedMotion } from 'framer-motion';
 import {
   Plus,
   Search,
-  StickyNote,
   Trash2,
   FileText,
   X,
@@ -11,10 +10,10 @@ import {
 } from 'lucide-react';
 
 import {
-  AppIcon,
   Badge,
   Button,
   EmptyState,
+  EmptyStateIllustration,
   Input,
   RichEditor,
   ConfirmDialog,
@@ -208,7 +207,7 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
             ) : filtered.length === 0 ? (
             <div className="p-6">
               <EmptyState
-                icon={<StickyNote className="h-10 w-10" />}
+                icon={<EmptyStateIllustration className="h-16 w-auto" />}
                 title={t('notebook.empty.title')}
                 description={t('notebook.empty.description')}
                 action={
@@ -355,17 +354,13 @@ export function NotebookView({ workspaceId, workspaceName }: NotebookViewProps) 
           ) : (
             <div className="flex-1 grid place-items-center">
               <EmptyState
-                icon={
-                  <AppIcon size="lg" tone="accent">
-                    <StickyNote />
-                  </AppIcon>
-                }
+                icon={<EmptyStateIllustration className="h-20 w-auto" />}
                 title={t('nav.notebook')}
-                description="选择左侧笔记开始编辑，或点击右上角创建新笔记。"
+                description={t('notebook.selectNoteHint')}
                 action={
                   <Button onClick={handleAdd} className="gap-2">
                     <Plus className="h-4 w-4" />
-                    新建笔记
+                    {t('notebook.newNote')}
                   </Button>
                 }
                 transition={emptyTransition}

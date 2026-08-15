@@ -32,6 +32,7 @@ import {
   listAiSessions as apiListSessions,
   optimizeEvent as apiOptimizeEvent,
   optimizeTimelineSegment as apiOptimizeTimelineSegment,
+  organizeOutline as apiOrganizeOutline,
   searchAiChunks as apiSearchAiChunks,
   summarizeWorkspace as apiSummarizeWorkspace,
   testAiConnection as apiTestAiConnection,
@@ -362,6 +363,21 @@ export function useCheckTimelineConsistency(workspaceId: string) {
   const qc = useQueryClient();
   return useMutation<AiShortcutResult, Error, AiShortcutInput>({
     mutationFn: apiCheckTimelineConsistency,
+    onSuccess: (result) => {
+      qc.setQueryData<AiMessage[]>(
+        aiMessagesKey(result.sessionId),
+        result.messages,
+      );
+      qc.invalidateQueries({ queryKey: aiSessionsKey(workspaceId) });
+    },
+    onError: toastError,
+  });
+}
+
+export function useOrganizeOutline(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation<AiShortcutResult, Error, AiShortcutInput>({
+    mutationFn: apiOrganizeOutline,
     onSuccess: (result) => {
       qc.setQueryData<AiMessage[]>(
         aiMessagesKey(result.sessionId),

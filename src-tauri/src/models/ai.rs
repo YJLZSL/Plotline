@@ -269,6 +269,7 @@ pub enum AiActionType {
     OptimizeTimelineSegment,
     SummarizeWorkspace,
     CheckTimelineConsistency,
+    OrganizeOutline,
 }
 
 impl std::fmt::Display for AiActionType {
@@ -278,6 +279,7 @@ impl std::fmt::Display for AiActionType {
             AiActionType::OptimizeTimelineSegment => write!(f, "optimize_timeline_segment"),
             AiActionType::SummarizeWorkspace => write!(f, "summarize_workspace"),
             AiActionType::CheckTimelineConsistency => write!(f, "check_timeline_consistency"),
+            AiActionType::OrganizeOutline => write!(f, "organize_outline"),
         }
     }
 }

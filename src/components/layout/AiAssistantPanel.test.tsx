@@ -13,6 +13,7 @@ import '@/i18n';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { useAiContextStore, type AiContextState } from '@/stores/aiContext';
 import { useAiAssistantStore } from '@/features/ai-assistant/store';
+import { useAiOutputHistory } from '@/stores/aiOutputHistory';
 import { aiChatStream, searchAiChunks } from '@/features/ai/api';
 import { collectAiContext } from '@/features/ai/contextCollector';
 import {
@@ -28,6 +29,7 @@ import {
   useDeleteAiSession,
   useOptimizeEvent,
   useOptimizeTimelineSegment,
+  useOrganizeOutline,
   useSummarizeWorkspace,
 } from '@/features/ai/hooks';
 import { useSettingsQuery } from '@/features/settings/hooks';
@@ -85,6 +87,7 @@ vi.mock('@/features/ai/hooks', () => ({
   useOptimizeTimelineSegment: vi.fn(),
   useSummarizeWorkspace: vi.fn(),
   useCheckTimelineConsistency: vi.fn(),
+  useOrganizeOutline: vi.fn(),
   useClearAiCache: vi.fn(),
 }));
 
@@ -209,6 +212,9 @@ function mockHooks(messages: AiMessage[] = []) {
   vi.mocked(useCheckTimelineConsistency).mockReturnValue(
     makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
   );
+  vi.mocked(useOrganizeOutline).mockReturnValue(
+    makeMutationResult<AiShortcutResult, AiShortcutInput>(vi.fn()),
+  );
   vi.mocked(useClearAiCache).mockReturnValue(
     makeMutationResult<void, void>(vi.fn().mockResolvedValue(undefined)),
   );
@@ -229,6 +235,7 @@ describe('AiAssistantPanel', () => {
     streamResolve = null;
     useAiContextStore.setState(defaultContext);
     useAiAssistantStore.setState({ currentSessionId: null });
+    useAiOutputHistory.setState({ versions: [] });
     mockHooks();
   });
 
@@ -354,6 +361,7 @@ describe('AiAssistantPanel', () => {
     expect(screen.getByTestId('ai-capability-chips')).toBeInTheDocument();
     expect(screen.getByTestId('ai-capability-summarize_workspace')).toHaveTextContent('总结工作区');
     expect(screen.getByTestId('ai-capability-check_timeline_consistency')).toHaveTextContent('检查逻辑漏洞');
+    expect(screen.getByTestId('ai-capability-organize_outline')).toHaveTextContent('整理大纲');
   });
 
   it('shows capability helper text and tooltips', () => {
@@ -463,6 +471,61 @@ describe('AiAssistantPanel', () => {
       );
     });
     expect(useAiContextStore.getState().pendingAction).toBeNull();
+  });
+
+  it('auto-runs pending organize_outline requested by outline view', async () => {
+    const organizeMutate = vi.fn().mockResolvedValue({
+      sessionId: 'session-organize',
+      reply: '# 整理后大纲\n\n## 第一卷',
+      messages: [],
+      cached: false,
+      entities: [],
+    });
+    vi.mocked(useOrganizeOutline).mockReturnValue(
+      makeMutationResult<AiShortcutResult, AiShortcutInput>(organizeMutate),
+    );
+    vi.mocked(collectAiContext).mockResolvedValue({ scope: 'whole_workspace' });
+    useAiContextStore.setState({
+      view: 'outline',
+      viewLabel: '大纲',
+      pendingAction: 'organize_outline',
+    });
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(organizeMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'ws-1',
+          action: 'organize_outline',
+          context: expect.objectContaining({ scope: 'whole_workspace' }),
+        }),
+      );
+    });
+    expect(useAiContextStore.getState().pendingAction).toBeNull();
+  });
+
+  it('records assistant output versions after final chat reply', async () => {
+    const user = userEvent.setup();
+    vi.mocked(aiChatStream).mockResolvedValue({
+      sessionId: 'session-1',
+      reply: '最终回复 **加粗**',
+      messages: [],
+      retrievedChunks: 0,
+    });
+
+    renderPanel();
+    const textarea = screen.getByPlaceholderText('输入消息，按 Enter 发送…');
+    await user.type(textarea, 'hello');
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(useAiOutputHistory.getState().versions).toHaveLength(1);
+    });
+    expect(useAiOutputHistory.getState().versions[0]).toMatchObject({
+      sessionId: 'session-1',
+      content: '最终回复 **加粗**',
+    });
   });
 
   it('runs /whole-workspace command by indexing and passing chunks to chat', async () => {

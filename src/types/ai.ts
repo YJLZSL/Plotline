@@ -75,7 +75,8 @@ export type AiActionType =
   | 'optimize_event'
   | 'optimize_timeline_segment'
   | 'summarize_workspace'
-  | 'check_timeline_consistency';
+  | 'check_timeline_consistency'
+  | 'organize_outline';
 
 export interface AiChatContextSelectedEntity {
   type: string;

@@ -134,6 +134,24 @@ describe('mock ipc', () => {
     expect(nodes).toHaveLength(2);
   });
 
+  it('should run organize_outline shortcut with a session and markdown reply', async () => {
+    const w = await ws('w');
+    const result = (await mockIpc('organize_outline', {
+      input: { workspaceId: w.id, action: 'organize_outline', query: '整理大纲' },
+    })) as {
+      sessionId: string;
+      reply: string;
+      messages: Array<{ role: string; content: string }>;
+      cached: boolean;
+      entities: unknown[];
+    };
+    expect(result.sessionId).toBeTruthy();
+    expect(result.reply).toContain('organize_outline');
+    expect(result.cached).toBe(false);
+    expect(result.entities).toEqual([]);
+    expect(result.messages.some((m) => m.role === 'assistant')).toBe(true);
+  });
+
   it('should create notes with tags', async () => {
     const w = await ws('w');
     const note = (await mockIpc('create_note', {

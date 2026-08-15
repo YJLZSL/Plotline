@@ -659,3 +659,46 @@ html.mc-easter [data-theme] {
     scroll-behavior: auto !important;
   }
 }
+
+/* 地图打印 / PDF 导出：仅显示 [data-map-print-root] 标记的地图主容器 */
+html.map-printing body * {
+  visibility: hidden !important;
+}
+
+html.map-printing [data-map-print-root],
+html.map-printing [data-map-print-root] * {
+  visibility: visible !important;
+}
+
+html.map-printing [data-map-print-root] {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  overflow: visible;
+}
+
+.map-print-root svg {
+  max-width: 100%;
+}
+
+@media print {
+  html.map-printing [data-map-print-root] {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    overflow: visible;
+  }
+
+  .map-print-root svg {
+    max-width: 100%;
+    box-shadow: none !important;
+  }
+
+  .map-print-root *,
+  .map-print-root *::before,
+  .map-print-root *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+  }
+}

@@ -21,7 +21,7 @@ import {
   Layers,
 } from 'lucide-react';
 
-import { AppIcon, BrandMark, Button, Card, CardContent, EmptyState, Input } from '@/components/ui';
+import { AppIcon, BrandMark, Button, Card, CardContent, EmptyState, EmptyStateIllustration, Input } from '@/components/ui';
 import {
   useCreateWorkspace,
   useDeleteWorkspace,
@@ -311,11 +311,7 @@ export function WorkspaceSelector() {
           ) : filtered.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <EmptyState
-                icon={
-                  <AppIcon size="lg" tone="accent">
-                    <BrandMark size={28} />
-                  </AppIcon>
-                }
+                icon={<EmptyStateIllustration className="h-24 w-auto" />}
                 title={t('workspace.empty.title')}
                 description={t('workspace.empty.description')}
                 actions={[

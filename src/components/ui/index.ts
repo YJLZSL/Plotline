@@ -10,6 +10,7 @@ export {
 } from './Dialog';
 export { Badge, StatusDot } from './Badge';
 export { Skeleton, LoadingVeil, EmptyState } from './Feedback';
+export { EmptyStateIllustration } from './EmptyStateIllustration';
 export { ToastViewport } from './Toast';
 export { AppIcon } from './AppIcon';
 export type { AppIconProps } from './AppIcon';
