@@ -1,5 +1,5 @@
-// Auto-generated from public/ai-logos/*.svg (LobeHub @lobehub/icons-static-svg)
-// Do not edit manually; rerun `python scripts/generate-provider-icons.py` to refresh.
+// AI 厂商品牌图标（基于 LobeHub @lobehub/icons-static-svg 生成，图标版权归各公司所有）。
+// 图标已内联到本文件，无需再依赖生成脚本。
 
 import type { SVGProps } from 'react';
 

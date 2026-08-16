@@ -31,7 +31,7 @@
 | 改翻译 | `src/i18n/locales/<lang>.json` |
 | 改番茄钟 | `src/components/ui/PomodoroTimer.tsx` + `src/stores/pomodoro.ts` |
 | 改全局字体主题 | `src/styles/themes.css` + `src/styles/tailwind.css` + `src/stores/ui.ts` |
-| 改自动更新 | `src-tauri/src/lib.rs` + `src-tauri/tauri.conf.json` + `releases/vX.Y.Z/latest.json` |
+| 改自动更新 | `src-tauri/src/lib.rs` + `src-tauri/tauri.conf.json`（`latest.json` 由 CI 生成并上传 Release） |
 
 必读文档：
 - `AGENTS.md` — 本文件（AI 协作规范）
@@ -199,7 +199,7 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 - `main` 上的代码必须始终可发布（已通过完整测试）
 - 禁止从 main 切出长期存在的功能分支；所有改动直接提交到 main
 - Release tag 应指向 `main` 上的某个 commit
-- 发布前统一版本号、`更新日志.md`、releases/vX.Y.Z/latest.json
+- 发布前统一版本号与 `更新日志.md`（`latest.json` / `.sig` 由 CI 自动生成）
 
 ### 4.2 Commit 信息
 遵循 **Conventional Commits**：
@@ -236,7 +236,7 @@ docs(agents): 补充 IPC 调用规范
 ### 4.4 发布检查清单（Release）
 - [ ] 版本号已统一（`package.json`、`Cargo.toml`、`tauri.conf.json`）
 - [ ] `更新日志.md` 已更新
-- [ ] `releases/vX.Y.Z/latest.json` 已创建（signature 字段已填入真实签名，不是 `<PLACEHOLDER>`）
+- [ ] `latest.json` 与 `.sig` 由 CI 签名步骤自动生成并上传 Release（本地无需手动维护）
 - [ ] **签名密钥检查**：本地 `keys/plotline.key` 存在，GitHub Secret `TAURI_SIGNING_PRIVATE_KEY` 已配置
 - [ ] **自动更新验证**：GitHub Release 页面包含 `.exe`、`.msi`、`.sig` 和 `latest.json` 四个文件
 - [ ] 老版本客户端可正常检测并安装更新（`https://github.com/YJLZSL/Plotline/releases/latest/download/latest.json` 可访问）

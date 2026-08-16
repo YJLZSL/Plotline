@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist', 'src-tauri/target', 'src-tauri/gen', 'coverage', 'playwright-report', 'test-artifacts'] },
+  { ignores: ['dist', 'src-tauri/target', 'src-tauri/gen', 'coverage', 'playwright-report', 'test-results'] },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
